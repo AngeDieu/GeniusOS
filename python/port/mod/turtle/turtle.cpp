@@ -74,19 +74,51 @@ void Turtle::left(mp_float_t angle) {
 void Turtle::circle(mp_int_t radius, mp_float_t angle) {
   mp_float_t oldHeading = heading();
   mp_float_t length = std::fabs(angle * k_headingScale * radius);
+  /*
   if (length > 1) {
-    for (int i = 1; i < length; i++) {
-      mp_float_t progress = i / length;
-      // Move the turtle forward
-      if (forward(1)) {
-        // Keyboard interruption. Return now to let MicroPython process it.
-        return;
+    if (angle > 0) {
+      for (int i = 1; i < length; i++) {
+        mp_float_t progress = i / length;
+        // Move the turtle forward
+        if (forward(1)) {
+          // Keyboard interruption. Return now to let MicroPython process it.
+          return;
+        }
+        setHeadingPrivate(oldHeading+std::copysign(angle*progress, radius));
       }
-      setHeadingPrivate(oldHeading+std::copysign(angle*progress, radius));
-    }
-    forward(1);
-    setHeading(oldHeading+angle);
+      forward(1);
+      setHeading(oldHeading+angle);
+    } else {
+      for (int i = 1; i < length; i++) {
+        mp_float_t progress = i / length;
+        // Move the turtle backward
+        if (forward(-1)) {
+          // Keyboard interruption. Return now to let MicroPython process it.
+          return;
+        }
+        setHeadingPrivate(oldHeading-std::copysign(angle*progress, radius));
+      }
+      forward(-1);
+      setHeading(oldHeading+angle);   
+    }  
   }
+  */
+  int direction = 1; // 1=fwd, -1=backward
+  if (angle < 0) {direction =-1;} 
+    if (length > 1) {
+      for (int i = 1; i < length; i++) {
+        mp_float_t progress = i / length;
+        // Move the turtle forward
+        if (forward(direction)) {
+          // Keyboard interruption. Return now to let MicroPython process it.
+          return;
+        }
+        setHeadingPrivate(oldHeading+std::copysign(angle*progress, direction*radius));
+      }
+      forward(direction);
+      setHeading(oldHeading+angle);
+    }
+
 }
 
 bool Turtle::goTo(mp_float_t x, mp_float_t y) {
