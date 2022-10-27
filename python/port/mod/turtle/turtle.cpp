@@ -74,7 +74,7 @@ void Turtle::left(mp_float_t angle) {
 void Turtle::circle(mp_int_t radius, mp_float_t angle) {
   mp_float_t oldHeading = heading();
   mp_float_t length = std::fabs(angle * k_headingScale * radius);
-  int direction = 1; // 1=fwd, -1=backward
+  int direction = 1; // 1=forward, -1=backward
   if (angle < 0) { direction =-1; } 
   if (length > 1) {
     for (int i = 1; i < length; i++) {
