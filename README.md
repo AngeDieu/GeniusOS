@@ -244,12 +244,12 @@ You can now go to step 2!
 
 ### 2. Set up repo
 
-Clone repo and use 'upsilon-dev' branch by pasting these two commands:
+Clone repo and use 'russian' branch by pasting these two commands:
 
 ```bash
-git clone --recursive https://github.com/UpsilonNumworks/Upsilon.git
+git clone --recursive https://github.com/AngeDieu/GeniusOS.git
 cd Upsilon
-git checkout upsilon-dev
+git checkout russian
 ```
 
 <br>
