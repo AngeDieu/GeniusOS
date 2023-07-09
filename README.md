@@ -11,10 +11,18 @@
 
 ## About
 
+SuperOS is a fork of [Upsilon](https//github.com/Upsilon-Numworks/Upsilon) that seeks to add features that I either liked and cherry-picked from other Epsilon/Upsilon forks, or have coded myself.
+
 Upsilon is a fork of Omega, an user-made OS that runs on the Numworks calculator, which brings many features to it, but was discontinued because of a policy change from Numworks. Upsilon is for the people who want to see a future for user-made OSes for Numworks, even after the closure and archiving of Omega.
 
 ### Some new features
 
+**SuperOS**
+- Green Theme (and added most existing themes in local)
+- more things
+- even more adds
+ 
+**Upsilon**
 - Enhancements for the Kandinsky python module
 - Support for wallpapers
 - External apps
@@ -233,7 +241,6 @@ usbipd wsl attach --busid <BUSID>
 ```
 
 It will ask you to type your wsl's password and will connect your calculator to WSL.
-
 You can now go to step 2!
 
 </details>
@@ -247,9 +254,8 @@ You can now go to step 2!
 Clone repo and use 'upsilon-dev' branch by pasting these two commands:
 
 ```bash
-git clone --recursive https://github.com/UpsilonNumworks/Upsilon.git
-cd Upsilon
-git checkout upsilon-dev
+git clone https://github.com/AngeDieu/superOS.git
+cd superOS
 ```
 
 <br>
@@ -361,7 +367,7 @@ to make binpack which you can flash to the calculator from [Ti-planet's webDFU](
 
 Run this command:
 ```bash
-make clean
+make PLATFROM=simulator TARGET={target} clean
 ```
 You can either build using the following command that will automatically detect your platform:
 ```bash
@@ -399,7 +405,7 @@ source emsdk_env.sh
 Then, compile Upsilon :
 
 ```bash
-make clean
+make PLATFORM=simulator TARGET=web clean
 make PLATFORM=simulator TARGET=web OMEGA_USERNAME="{Your name, max 15 characters}" -j$(nproc)
 ```
 
@@ -414,9 +420,6 @@ The simulator is now in `output/release/simulator/web/simulator.zip`
 You need devkitPro and devkitARM installed and in your path (instructions [here](https://devkitpro.org/wiki/Getting_Started))
 
 ```bash
-git clone --recursive https://github.com/UpsilonNumworks/Upsilon.git
-cd Upsilon
-git checkout upsilon-dev
 make PLATFORM=simulator TARGET=3ds -j(nproc)
 ```
 
@@ -437,9 +440,6 @@ First, install gint and fxsdk along with a cross compiler for the calculator. Th
 
 Next:
 ```bash
-git clone --recursive https://github.com/UpsilonNumworks/Upsilon.git
-cd Omega
-git checkout upsilon-dev
 make PLATFORM=simulator TARGET=fxcg -j$(nproc)
 ```
 Then copy the file at `./output/release/simulator/fxcg/epsilon.g3a` to the calculator over USB.
@@ -471,6 +471,7 @@ To contribute, please refer to [Omega's Wiki](https://github.com/Omega-Numworks/
 
 Here are the main links toward Omega's different websites and repositories, that have been used for the creation of Upsilon.
 
+- [Upsilon](https://github.com/UpsilonNumworks/Upsilon)
 - [Omega Themes](https://github.com/Omega-Numworks/Omega-Themes)
 - [Omega Website](https://github.com/Omega-Numworks/Omega-Website)
 - [Omega RPN `APP`](https://github.com/Omega-Numworks/Omega-RPN)
