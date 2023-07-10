@@ -11,7 +11,7 @@
 
 ## About
 
-SuperOS is a fork of [Upsilon](https//github.com/Upsilon-Numworks/Upsilon) that seeks to add features that I either liked and cherry-picked from other Epsilon/Upsilon forks, or have coded myself.
+SuperOS is a fork of [Upsilon](https//github.com/Upsilon-Numworks/Upsilon) that seeks to add features that I either liked and cherry-picked from other Epsilon/Upsilon forks, or have coded myself. It is intended to be a playground for me to practice on rather than an actual prod project.
 
 Upsilon is a fork of Omega, an user-made OS that runs on the Numworks calculator, which brings many features to it, but was discontinued because of a policy change from Numworks. Upsilon is for the people who want to see a future for user-made OSes for Numworks, even after the closure and archiving of Omega.
 
