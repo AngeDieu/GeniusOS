@@ -1,2 +1,2 @@
-Default,calculation,graph,rpn,code,statistics,probability,solver,atomic,sequence,regression,reader,settings
-HidePython,calculation,graph,rpn,code,statistics,probability,solver,atomic,sequence,regression,reader,settings
+Default,calculation,code,solver,graph,sequence,regression,statistics,probability,rpn,atomic,reader,settings
+HidePython,calculation,code,solver,graph,sequence,regression,statistics,probability,rpn,atomic,reader,settings
