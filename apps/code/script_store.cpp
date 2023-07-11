@@ -10,7 +10,11 @@ bool ScriptStore::ScriptNameIsFree(const char * baseName) {
 
 // Here we add "base" script
 ScriptStore::ScriptStore() {
-  
+  addScriptFromTemplate(ScriptTemplate::Tables());
+  addScriptFromTemplate(ScriptTemplate::Fractions());
+  addScriptFromTemplate(ScriptTemplate::Equations());
+  addScriptFromTemplate(ScriptTemplate::Vecteurs());
+  addScriptFromTemplate(ScriptTemplate::Snake());
 }
 
 void ScriptStore::deleteAllScripts() {

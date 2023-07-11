@@ -9,5 +9,9 @@ QUIZ_CASE(python_basics) {
 
 // "base" scripts to test.
 QUIZ_CASE(python_template) {
-
+  assert_script_execution_succeeds(Code::ScriptTemplate::Tables()->content());
+  assert_script_execution_succeeds(Code::ScriptTemplate::Fractions()->content());
+  assert_script_execution_succeeds(Code::ScriptTemplate::Equations()->content());
+  assert_script_execution_succeeds(Code::ScriptTemplate::Vecteurs()->content());
+  assert_script_execution_succeeds(Code::ScriptTemplate::Snake()->content());
 }
