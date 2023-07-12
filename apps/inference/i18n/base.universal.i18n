@@ -1,0 +1,4 @@
+GreekAlpha = "α"
+ME = "ME"
+SE = "SE"
+StatisticGraphControllerIntervalTitleFormat = "ME=%*.*ed"

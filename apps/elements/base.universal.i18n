@@ -1,0 +1,8 @@
+ElementsASymbol = "A"
+ElementsAffinitySymbol = "E"
+ElementsDensitySymbol = "ρ"
+ElementsElectronegativitySymbol = "χ"
+ElementsMassSymbol = "M"
+ElementsRadiusSymbol = "r"
+ElementsZSymbol = "Z"
+UnknownValue = "N/A"

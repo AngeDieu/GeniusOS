@@ -1,0 +1,2 @@
+PCB_LATEST = 418 # PCB version 4.18
+SIGNATURE_INDEX = 1

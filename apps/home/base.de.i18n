@@ -1,0 +1,4 @@
+Apps = "Anwendungen"
+AppsCapital = "ANWENDUNGEN"
+ForbiddenAppInExamMode1 = "Diese Anwendung ist im"
+ForbiddenAppInExamMode2 = "Prüfungsmodus nicht erlaubt."

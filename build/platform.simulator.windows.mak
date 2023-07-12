@@ -1,0 +1,5 @@
+TOOLCHAIN = windows
+EXE = exe
+
+EPSILON_TELEMETRY ?= 0
+TERMS_OF_USE ?= 0
