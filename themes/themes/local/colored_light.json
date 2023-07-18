@@ -1,6 +1,6 @@
 {
     "name": "OmegaT",
-    "icons": "color_theme",
+    "icons": "colored_light",
     "colors": {
         "PrimaryText": "000000",
         "SecondaryText": "6e6e6e",
