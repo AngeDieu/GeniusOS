@@ -1,5 +1,5 @@
 CountryCode,CountryPreferences::AvailableExamModes,CountryPreferences::MethodForQuartiles,Poincare::Preferences::UnitFormat,CountryPreferences::HomeAppsLayout
-WW,StandardOnly,MedianOfSublist,Metric,Default
+WW,All,MedianOfSublist,Metric,Default
 CA,StandardOnly,MedianOfSublist,Metric,Default
 DE,StandardOnly,MedianOfSublist,Metric,Default
 ES,StandardOnly,MedianOfSublist,Metric,Default

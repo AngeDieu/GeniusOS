@@ -55,7 +55,7 @@ private:
   static_assert(I18n::NumberOfLanguages > 0, "I18n::NumberOfLanguages is not superior to 0"); // There should already have been an error when processing an empty EPSILON_I18N flag
   static_assert(I18n::NumberOfCountries > 0, "I18n::NumberOfCountries is not superior to 0"); // There should already have been an error when processing an empty EPSILON_COUNTRIES flag
   GlobalPreferences() :
-    m_language((I18n::Language)0),
+    m_language((I18n::Language)1),
     m_country((I18n::Country)0),
     m_examMode(ExamMode::Unknown),
     m_tempExamMode(ExamMode::Standard),
