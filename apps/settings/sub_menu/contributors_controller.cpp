@@ -28,9 +28,10 @@ int ContributorsController::reusableCellCount(int type) {
   return k_totalNumberOfCell;
 }
 
-constexpr static int s_numberOfDevelopers = 18;
-constexpr static int s_numberOfUpsilonDevelopers = 5;
+constexpr static int s_numberOfDevelopers = 19;
+constexpr static int s_numberOfUpsilonDevelopers = 6;
 constexpr static I18n::Message s_developersUsernames[s_numberOfDevelopers] = {
+  I18n::Message::PAngeDieu,
   I18n::Message::PLaurianFournier,
   I18n::Message::PYannCouturier,
   I18n::Message::PDavidLuca,
