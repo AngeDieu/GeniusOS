@@ -10,3 +10,5 @@ epsilon.map
 .vs
 .cache/
 compile_commands.json
+apps/home/apps_layout.csv
+themes/themes/git/
