@@ -1,4 +1,5 @@
 #include "chained_expressions_list_controller.h"
+
 #include "../app.h"
 #include "apps/calculation/additional_outputs/expressions_list_controller.h"
 
@@ -14,11 +15,20 @@ void ChainedExpressionsListController::viewDidDisappear() {
   ExpressionsListController::viewDidDisappear();
 }
 
-int ChainedExpressionsListController::reusableCellCount(int type) {
-  return (type == k_expressionCellType ? k_maxNumberOfRows : 0) + (m_tail ? m_tail->reusableCellCount(type) : 0);
+void ChainedExpressionsListController::didBecomeFirstResponder() {
+  /* Width needs to be reinit if tail of controller changed and wasn't already
+   * initialized. */
+  initCellsAvailableWidth(m_listController.selectableListView());
+  ExpressionsListController::didBecomeFirstResponder();
 }
 
-HighlightCell * ChainedExpressionsListController::reusableCell(int index, int type) {
+int ChainedExpressionsListController::reusableCellCount(int type) {
+  return (type == k_expressionCellType ? k_maxNumberOfRows : 0) +
+         (m_tail ? m_tail->reusableCellCount(type) : 0);
+}
+
+HighlightCell* ChainedExpressionsListController::reusableCell(int index,
+                                                              int type) {
   if (type != k_expressionCellType) {
     return m_tail->reusableCell(index, type);
   }
@@ -29,47 +39,55 @@ HighlightCell * ChainedExpressionsListController::reusableCell(int index, int ty
   return &m_cells[index];
 }
 
-void ChainedExpressionsListController::initCellSize(Escher::TableView * view) {
-  ExpressionsListController::initCellSize(view);
+void ChainedExpressionsListController::initCellsAvailableWidth(
+    Escher::TableView* view) {
+  ExpressionsListController::initCellsAvailableWidth(view);
   if (m_tail) {
-    m_tail->initCellSize(view);
+    m_tail->initCellsAvailableWidth(view);
   }
 }
 
-int ChainedExpressionsListController::typeAtIndex(int index) const {
+int ChainedExpressionsListController::typeAtRow(int row) const {
   int numberOfOwnedCells = ExpressionsListController::numberOfRows();
-  if (index >= numberOfOwnedCells) {
-    return m_tail->typeAtIndex(index - numberOfOwnedCells);
+  if (row >= numberOfOwnedCells) {
+    return m_tail->typeAtRow(row - numberOfOwnedCells);
   }
-  return ExpressionsListController::typeAtIndex(index);
+  return ExpressionsListController::typeAtRow(row);
 }
 
-KDCoordinate ChainedExpressionsListController::nonMemoizedRowHeight(int index) {
+KDCoordinate ChainedExpressionsListController::nonMemoizedRowHeight(int row) {
   int numberOfOwnedCells = ExpressionsListController::numberOfRows();
-  if (index >= numberOfOwnedCells) {
-    return m_tail->nonMemoizedRowHeight(index - numberOfOwnedCells);
+  if (row >= numberOfOwnedCells) {
+    return m_tail->nonMemoizedRowHeight(row - numberOfOwnedCells);
   }
-  return ExpressionsListController::nonMemoizedRowHeight(index);
+  return ExpressionsListController::nonMemoizedRowHeight(row);
 }
 
-void ChainedExpressionsListController::willDisplayCellForIndex(HighlightCell * cell, int index) {
+void ChainedExpressionsListController::fillCellForRow(HighlightCell* cell,
+                                                      int row) {
   int numberOfOwnedCells = ExpressionsListController::numberOfRows();
-  if (index >= numberOfOwnedCells) {
-    return m_tail->willDisplayCellForIndex(cell, index - numberOfOwnedCells);
+  if (row >= numberOfOwnedCells) {
+    return m_tail->fillCellForRow(cell, row - numberOfOwnedCells);
   }
-  return ExpressionsListController::willDisplayCellForIndex(cell, index);
+  return ExpressionsListController::fillCellForRow(cell, row);
 }
 
 int ChainedExpressionsListController::numberOfRows() const {
-  return ExpressionsListController::numberOfRows() + (m_tail ? m_tail->numberOfRows() : 0);
+  return ExpressionsListController::numberOfRows() +
+         (m_tail ? m_tail->numberOfRows() : 0);
 }
 
-int ChainedExpressionsListController::textAtIndex(char * buffer, size_t bufferSize, HighlightCell * cell, int index) {
+int ChainedExpressionsListController::textAtIndex(char* buffer,
+                                                  size_t bufferSize,
+                                                  HighlightCell* cell,
+                                                  int index) {
   int numberOfOwnedCells = ExpressionsListController::numberOfRows();
   if (index >= numberOfOwnedCells) {
-    return m_tail->textAtIndex(buffer, bufferSize, cell, index - numberOfOwnedCells);
+    return m_tail->textAtIndex(buffer, bufferSize, cell,
+                               index - numberOfOwnedCells);
   }
-  return ExpressionsListController::textAtIndex(buffer, bufferSize, cell, index);
+  return ExpressionsListController::textAtIndex(buffer, bufferSize, cell,
+                                                index);
 }
 
-}
+}  // namespace Calculation

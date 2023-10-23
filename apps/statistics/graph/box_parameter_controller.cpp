@@ -4,32 +4,34 @@ using namespace Escher;
 
 namespace Statistics {
 
-BoxParameterController::BoxParameterController(Responder * parentResponder, Store * store, int * selectedBoxCalculation) :
-  SelectableCellListPage<MessageTableCellWithSwitch, k_numberOfParameterCells, Escher::RegularListViewDataSource>(parentResponder),
-  m_store(store),
-  m_selectedBoxCalculation(selectedBoxCalculation)
-{
-  cellAtIndex(0)->setMessage(I18n::Message::DisplayOutliers);
+BoxParameterController::BoxParameterController(
+    Responder* parentResponder, Store* store,
+    DataViewController* dataViewController)
+    : SelectableCellListPage<
+          MenuCell<MessageTextView, EmptyCellWidget, SwitchView>,
+          k_numberOfCells, Escher::RegularListViewDataSource>(parentResponder),
+      m_store(store),
+      m_dataViewController(dataViewController) {
+  cellAtIndex(0)->label()->setMessage(I18n::Message::DisplayOutliers);
   // Being the only cell, it is always highlighted.
   cellAtIndex(0)->setHighlighted(true);
 }
 
 void BoxParameterController::viewWillAppear() {
-  cellAtIndex(0)->setState(m_store->displayOutliers());
+  cellAtIndex(0)->accessory()->setState(m_store->displayOutliers());
 }
 
-void BoxParameterController::willDisplayCellForIndex(HighlightCell * cell, int index) {
-}
+void BoxParameterController::fillCellForRow(HighlightCell* cell, int row) {}
 
 bool BoxParameterController::handleEvent(Ion::Events::Event event) {
-  if (event == Ion::Events::OK || event == Ion::Events::EXE) {
+  if (cellAtIndex(0)->canBeActivatedByEvent(event)) {
     m_store->setDisplayOutliers(!m_store->displayOutliers());
-    cellAtIndex(0)->setState(m_store->displayOutliers());
+    cellAtIndex(0)->accessory()->setState(m_store->displayOutliers());
     // Reset selected box calculation because the total number may have changed
-    *m_selectedBoxCalculation = 0;
+    m_dataViewController->setSelectedIndex(0);
     return true;
   }
   return false;
 }
 
-}
+}  // namespace Statistics

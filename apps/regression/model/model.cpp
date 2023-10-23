@@ -1,58 +1,102 @@
 #include "model.h"
-#include "../store.h"
+
+#include <apps/apps_container_helper.h>
 #include <apps/shared/poincare_helpers.h>
+#include <poincare/addition.h>
+#include <poincare/comparison.h>
 #include <poincare/decimal.h>
 #include <poincare/float.h>
+#include <poincare/function.h>
 #include <poincare/layout_helper.h>
 #include <poincare/multiplication.h>
+#include <poincare/subtraction.h>
+
 #include <cmath>
+
+#include "../store.h"
 
 using namespace Poincare;
 using namespace Shared;
 
 namespace Regression {
 
-Layout Model::layout() {
-  if (m_layout.isUninitialized()) {
-    const char * layoutString = I18n::translate(formulaMessage()) + sizeof("y=") - 1;
-    m_layout = LayoutHelper::StringToCodePointsLayout(layoutString, strlen(layoutString));
-  }
-  return m_layout;
+Layout Model::templateLayout() const {
+  const char* layoutString =
+      I18n::translate(formulaMessage()) + sizeof("y=") - 1;
+  return LayoutHelper::StringToCodePointsLayout(layoutString,
+                                                strlen(layoutString));
 }
 
-Poincare::Expression Model::simplifiedExpression(double * modelCoefficients, Poincare::Context * context) {
+Layout Model::equationLayout(
+    double* modelCoefficients, const char* ySymbol, int significantDigits,
+    Poincare::Preferences::PrintFloatMode displayMode) const {
+  Expression formula = expression(modelCoefficients);
+  if (formula.isUninitialized()) {
+    return Layout();
+  }
+  Expression equation =
+      Comparison::Builder(Symbol::Builder(ySymbol, strlen(ySymbol)),
+                          ComparisonNode::OperatorType::Equal, formula);
+  return equation.createLayout(
+      displayMode, significantDigits,
+      AppsContainerHelper::sharedAppsContainerGlobalContext());
+}
+
+Poincare::Expression Model::expression(double* modelCoefficients) const {
+  for (int i = 0; i < numberOfCoefficients(); i++) {
+    if (std::isnan(modelCoefficients[i])) {
+      return Expression();
+    }
+  }
+  return privateExpression(modelCoefficients);
+}
+
+double Model::levelSet(double* modelCoefficients, double xMin, double xMax,
+                       double y, Poincare::Context* context) {
   Expression e = expression(modelCoefficients);
-  if (!e.isUninitialized()) {
-    PoincareHelpers::CloneAndSimplify(&e, context, ReductionTarget::SystemForApproximation);
+  if (e.isUninitialized()) {
+    return NAN;
   }
-  return e;
+  return PoincareHelpers::Solver(xMin, xMax, "x", context)
+      .nextIntersection(Number::DecimalNumber(y), e)
+      .x();
 }
 
-double Model::levelSet(double * modelCoefficients, double xMin, double xMax, double y, Poincare::Context * context) {
-  return PoincareHelpers::Solver(xMin, xMax, "x", context).nextIntersection(Number::DecimalNumber(y), expression(modelCoefficients)).x1();
-}
-
-void Model::fit(Store * store, int series, double * modelCoefficients, Poincare::Context * context) {
+void Model::fit(Store* store, int series, double* modelCoefficients,
+                Poincare::Context* context) {
   if (!dataSuitableForFit(store, series)) {
-    return initCoefficientsForFit(modelCoefficients, NAN, true);
+    initCoefficientsForFit(modelCoefficients, NAN, true);
+    return;
   }
-  return privateFit(store, series, modelCoefficients, context);
+  privateFit(store, series, modelCoefficients, context);
 }
 
-void Model::privateFit(Store * store, int series, double * modelCoefficients, Poincare::Context * context) {
-  initCoefficientsForFit(modelCoefficients, k_initialCoefficientValue, false, store, series);
+void Model::privateFit(Store* store, int series, double* modelCoefficients,
+                       Poincare::Context* context) {
+  initCoefficientsForFit(modelCoefficients, k_initialCoefficientValue, false,
+                         store, series);
   fitLevenbergMarquardt(store, series, modelCoefficients, context);
   uniformizeCoefficientsFromFit(modelCoefficients);
 }
 
-bool Model::dataSuitableForFit(Store * store, int series) const {
-  if (!store->seriesNumberOfAbscissaeGreaterOrEqualTo(series, numberOfCoefficients())) {
+bool Model::dataSuitableForFit(Store* store, int series) const {
+  if (!store->seriesNumberOfAbscissaeGreaterOrEqualTo(series,
+                                                      numberOfCoefficients())) {
     return false;
   }
   return store->seriesIsActive(series);
 }
 
-void Model::fitLevenbergMarquardt(Store * store, int series, double * modelCoefficients, Context * context) {
+Expression Model::AdditionOrSubtractionBuilder(Expression e1, Expression e2,
+                                               bool addition) {
+  if (addition) {
+    return Addition::Builder(e1, e2);
+  }
+  return Subtraction::Builder(e1, e2);
+}
+
+void Model::fitLevenbergMarquardt(Store* store, int series,
+                                  double* modelCoefficients, Context* context) {
   /* We want to find the best coefficients of the regression to minimize the sum
    * of the squares of the difference between a data point and the corresponding
    * point of the fitting regression (chi2 function).
@@ -63,19 +107,22 @@ void Model::fitLevenbergMarquardt(Store * store, int series, double * modelCoeff
    * gradient of chi2.*/
   double currentChi2 = chi2(store, series, modelCoefficients);
   double lambda = k_initialLambda;
-  int n = numberOfCoefficients(); // n unknown coefficients
+  int n = numberOfCoefficients();  // n unknown coefficients
   int smallChi2ChangeCounts = 0;
   int iterationCount = 0;
-  while (smallChi2ChangeCounts < k_consecutiveSmallChi2ChangesLimit && iterationCount < k_maxIterations) {
+  while (smallChi2ChangeCounts < k_consecutiveSmallChi2ChangesLimit &&
+         iterationCount < k_maxIterations) {
     // Create the alpha prime matrix (it is symmetric)
-    double coefficientsAPrime[Model::k_maxNumberOfCoefficients * Model::k_maxNumberOfCoefficients] = {NAN};
-    assert(n > 0); // Ensure that coefficientsAPrime is initialized
+    double coefficientsAPrime[Model::k_maxNumberOfCoefficients *
+                              Model::k_maxNumberOfCoefficients] = {NAN};
+    assert(n > 0);  // Ensure that coefficientsAPrime is initialized
     for (int i = 0; i < n; i++) {
       for (int j = i; j < n; j++) {
-        double alphaPrime = alphaPrimeCoefficient(store, series, modelCoefficients, i, j, lambda);
-        coefficientsAPrime[i*n+j] = alphaPrime;
+        double alphaPrime = alphaPrimeCoefficient(
+            store, series, modelCoefficients, i, j, lambda);
+        coefficientsAPrime[i * n + j] = alphaPrime;
         if (i != j) {
-          coefficientsAPrime[j*n+i] = alphaPrime;
+          coefficientsAPrime[j * n + i] = alphaPrime;
         }
       }
     }
@@ -87,7 +134,8 @@ void Model::fitLevenbergMarquardt(Store * store, int series, double * modelCoeff
 
     // Compute the equation solution (= vector of coefficients increments)
     double modelCoefficientSteps[Model::k_maxNumberOfCoefficients];
-    if (solveLinearSystem(modelCoefficientSteps, coefficientsAPrime, operandsB, n, context) < 0) {
+    if (solveLinearSystem(modelCoefficientSteps, coefficientsAPrime, operandsB,
+                          n, context) < 0) {
       break;
     }
 
@@ -99,11 +147,14 @@ void Model::fitLevenbergMarquardt(Store * store, int series, double * modelCoeff
 
     // Compare new chi2 with the previous value
     double newChi2 = chi2(store, series, newModelCoefficients);
-    smallChi2ChangeCounts = (fabs(currentChi2 - newChi2) > k_chi2ChangeCondition) ? 0 : smallChi2ChangeCounts + 1;
+    smallChi2ChangeCounts =
+        (fabs(currentChi2 - newChi2) > k_chi2ChangeCondition)
+            ? 0
+            : smallChi2ChangeCounts + 1;
     if (newChi2 >= currentChi2) {
-      lambda*= k_lambdaFactor;
+      lambda *= k_lambdaFactor;
     } else {
-      lambda/= k_lambdaFactor;
+      lambda /= k_lambdaFactor;
       for (int i = 0; i < n; i++) {
         modelCoefficients[i] = newModelCoefficients[i];
       }
@@ -113,7 +164,7 @@ void Model::fitLevenbergMarquardt(Store * store, int series, double * modelCoeff
   }
 }
 
-double Model::chi2(Store * store, int series, double * modelCoefficients) const {
+double Model::chi2(Store* store, int series, double* modelCoefficients) const {
   double result = 0.0;
   for (int i = 0; i < store->numberOfPairsOfSeries(series); i++) {
     double xi = store->get(series, 0, i);
@@ -124,9 +175,11 @@ double Model::chi2(Store * store, int series, double * modelCoefficients) const 
   return result;
 }
 
-// a'(k,k) = a(k,k) * (1 + lambda)
-// a'(k,l) = a(l,k) when (k != l)
-double Model::alphaPrimeCoefficient(Store * store, int series, double * modelCoefficients, int k, int l, double lambda) const {
+/* a'(k,k) = a(k,k) * (1 + lambda)
+ * a'(k,l) = a(l,k) when (k != l) */
+double Model::alphaPrimeCoefficient(Store* store, int series,
+                                    double* modelCoefficients, int k, int l,
+                                    double lambda) const {
   assert(k >= 0 && k < numberOfCoefficients());
   assert(l >= 0 && l < numberOfCoefficients());
   double result = 0.0;
@@ -137,9 +190,10 @@ double Model::alphaPrimeCoefficient(Store * store, int series, double * modelCoe
      * a'(k,k) = a(k,k) * (1 + lambda), but if a'(k,k) is too small,
      * a'(k,k) = 2*epsilon so that the inversion method does not detect a'(k,k)
      * as a zero. */
-    result = alphaCoefficient(store, series, modelCoefficients, k, l)*(1.0+lambda);
+    result = alphaCoefficient(store, series, modelCoefficients, k, l) *
+             (1.0 + lambda);
     if (std::fabs(result) < Float<double>::EpsilonLax()) {
-      result = 2*Float<double>::EpsilonLax();
+      result = 2 * Float<double>::EpsilonLax();
     }
   } else {
     result = alphaCoefficient(store, series, modelCoefficients, l, k);
@@ -148,78 +202,95 @@ double Model::alphaPrimeCoefficient(Store * store, int series, double * modelCoe
 }
 
 // a(k,l) = sum(0, N-1, derivate(y(xi|a), ak) * derivate(y(xi|a), a))
-double Model::alphaCoefficient(Store * store, int series, double * modelCoefficients, int k, int l) const {
+double Model::alphaCoefficient(Store* store, int series,
+                               double* modelCoefficients, int k, int l) const {
   assert(k >= 0 && k < numberOfCoefficients());
   assert(l >= 0 && l < numberOfCoefficients());
   double result = 0.0;
   int m = store->numberOfPairsOfSeries(series);
   for (int i = 0; i < m; i++) {
     double xi = store->get(series, 0, i);
-    result += partialDerivate(modelCoefficients, k, xi) * partialDerivate(modelCoefficients, l, xi);
+    result += partialDerivate(modelCoefficients, k, xi) *
+              partialDerivate(modelCoefficients, l, xi);
   }
   return result;
 }
 
 // b(k) = sum(0, N-1, (yi - y(xi|a)) * derivate(y(xi|a), ak))
-double Model::betaCoefficient(Store * store, int series, double * modelCoefficients, int k) const {
+double Model::betaCoefficient(Store* store, int series,
+                              double* modelCoefficients, int k) const {
   assert(k >= 0 && k < numberOfCoefficients());
   double result = 0.0;
-  int m = store->numberOfPairsOfSeries(series); // m equations
+  int m = store->numberOfPairsOfSeries(series);  // m equations
   for (int i = 0; i < m; i++) {
     double xi = store->get(series, 0, i);
     double yi = store->get(series, 1, i);
-    result += (yi - evaluate(modelCoefficients, xi)) * partialDerivate(modelCoefficients, k, xi);
+    result += (yi - evaluate(modelCoefficients, xi)) *
+              partialDerivate(modelCoefficients, k, xi);
   }
   return result;
 }
 
-int Model::solveLinearSystem(double * solutions, double * coefficients, double * constants, int solutionDimension, Context * context) {
+int Model::solveLinearSystem(double* solutions, double* coefficients,
+                             double* constants, int solutionDimension,
+                             Context* context) {
   int n = solutionDimension;
   assert(n <= k_maxNumberOfCoefficients);
-  double coefficientsSave[k_maxNumberOfCoefficients * k_maxNumberOfCoefficients];
+  double
+      coefficientsSave[k_maxNumberOfCoefficients * k_maxNumberOfCoefficients];
   for (int i = 0; i < n * n; i++) {
     coefficientsSave[i] = coefficients[i];
   }
   int inverseResult = Matrix::ArrayInverse(coefficients, n, n);
   int numberOfMatrixModifications = 0;
-  while (inverseResult < 0 && numberOfMatrixModifications < k_maxMatrixInversionFixIterations) {
+  while (inverseResult < 0 &&
+         numberOfMatrixModifications < k_maxMatrixInversionFixIterations) {
     /* If the matrix is not invertible, we modify it to try to make
      * it invertible by multiplying the diagonal coefficients by 1+i/n. This
      * will change the iterative path of the algorithm towards the chi2 minimum,
      * but not the final solution itself, as the stopping condition is that chi2
      * is at its minimum, so when B is null. */
-    for (int i = 0; i < n; i ++) {
-      coefficientsSave[i*n+i] = (1 + ((double)i)/((double)n)) * coefficientsSave[i*n+i];
+    for (int i = 0; i < n; i++) {
+      coefficientsSave[i * n + i] =
+          (1 + ((double)i) / ((double)n)) * coefficientsSave[i * n + i];
     }
     inverseResult = Matrix::ArrayInverse(coefficientsSave, n, n);
     numberOfMatrixModifications++;
   }
   if (inverseResult < 0) {
-    return - 1;
+    return -1;
   }
   if (numberOfMatrixModifications > 0) {
-    for (int i = 0; i < n*n; i++) {
+    for (int i = 0; i < n * n; i++) {
       coefficients[i] = coefficientsSave[i];
     }
   }
-  Multiplication::computeOnArrays<double>(coefficients, constants, solutions, n, n, 1);
+  Multiplication::computeOnArrays<double>(coefficients, constants, solutions, n,
+                                          n, 1);
   return 0;
 }
 
-void Model::initCoefficientsForFit(double * modelCoefficients, double defaultValue, bool forceDefaultValue, Store * store, int series) const {
-  assert(forceDefaultValue || (store != nullptr && series >= 0 && series < Store::k_numberOfSeries && store->seriesIsActive(series)));
+void Model::initCoefficientsForFit(double* modelCoefficients,
+                                   double defaultValue, bool forceDefaultValue,
+                                   Store* store, int series) const {
+  assert(forceDefaultValue ||
+         (store != nullptr && series >= 0 && series < Store::k_numberOfSeries &&
+          store->seriesIsActive(series)));
   if (forceDefaultValue) {
     Model::specializedInitCoefficientsForFit(modelCoefficients, defaultValue);
   } else {
-    specializedInitCoefficientsForFit(modelCoefficients, defaultValue, store, series);
+    specializedInitCoefficientsForFit(modelCoefficients, defaultValue, store,
+                                      series);
   }
 }
 
-void Model::specializedInitCoefficientsForFit(double * modelCoefficients, double defaultValue, Store * store, int series) const {
+void Model::specializedInitCoefficientsForFit(double* modelCoefficients,
+                                              double defaultValue, Store* store,
+                                              int series) const {
   const int nbCoef = numberOfCoefficients();
   for (int i = 0; i < nbCoef; i++) {
     modelCoefficients[i] = defaultValue;
   }
 }
 
-}
+}  // namespace Regression

@@ -4,6 +4,7 @@ app_headers += apps/solver/app.h
 app_solver_test_src = $(addprefix apps/solver/,\
   equation.cpp \
   equation_store.cpp \
+  system_of_equations.cpp \
 )
 
 app_solver_src = $(addprefix apps/solver/,\

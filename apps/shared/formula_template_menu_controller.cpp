@@ -1,54 +1,55 @@
 #include "formula_template_menu_controller.h"
-#include "column_helper.h"
+
+#include <ion/storage/record.h>
 #include <poincare/addition.h>
 #include <poincare/print.h>
 #include <poincare/symbol.h>
-#include <ion/storage/record.h>
+
+#include "column_helper.h"
 
 using namespace Escher;
 using namespace Poincare;
 
 namespace Shared {
 
-FormulaTemplateMenuController::FormulaTemplateMenuController(Responder * parentResponder, StoreColumnHelper * storeColumnHelper) :
-  SelectableListViewController(parentResponder),
-  m_emptyTemplateCell(I18n::Message::Empty),
-  m_storeColumnHelper(storeColumnHelper)
-{
-  m_selectableTableView.setMargins(0);
-  m_selectableTableView.setDecoratorType(ScrollView::Decorator::Type::None);
+FormulaTemplateMenuController::FormulaTemplateMenuController(
+    Responder *parentResponder, StoreColumnHelper *storeColumnHelper)
+    : SelectableListViewController(parentResponder),
+      m_storeColumnHelper(storeColumnHelper) {
+  m_emptyTemplateCell.label()->setMessage(I18n::Message::Empty);
+  m_selectableListView.setMargins(0);
+  m_selectableListView.hideScrollBars();
 }
 
-const char * FormulaTemplateMenuController::title() {
+const char *FormulaTemplateMenuController::title() {
   return I18n::translate(I18n::Message::FillWithFormula);
 }
 
 void FormulaTemplateMenuController::viewWillAppear() {
   computeUninitializedLayouts();
   ViewController::viewWillAppear();
-  selectCellAtLocation(0, 0);
+  selectCell(0);
 }
 
-void FormulaTemplateMenuController::willDisplayCellForIndex(HighlightCell * cell, int i) {
-  assert(i < k_numberOfTemplates);
-  CellType type = static_cast<CellType>(typeAtIndex(i));
+void FormulaTemplateMenuController::fillCellForRow(HighlightCell *cell,
+                                                   int row) {
+  assert(row < k_numberOfTemplates);
+  CellType type = static_cast<CellType>(typeAtRow(row));
   if (type == CellType::EmptyTemplate) {
     return;
   }
   computeUninitializedLayouts();
-  int index = relativeCellIndex(i, type);
+  int index = relativeCellIndex(row, type);
   if (type == CellType::TemplateWithMessage) {
-    ExpressionTableCellWithMessage * myCell = static_cast<ExpressionTableCellWithMessage *>(cell);
-    myCell->setLayout(m_layouts[i - 1]);
-    myCell->setSubLabelMessage(k_subLabelMessages[index]);
-    myCell->setParentResponder(&m_selectableTableView);
+    MessageTemplateCell *myCell = static_cast<MessageTemplateCell *>(cell);
+    myCell->label()->setLayout(m_layouts[row - 1]);
+    myCell->subLabel()->setMessage(k_subLabelMessages[index]);
     return;
   }
   assert(type == CellType::TemplateWithBuffer);
-  ExpressionTableCellWithBuffer * myCell = static_cast<ExpressionTableCellWithBuffer *>(cell);
-  myCell->setLayout(m_layouts[i - 1]);
+  BufferTemplateCell *myCell = static_cast<BufferTemplateCell *>(cell);
+  myCell->label()->setLayout(m_layouts[row - 1]);
   fillSubLabelBuffer(myCell, index);
-  myCell->setParentResponder(&m_selectableTableView);
 }
 
 void FormulaTemplateMenuController::viewDidDisappear() {
@@ -57,10 +58,6 @@ void FormulaTemplateMenuController::viewDidDisappear() {
     m_layouts[i] = Layout();
   }
   ViewController::viewDidDisappear();
-}
-
-void FormulaTemplateMenuController::didBecomeFirstResponder() {
-  Container::activeApp()->setFirstResponder(&m_selectableTableView);
 }
 
 bool FormulaTemplateMenuController::handleEvent(Ion::Events::Event event) {
@@ -74,14 +71,16 @@ bool FormulaTemplateMenuController::handleEvent(Ion::Events::Event event) {
   return false;
 }
 
-KDCoordinate FormulaTemplateMenuController::nonMemoizedRowHeight(int index) {
-  assert(index < k_numberOfTemplates);
-  CellType type = static_cast<CellType>(typeAtIndex(index));
-  int reusableCellIndex = relativeCellIndex(index, type);
-  return heightForCellAtIndex(reusableCell(reusableCellIndex, typeAtIndex(index)), index);
+KDCoordinate FormulaTemplateMenuController::nonMemoizedRowHeight(int row) {
+  assert(row < k_numberOfTemplates);
+  CellType type = static_cast<CellType>(typeAtRow(row));
+  int reusableCellIndex = relativeCellIndex(row, type);
+  return protectedNonMemoizedRowHeight(
+      reusableCell(reusableCellIndex, typeAtRow(row)), row);
 }
 
-HighlightCell * FormulaTemplateMenuController::reusableCell(int index, int type) {
+HighlightCell *FormulaTemplateMenuController::reusableCell(int index,
+                                                           int type) {
   assert(index < reusableCellCount(type));
   CellType cellType = static_cast<CellType>(type);
   if (cellType == CellType::EmptyTemplate) {
@@ -105,19 +104,20 @@ int FormulaTemplateMenuController::reusableCellCount(int type) {
   return k_numberOfExpressionCellsWithBuffer;
 }
 
-int FormulaTemplateMenuController::typeAtIndex(int index) const {
-  assert(index < numberOfRows());
-  if (index <= static_cast<int>(Cell::EmptyTemplate)) {
+int FormulaTemplateMenuController::typeAtRow(int row) const {
+  assert(row < numberOfRows());
+  if (row <= static_cast<int>(Cell::EmptyTemplate)) {
     return static_cast<int>(CellType::EmptyTemplate);
   }
-  if (index <= static_cast<int>(Cell::Logarithm)) {
+  if (row <= static_cast<int>(Cell::Logarithm)) {
     return static_cast<int>(CellType::TemplateWithMessage);
   }
   return static_cast<int>(CellType::TemplateWithBuffer);
 }
 
 int FormulaTemplateMenuController::relativeCellIndex(int index, CellType type) {
-  if (type == CellType::TemplateWithMessage || type == CellType::TemplateWithBuffer) {
+  if (type == CellType::TemplateWithMessage ||
+      type == CellType::TemplateWithBuffer) {
     index -= reusableCellCount(static_cast<int>(CellType::EmptyTemplate));
   }
   if (type == CellType::TemplateWithBuffer) {
@@ -142,9 +142,11 @@ Expression FormulaTemplateMenuController::templateExpressionForCell(Cell cell) {
   if (cell == Cell::OtherColumns) {
     char name1[DoublePairStore::k_columnNamesLength + 1];
     char name2[DoublePairStore::k_columnNamesLength + 1];
-    char * columnNames[2] = {name1, name2};
+    char *columnNames[2] = {name1, name2};
     fillSumColumnNames(columnNames);
-    return Addition::Builder(Symbol::Builder(columnNames[0], DoublePairStore::k_columnNamesLength), Symbol::Builder(columnNames[1], DoublePairStore::k_columnNamesLength));
+    return Addition::Builder(
+        Symbol::Builder(columnNames[0], DoublePairStore::k_columnNamesLength),
+        Symbol::Builder(columnNames[1], DoublePairStore::k_columnNamesLength));
   }
   // Build the expression "V1"
   assert(cell == Cell::OtherApp && shouldDisplayOtherAppCell());
@@ -160,41 +162,54 @@ void FormulaTemplateMenuController::computeUninitializedLayouts() {
       continue;
     }
     Poincare::Expression e = templateExpressionForCell(static_cast<Cell>(i));
-    m_layouts[i - 1] = e.createLayout(Poincare::Preferences::PrintFloatMode::Decimal, Preferences::ShortNumberOfSignificantDigits, Container::activeApp()->localContext());
+    m_layouts[i - 1] =
+        e.createLayout(Poincare::Preferences::PrintFloatMode::Decimal,
+                       Preferences::ShortNumberOfSignificantDigits,
+                       Container::activeApp()->localContext());
   }
 }
 
-void FormulaTemplateMenuController::fillSubLabelBuffer(Escher::ExpressionTableCellWithBuffer * cell, int index) {
-  I18n::Message message = k_subLabelMessages[index + k_numberOfExpressionCellsWithMessage];
-  char buffer[BufferTextView::k_maxNumberOfChar];
+void FormulaTemplateMenuController::fillSubLabelBuffer(BufferTemplateCell *cell,
+                                                       int index) {
+  I18n::Message message =
+      k_subLabelMessages[index + k_numberOfExpressionCellsWithMessage];
+  constexpr size_t k_bufferSize =
+      Escher::OneLineBufferTextView<>::MaxTextSize();
+  char buffer[k_bufferSize];
   if (index == 0) {
     char name1[DoublePairStore::k_columnNamesLength + 1];
     char name2[DoublePairStore::k_columnNamesLength + 1];
-    char * columnNames[2] = {name1, name2};
+    char *columnNames[2] = {name1, name2};
     fillSumColumnNames(columnNames);
-    Print::CustomPrintf(buffer, BufferTextView::k_maxNumberOfChar + 1, I18n::translate(message), name1, name2);
-    cell->setSubLabelText(buffer);
+    Print::CustomPrintf(buffer, k_bufferSize, I18n::translate(message), name1,
+                        name2);
+    cell->subLabel()->setText(buffer);
     return;
   }
   assert(index == 1);
   char columnName[DoublePairStore::k_columnNamesLength + 1];
   fillOtherAppColumnName(columnName);
-  Print::CustomPrintf(buffer, BufferTextView::k_maxNumberOfChar + 1, I18n::translate(message), columnName);
-  cell->setSubLabelText(buffer);
+  Print::CustomPrintf(buffer, k_bufferSize, I18n::translate(message),
+                      columnName);
+  cell->subLabel()->setText(buffer);
 }
 
-void FormulaTemplateMenuController::fillSumColumnNames(char * buffers[]) const {
+void FormulaTemplateMenuController::fillSumColumnNames(char *buffers[]) const {
   for (int i = 0; i < 2; i++) {
-    m_storeColumnHelper->fillColumnNameFromStore(m_storeColumnHelper->referencedColumn(), buffers[i]);
+    m_storeColumnHelper->fillColumnNameFromStore(
+        m_storeColumnHelper->referencedColumn(), buffers[i]);
     int seriesIndex = static_cast<int>(buffers[i][1] - '1');
-    int newSeriesIndex = (seriesIndex + i + 1) % DoublePairStore::k_numberOfSeries;
+    int newSeriesIndex =
+        (seriesIndex + i + 1) % DoublePairStore::k_numberOfSeries;
     buffers[i][1] = '1' + newSeriesIndex;
   }
 }
 
 char correspondingColumnInOtherApp(char columnPrefix) {
   constexpr static int k_numberOfApps = 2;
-  constexpr static const char * const * k_columnNames[k_numberOfApps] = {DoublePairStore::k_regressionColumNames, DoublePairStore::k_statisticsColumNames};
+  constexpr static const char *const *k_columnNames[k_numberOfApps] = {
+      DoublePairStore::k_regressionColumNames,
+      DoublePairStore::k_statisticsColumNames};
   for (int i = 0; i < DoublePairStore::k_numberOfColumnsPerSeries; i++) {
     for (int j = 0; j < k_numberOfApps; j++) {
       if (k_columnNames[j][i][0] == columnPrefix) {
@@ -206,9 +221,10 @@ char correspondingColumnInOtherApp(char columnPrefix) {
   return 0;
 }
 
-void FormulaTemplateMenuController::fillOtherAppColumnName(char * buffer) const {
-  m_storeColumnHelper->fillColumnNameFromStore(m_storeColumnHelper->referencedColumn(), buffer);
+void FormulaTemplateMenuController::fillOtherAppColumnName(char *buffer) const {
+  m_storeColumnHelper->fillColumnNameFromStore(
+      m_storeColumnHelper->referencedColumn(), buffer);
   buffer[0] = correspondingColumnInOtherApp(buffer[0]);
 }
 
-}
+}  // namespace Shared

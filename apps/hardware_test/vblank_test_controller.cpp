@@ -1,6 +1,8 @@
 #include "vblank_test_controller.h"
-#include "../apps_container.h"
+
 #include <ion/post_and_hardware_tests.h>
+
+#include "../apps_container.h"
 
 using namespace Poincare;
 
@@ -23,14 +25,13 @@ bool VBlankTestController::handleEvent(Ion::Events::Event event) {
 void VBlankTestController::viewWillAppear() {
   bool testOK = Ion::POSTAndHardwareTests::VBlankOK();
   m_view.setColor(testOK ? KDColorGreen : KDColorRed);
-  m_view.vBlankStateTextView()->setText(testOK ? k_vBlankOKText : k_vBlankFailTest);
+  m_view.vBlankStateTextView()->setText(testOK ? k_vBlankOKText
+                                               : k_vBlankFailTest);
 }
 
-VBlankTestController::ContentView::ContentView() :
-  SolidColorView(KDColorWhite),
-  m_vBlankStateView(KDFont::Size::Large, KDContext::k_alignCenter, KDContext::k_alignCenter)
-{
-}
+VBlankTestController::ContentView::ContentView()
+    : SolidColorView(KDColorWhite),
+      m_vBlankStateView({.horizontalAlignment = KDGlyph::k_alignCenter}) {}
 
 void VBlankTestController::ContentView::setColor(KDColor color) {
   SolidColorView::setColor(color);
@@ -38,7 +39,7 @@ void VBlankTestController::ContentView::setColor(KDColor color) {
 }
 
 void VBlankTestController::ContentView::layoutSubviews(bool force) {
-  m_vBlankStateView.setFrame(KDRectScreen, force);
+  setChildFrame(&m_vBlankStateView, KDRectScreen, force);
 }
 
-}
+}  // namespace HardwareTest

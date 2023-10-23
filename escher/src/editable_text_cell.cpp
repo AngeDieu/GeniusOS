@@ -1,50 +1,44 @@
-#include <escher/editable_text_cell.h>
+#include <assert.h>
 #include <escher/container.h>
+#include <escher/editable_text_cell.h>
 #include <escher/palette.h>
 #include <poincare/print_float.h>
-#include <assert.h>
 
 namespace Escher {
 
-EditableTextCell::EditableTextCell(Responder * parentResponder, InputEventHandlerDelegate * inputEventHandlerDelegate, TextFieldDelegate * delegate,
-   KDFont::Size font, float horizontalAlignment, float verticalAlignment, KDColor textColor, KDColor backgroundColor) :
-  HighlightCell(),
-  Responder(parentResponder),
-  m_textField(this, m_textBody, Poincare::PrintFloat::k_maxFloatCharSize, TextField::MaxBufferSize(), inputEventHandlerDelegate, delegate, font, horizontalAlignment, verticalAlignment, textColor, backgroundColor)
-{
-  m_textBody[0] = 0;
-}
-
-TextField * EditableTextCell::textField() {
-  return &m_textField;
-}
-
-void EditableTextCell::setHighlighted(bool highlight) {
+void AbstractEditableTextCell::setHighlighted(bool highlight) {
   HighlightCell::setHighlighted(highlight);
-  KDColor backgroundColor = highlight? Palette::Select : KDColorWhite;
-  m_textField.setBackgroundColor(backgroundColor);
+  KDColor backgroundColor = highlight ? Palette::Select : KDColorWhite;
+  textField()->setBackgroundColor(backgroundColor);
 }
 
-int EditableTextCell::numberOfSubviews() const {
-  return 1;
+const char* AbstractEditableTextCell::text() const {
+  if (!const_cast<AbstractEditableTextCell*>(this)->textField()->isEditing()) {
+    return const_cast<AbstractEditableTextCell*>(this)->textField()->text();
+  }
+  return nullptr;
 }
 
-View * EditableTextCell::subviewAtIndex(int index) {
+int AbstractEditableTextCell::numberOfSubviews() const { return 1; }
+
+View* AbstractEditableTextCell::subviewAtIndex(int index) {
   assert(index == 0);
-  return &m_textField;
+  return textField();
 }
 
-void EditableTextCell::layoutSubviews(bool force) {
+void AbstractEditableTextCell::layoutSubviews(bool force) {
   KDRect cellBounds = bounds();
-  m_textField.setFrame(cellBounds, force);
+  setChildFrame(textField(), cellBounds, force);
 }
 
-void EditableTextCell::didBecomeFirstResponder() {
-  Container::activeApp()->setFirstResponder(&m_textField);
+void AbstractEditableTextCell::didBecomeFirstResponder() {
+  Container::activeApp()->setFirstResponder(textField());
 }
 
-KDSize EditableTextCell::minimalSizeForOptimalDisplay() const {
-  return m_textField.minimalSizeForOptimalDisplay();
+KDSize AbstractEditableTextCell::minimalSizeForOptimalDisplay() const {
+  return const_cast<AbstractEditableTextCell*>(this)
+      ->textField()
+      ->minimalSizeForOptimalDisplay();
 }
 
-}
+}  // namespace Escher

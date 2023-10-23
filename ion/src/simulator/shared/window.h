@@ -7,6 +7,9 @@ namespace Ion {
 namespace Simulator {
 namespace Window {
 
+constexpr static int perfectWidth = 458;
+constexpr static int perfectHeight = 888;
+
 void init();
 void shutdown();
 
@@ -19,11 +22,11 @@ void relayout();
 // Callbacks
 void didRefresh();
 
-void didInit(SDL_Window * window);
-void willShutdown(SDL_Window * window);
+void didInit(SDL_Window* window);
+void willShutdown(SDL_Window* window);
 
-}
-}
-}
+}  // namespace Window
+}  // namespace Simulator
+}  // namespace Ion
 
 #endif

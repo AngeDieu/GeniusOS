@@ -1,9 +1,6 @@
 #ifndef POINCARE_CHECKPOINT_H
 #define POINCARE_CHECKPOINT_H
 
-#include <poincare/tree_node.h>
-#include <poincare/tree_pool.h>
-
 /* Usage:
  *
  * CAUTION : A scope MUST be created directly around the Checkpoint, to ensure
@@ -23,38 +20,43 @@ void interruptableCode() {
 
 */
 
-#define CheckpointRun(checkpoint, activation) ( checkpoint.setActive(activation) )
+#define CheckpointRun(checkpoint, activation) (checkpoint.setActive(activation))
 
 namespace Poincare {
 
+class TreeNode;
+
 class Checkpoint {
   friend class ExceptionCheckpoint;
-public:
-  static TreeNode * TopmostEndOfPool();
 
-  Checkpoint() : m_parent(s_topmost), m_endOfPool(TreePool::sharedPool()->last()) {
-    assert(!m_parent || m_endOfPool >= m_parent->m_endOfPool);
+ public:
+  static TreeNode *TopmostEndOfPool() {
+    return s_topmost ? s_topmost->m_endOfPool : nullptr;
   }
+
+  Checkpoint();
   Checkpoint(const Checkpoint &) = delete;
   virtual ~Checkpoint() { protectedDiscard(); }
-  Checkpoint & operator=(const Checkpoint &) = delete;
+  Checkpoint &operator=(const Checkpoint &) = delete;
+
+  TreeNode *const endOfPoolBeforeCheckpoint() { return m_endOfPool; }
 
   virtual void discard() const { protectedDiscard(); }
 
-protected:
-  static Checkpoint * s_topmost;
+ protected:
+  static Checkpoint *s_topmost;
 
-  void rollback() const { TreePool::sharedPool()->freePoolFromNode(m_endOfPool); }
+  void rollback() const;
   void protectedDiscard() const;
 
-  Checkpoint * const m_parent;
+  Checkpoint *const m_parent;
 
-private:
+ private:
   virtual void rollbackException();
 
-  TreeNode * const m_endOfPool;
+  TreeNode *const m_endOfPool;
 };
 
-}
+}  // namespace Poincare
 
 #endif

@@ -10,23 +10,25 @@ namespace Distributions {
 
 /* Parameters Controller */
 
-ParametersController::ParametersController(Escher::StackViewController * parentResponder,
-                                           InputEventHandlerDelegate * inputEventHandlerDelegate,
-                                           Distribution * distribution,
-                                           CalculationController * calculationController) :
-      FloatParameterController<double>(parentResponder),
-      m_contentView(&m_selectableTableView, I18n::Message::DefineParameters),
+ParametersController::ParametersController(
+    Escher::StackViewController *parentResponder,
+    InputEventHandlerDelegate *inputEventHandlerDelegate,
+    Distribution *distribution, CalculationController *calculationController)
+    : FloatParameterController<double>(parentResponder),
+      m_headerView(I18n::Message::DefineParameters, k_messageFormat),
+      m_bottomView(I18n::Message::LeaveAFieldEmpty, k_messageFormat),
       m_distribution(distribution),
       m_calculationController(calculationController) {
   assert(m_distribution != nullptr);
   m_okButton.setMessage(I18n::Message::Next);
   for (int i = 0; i < k_maxNumberOfCells; i++) {
-    m_menuListCell[i].setParentResponder(&m_selectableTableView);
+    m_menuListCell[i].setParentResponder(&m_selectableListView);
     m_menuListCell[i].setDelegates(inputEventHandlerDelegate, this);
   }
+  setTopView(&m_headerView);
 }
 
-const char * ParametersController::title() {
+const char *ParametersController::title() {
   return I18n::translate(m_distribution->title());
 }
 
@@ -43,48 +45,50 @@ void ParametersController::reinitCalculation() {
 }
 
 void ParametersController::viewWillAppear() {
+  if (m_distribution->canHaveUninitializedParameter()) {
+    setBottomView(&m_bottomView);
+  } else {
+    setBottomView(nullptr);
+  }
   resetMemoization();
-  m_contentView.layoutSubviews();
+  m_selectableListView.reloadData();
   FloatParameterController::viewWillAppear();
-}
-
-void ParametersController::viewDidDisappear() {
-  /* Prevent initSize to be bypassed when reopening the ParametersController.
-   * Indeed, number of cells might increase so their width need to be computed
-   * */
-  m_contentView.resetSize();
 }
 
 int ParametersController::numberOfRows() const {
   return 1 + m_distribution->numberOfParameters();
 }
 
-void ParametersController::willDisplayCellForIndex(HighlightCell * cell, int index) {
-  if (index == numberOfRows() - 1) {
-    if (selectedRow() != numberOfRows() - 1) {
-      cell->setHighlighted(false);
-    }
+void ParametersController::fillCellForRow(HighlightCell *cell, int row) {
+  if (row == numberOfRows() - 1) {
     return;
   }
-  ExpressionCellWithEditableTextWithMessage * myCell =
-      static_cast<ExpressionCellWithEditableTextWithMessage *>(cell);
-  myCell->setLayout(m_distribution->parameterSymbolAtIndex(index));
-  myCell->setSubLabelMessage(m_distribution->parameterDefinitionAtIndex(index));
-  FloatParameterController::willDisplayCellForIndex(cell, index);
+  MenuCellWithEditableText<LayoutView, MessageTextView> *myCell =
+      static_cast<MenuCellWithEditableText<LayoutView, MessageTextView> *>(
+          cell);
+  myCell->label()->setLayout(m_distribution->parameterSymbolAtIndex(row));
+  myCell->subLabel()->setMessage(
+      m_distribution->parameterDefinitionAtIndex(row));
+  if (m_distribution->uninitializedParameterIndex() == row) {
+    textFieldOfCellAtIndex(cell, row)->setText("");
+    return;
+  }
+  FloatParameterController::fillCellForRow(cell, row);
 }
 
-bool ParametersController::isCellEditing(Escher::HighlightCell * cell, int index) {
-  return static_cast<ExpressionCellWithEditableTextWithMessage *>(cell)->textField()->isEditing();
-}
-
-void ParametersController::setTextInCell(Escher::HighlightCell * cell, const char * text, int index) {
-  static_cast<ExpressionCellWithEditableTextWithMessage *>(cell)->textField()->setText(text);
-}
-
-HighlightCell * ParametersController::reusableParameterCell(int index, int type) {
+HighlightCell *ParametersController::reusableParameterCell(int index,
+                                                           int type) {
   assert(index >= 0);
   assert(index < k_maxNumberOfCells);
   return &m_menuListCell[index];
+}
+
+TextField *ParametersController::textFieldOfCellAtIndex(HighlightCell *cell,
+                                                        int index) {
+  assert(typeAtRow(index) == k_parameterCellType);
+  return static_cast<MenuCellWithEditableText<LayoutView, MessageTextView> *>(
+             cell)
+      ->textField();
 }
 
 int ParametersController::reusableParameterCellCount(int type) {
@@ -105,12 +109,12 @@ bool ParametersController::setParameterAtIndex(int parameterIndex, double f) {
   return true;
 }
 
-bool ParametersController::textFieldDidFinishEditing(AbstractTextField * textField,
-                                                     const char * text,
-                                                     Ion::Events::Event event) {
-  if (FloatParameterController::textFieldDidFinishEditing(textField, text, event)) {
+bool ParametersController::textFieldDidFinishEditing(
+    AbstractTextField *textField, const char *text, Ion::Events::Event event) {
+  if (FloatParameterController::textFieldDidFinishEditing(textField, text,
+                                                          event)) {
     resetMemoization();
-    m_selectableTableView.reloadData();
+    m_selectableListView.reloadData();
     return true;
   }
   return false;
@@ -118,6 +122,16 @@ bool ParametersController::textFieldDidFinishEditing(AbstractTextField * textFie
 
 void ParametersController::buttonAction() {
   stackOpenPage(m_calculationController);
+}
+
+bool ParametersController::hasUndefinedValue(const char *text,
+                                             double floatValue) const {
+  if (text[0] == 0) {
+    // Accept empty inputs
+    return false;
+  }
+  return Shared::FloatParameterController<double>::hasUndefinedValue(
+      text, floatValue);
 }
 
 }  // namespace Distributions

@@ -4,7 +4,7 @@ namespace Ion {
 namespace Simulator {
 namespace Platform {
 
-const char * cacheWindowPositionFilePath() {
+const char* cacheWindowPositionFilePath() {
   return filePathInTempDir("numworks.pos");
 }
 

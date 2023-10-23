@@ -1,158 +1,155 @@
 #ifndef POINCARE_LAYOUT_CURSOR_H
 #define POINCARE_LAYOUT_CURSOR_H
 
+#include <omg/directions.h>
+#include <poincare/empty_rectangle.h>
 #include <poincare/layout.h>
+#include <poincare/layout_selection.h>
 
 namespace Poincare {
 
-class HorizontalLayoutNode;
-class VerticalOffsetLayout;
+/* The LayoutCursor has two main attributes: m_layout and m_position
+ *
+ * If m_layout is an HorizontalLayout, the cursor is left of the child at
+ * index m_position. If m_position == layout.numberOfChildren(), the cursor
+ * is on the right of the HorizontalLayout.
+ * Ex: l = HorizontalLayout("01234")
+ *     -> m_position == 0 -> "|01234"
+ *     -> m_position == 2 -> "01|234"
+ *     -> m_position == 5 -> "01234|"
+ *
+ * If the layout is not an HorizontalLayout, and its parent is not horizontal
+ * either, the cursor is either left or right of the layout.
+ * m_position should only be 0 or 1.
+ * Ex: l = CodePoint("A")
+ *     -> m_position == 0 -> "|A"
+ *     -> m_position == 1 -> "A|"
+ *
+ * WARNING: If a layout has an HorizontalLayout as parent, the cursor must have
+ * m_layout = ParentHorizontalLayout.
+ *
+ * Ex: l = HorizontalLayout("01234") and the cursor is at "012|34"
+ * It CAN'T be m_layout = "3" and m_position = 0.
+ * It MUST be m_layout = Horizontal("01234") and m_position = 3
+ *
+ * */
 
 class LayoutCursor final {
-  friend class AutocompletedBracketPairLayoutNode;
-  friend class BinomialCoefficientLayoutNode;
-  friend class BracketLayoutNode;
-  friend class BracketPairLayoutNode;
-  friend class ConjugateLayoutNode;
-  friend class DerivativeLayoutNode;
-  friend class EmptyLayoutNode;
-  friend class FirstOrderDerivativeLayoutNode;
-  friend class FractionLayoutNode;
-  friend class GridLayoutNode;
-  friend class HigherOrderDerivativeLayoutNode;
-  friend class HorizontalLayoutNode;
-  friend class IntegralLayoutNode;
-  friend class Layout;
-  friend class LayoutNode;
-  friend class LetterWithSubAndSuperscriptLayoutNode;
-  friend class ListSequenceLayoutNode;
-  friend class MatrixLayoutNode;
-  friend class NthRootLayoutNode;
-  friend class PiecewiseOperatorLayoutNode;
-  friend class SequenceLayoutNode;
-  friend class SquareBracketPairLayoutNode;
-  friend class VerticalOffsetLayoutNode;
-public:
-  constexpr static KDCoordinate k_cursorWidth = 1;
+ public:
+  /* This constructor either set the cursor at the leftMost or rightmost
+   * position in the layout. */
+  LayoutCursor(Layout layout,
+               OMG::HorizontalDirection sideOfLayout = OMG::Direction::Right())
+      : m_position(0), m_startOfSelection(-1) {
+    if (!layout.isUninitialized()) {
+      setLayout(layout, sideOfLayout);
+    }
+  }
 
-  enum class Direction {
-    Left,
-    Up,
-    Down,
-    Right
-  };
-
-  enum class Position {
-    Left,
-    Right
-  };
-
-  LayoutCursor() :
-    m_position(Position::Right)
-  {}
-
-  LayoutCursor(Layout layoutR, Position position = Position::Right) :
-    m_layout(layoutR.node()),
-    m_position(position)
-  {}
+  LayoutCursor() : LayoutCursor(Layout()) {}
 
   // Definition
-  bool isDefined() const { return !m_layout.isUninitialized(); }
+  bool isUninitialized() const { return m_layout.isUninitialized(); }
+  bool isValid() const {
+    return !m_layout.deepIsGhost() &&
+           (isUninitialized() || (m_position >= leftMostPosition() &&
+                                  m_position <= rightmostPosition()));
+  }
 
   // Getters and setters
   Layout layout() { return m_layout; }
-  LayoutNode * layoutNode() { return m_layout.node(); }
-
-  int layoutIdentifier() { return m_layout.identifier(); }
-  void setLayout(Layout r) {
-    if (r != m_layout) {
-      m_layout = r;
-    }
+  int position() const { return m_position; }
+  bool isSelecting() const { return m_startOfSelection >= 0; }
+  LayoutSelection selection() const {
+    return isSelecting()
+               ? LayoutSelection(m_layout, m_startOfSelection, m_position)
+               : LayoutSelection();
   }
-  void setTo(LayoutCursor * other) {
-     m_layout = other->layout();
-     m_position = other->position();
-  }
-  Position position() const { return m_position; }
-  void setPosition(Position position) { m_position = position; }
-  KDCoordinate cursorHeightWithoutSelection(KDFont::Size font);
-  KDCoordinate baselineWithoutSelection(KDFont::Size font);
 
+  // These will call didEnterCurrentPosition
+  void safeSetLayout(Layout layout, OMG::HorizontalDirection sideOfLayout);
+  void safeSetPosition(int position);
 
-  /* Comparison */
-  bool isEquivalentTo(LayoutCursor cursor);
-
-  /* Position */
-  KDPoint middleLeftPoint();
+  /* Position and size */
+  KDCoordinate cursorHeight(KDFont::Size font);
+  KDPoint cursorAbsoluteOrigin(KDFont::Size font);
+  KDPoint middleLeftPoint(KDFont::Size font);
 
   /* Move */
-  void move(Direction direction, bool * shouldRecomputeLayout, bool forSelection = false);
-  void moveLeft(bool * shouldRecomputeLayout, bool forSelection = false) {
-    layoutNode()->moveCursorLeft(this, shouldRecomputeLayout, forSelection);
-  }
-  void moveRight(bool * shouldRecomputeLayout, bool forSelection = false) {
-    layoutNode()->moveCursorRight(this, shouldRecomputeLayout, forSelection);
-  }
-  void moveAbove(bool * shouldRecomputeLayout, bool forSelection = false) {
-    layoutNode()->moveCursorUp(this, shouldRecomputeLayout, false, forSelection);
-  }
-  void moveUnder(bool * shouldRecomputeLayout, bool forSelection = false) {
-    layoutNode()->moveCursorDown(this, shouldRecomputeLayout, false, forSelection);
-  }
-  LayoutCursor cursorAtDirection(Direction direction, bool * shouldRecomputeLayout, bool forSelection = false, int step = 1);
+  // Return false if could not move
+  bool move(OMG::Direction direction, bool selecting, bool* shouldRedrawLayout,
+            Context* context = nullptr);
+  bool moveMultipleSteps(OMG::Direction direction, int step, bool selecting,
+                         bool* shouldRedrawLayout, Context* context = nullptr);
 
-  /* Select */
-  void select(Direction direction, bool * shouldRecomputeLayout, Layout * selection);
-  LayoutCursor selectAtDirection(Direction direction, bool * shouldRecomputeLayout, Layout * selection);
+  /* Layout insertion */
+  void insertLayout(Layout layout, Context* context, bool forceRight = false,
+                    bool forceLeft = false);
+  void addEmptyExponentialLayout(Context* context);
+  void addEmptyMatrixLayout(Context* context);
+  void addEmptyPowerLayout(Context* context);
+  void addEmptySquareRootLayout(Context* context);
+  void addEmptySquarePowerLayout(Context* context);
+  void addEmptyTenPowerLayout(Context* context);
+  void addFractionLayoutAndCollapseSiblings(Context* context);
+  void insertText(const char* text, Context* context,
+                  bool forceCursorRightOfText = false,
+                  bool forceCursorLeftOfText = false, bool linearMode = false);
 
-  /* Layout modification */
-  void addEmptyExponentialLayout(Context * context);
-  void addEmptyMatrixLayout(Context * context);
-  void addEmptyPowerLayout(Context * context);
-  void addEmptySquareRootLayout(Context * context);
-  void addEmptySquarePowerLayout(Context * context);
-  void addEmptyTenPowerLayout(Context * context);
-  void addFractionLayoutAndCollapseSiblings(Context * context);
-  void insertText(const char * text, Context * context, bool forceCursorRightOfText = false, bool forceCursorLeftOfText = false);
-  void addLayoutAndMoveCursor(Layout l, Context * context, bool forceCursorRightOfLayout = false, bool withinBeautification = false);
-  bool showEmptyLayoutIfNeeded() { return privateShowHideEmptyLayoutIfNeeded(true); }
-  bool hideEmptyLayoutIfNeeded() { return privateShowHideEmptyLayoutIfNeeded(false); }
-  void performBackspace() { m_layout.deleteBeforeCursor(this); }
-  void clearLayout();
+  /* Layout deletion */
+  void performBackspace();
+
+  void stopSelecting();
+
+  /* Set empty rectangle visibility and gray rectangle in grids. */
+  bool didEnterCurrentPosition(LayoutCursor previousPosition = LayoutCursor());
+  // Call this if the cursor is disappearing from the field
+  bool didExitPosition();
 
   bool isAtNumeratorOfEmptyFraction() const;
 
-private:
-  constexpr static KDCoordinate k_cursorHeight = 18;
+ private:
+  void setLayout(Layout layout, OMG::HorizontalDirection sideOfLayout);
 
-  LayoutCursor(LayoutNode * node, Position position = Position::Right) :
-    m_layout(node),
-    m_position(position)
-  {}
+  Layout leftLayout();
+  Layout rightLayout();
+  Layout layoutToFit(KDFont::Size font);
 
-  void setLayoutNode(LayoutNode * n) {
-    if (n->identifier() != m_layout.identifier()) {
-      /* Compare the identifiers and not the nodes because m_layout might
-       * temporarily be pointing to a GhostNode. In this case,
-       * m_layout.node() would crash because of the assertion that the node
-       * is not ghost. */
-      m_layout = Layout(n);
-    }
+  int leftMostPosition() const { return 0; }
+  int rightmostPosition() const {
+    return m_layout.isHorizontal() ? m_layout.numberOfChildren() : 1;
   }
-  KDCoordinate layoutHeight(KDFont::Size font);
-  void privateAddEmptyPowerLayout(VerticalOffsetLayout v);
-  bool baseForNewPowerLayout();
-  bool privateShowHideEmptyLayoutIfNeeded(bool show);
-  void selectLeftRight(bool right, bool * shouldRecomputeLayout, Layout * selection);
-  void selectUpDown(bool up, bool * shouldRecomputeLayout, Layout * selection);
-  /* Return an uninitialized layout if the cursor is not inside a bracket pair,
-   * touching one of the brackets. */
-  Layout bracketsEncompassingCursor(Layout equivalentLayout) const;
+  bool horizontalMove(OMG::HorizontalDirection direction,
+                      bool* shouldRedrawLayout);
+  bool verticalMove(OMG::VerticalDirection direction, bool* shouldRedrawLayout);
+  bool verticalMoveWithoutSelection(OMG::VerticalDirection direction,
+                                    bool* shouldRedrawLayout);
+
+  void privateStartSelecting();
+
+  void deleteAndResetSelection();
+  void privateDelete(LayoutNode::DeletionMethod deletionMethod,
+                     bool deletionAppliedToParent);
+
+  bool setEmptyRectangleVisibilityAtCurrentPosition(
+      EmptyRectangle::State state);
+  void removeEmptyRowOrColumnOfGridParentIfNeeded();
+  void invalidateSizesAndPositions();
+
+  void collapseSiblingsOfLayout(Layout l);
+  void collapseSiblingsOfLayoutOnDirection(Layout l,
+                                           OMG::HorizontalDirection direction,
+                                           int absorbingChildIndex);
+
+  void balanceAutocompletedBracketsAndKeepAValidCursor();
 
   Layout m_layout;
-  Position m_position;
+  int m_position;
+  /* -1 if no current selection. If m_startOfSelection >= 0, the selection is
+   * between m_startOfSelection and m_position */
+  int m_startOfSelection;
 };
 
-}
+}  // namespace Poincare
 
 #endif

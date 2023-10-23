@@ -1,28 +1,28 @@
 #ifndef SHARED_COLOR_CELL_H
 #define SHARED_COLOR_CELL_H
 
-#include <escher/message_table_cell.h>
-#include <escher/transparent_view.h>
+#include <escher/arbitrary_shaped_view.h>
+#include <escher/menu_cell.h>
+#include <escher/message_text_view.h>
 
 namespace Shared {
 
-class ColorCell : public Escher::MessageTableCell {
-public:
-  using MessageTableCell::MessageTableCell;
-  const View * accessoryView() const override { return &m_colorView; }
-  void setColor(KDColor color) { m_colorView.setColor(color); }
-private:
-  class ColorView : public Escher::TransparentView {
-  public:
-    void drawRect(KDContext * ctx, KDRect rect) const override;
-    KDSize minimalSizeForOptimalDisplay() const override;
-    void setColor(KDColor color);
-  private:
-    KDColor m_color;
-  };
-  ColorView m_colorView;
+/* Not ArbitraryShapedView since the shape never changes, the parent does not
+ * need to be invalidated */
+class ColorView : public Escher::View, public Escher::CellWidget {
+ public:
+  const View* view() const override { return this; }
+  void drawRect(KDContext* ctx, KDRect rect) const override;
+  KDSize minimalSizeForOptimalDisplay() const override;
+  void setColor(KDColor color);
+
+ private:
+  KDColor m_color;
 };
 
-}
+using ColorCell = Escher::MenuCell<Escher::MessageTextView,
+                                   Escher::EmptyCellWidget, ColorView>;
+
+}  // namespace Shared
 
 #endif

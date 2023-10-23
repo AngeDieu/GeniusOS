@@ -1,9 +1,12 @@
 #include "store_controller.h"
+
 #include <apps/apps_container.h>
-#include <apps/shared/poincare_helpers.h>
 #include <apps/constant.h>
-#include <escher/metric.h>
+#include <apps/shared/poincare_helpers.h>
+#include <apps/shared/store_app.h>
 #include <assert.h>
+#include <escher/metric.h>
+
 #include <algorithm>
 
 using namespace Poincare;
@@ -11,38 +14,48 @@ using namespace Escher;
 
 namespace Shared {
 
-StoreController::StoreController(Responder * parentResponder, Escher::InputEventHandlerDelegate * inputEventHandlerDelegate, DoublePairStore * store, ButtonRowController * header, Context * parentContext) :
-  EditableCellTableViewController(parentResponder, &m_prefacedTableView),
-  ButtonRowDelegate(header, nullptr),
-  StoreColumnHelper(this, parentContext, this),
-  m_prefacedTableView(0, this, &m_selectableTableView, this),
-  m_store(store)
-  {
+StoreController::StoreController(
+    Responder *parentResponder,
+    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
+    DoublePairStore *store, ButtonRowController *header, Context *parentContext)
+    : EditableCellTableViewController(parentResponder, &m_prefacedTableView),
+      ButtonRowDelegate(header, nullptr),
+      StoreColumnHelper(this, parentContext, this),
+      m_prefacedTableView(0, this, &m_selectableTableView, this, this),
+      m_store(store),
+      m_widthManager(this) {
   m_prefacedTableView.setBackgroundColor(Palette::WallScreenDark);
   m_prefacedTableView.setCellOverlap(0, 0);
-  m_prefacedTableView.setMargins(k_margin, k_scrollBarMargin, k_scrollBarMargin, k_margin);
-  for (int i = 0; i < k_maxNumberOfEditableCells; i++) {
+  m_prefacedTableView.setMargins(k_margin, k_scrollBarMargin, k_scrollBarMargin,
+                                 k_margin);
+  for (int i = 0; i < k_maxNumberOfDisplayableCells; i++) {
     m_editableCells[i].setParentResponder(&m_selectableTableView);
-    m_editableCells[i].editableTextCell()->textField()->setDelegates(inputEventHandlerDelegate, this);
+    m_editableCells[i].editableTextCell()->textField()->setDelegates(
+        inputEventHandlerDelegate, this);
   }
 }
 
-bool StoreController::textFieldDidFinishEditing(AbstractTextField * textField, const char * text, Ion::Events::Event event) {
+bool StoreController::textFieldDidFinishEditing(AbstractTextField *textField,
+                                                const char *text,
+                                                Ion::Events::Event event) {
   // First row is not editable.
   assert(selectedRow() != 0);
   int series = m_store->seriesAtColumn(selectedColumn());
   bool wasSeriesValid = m_store->seriesIsActive(series);
-  if (text[0] == 0) { // If text = "", delete the cell
+  if (text[0] == 0) {  // If text = "", delete the cell
     bool didDeleteRow = false;
     handleDeleteEvent(true, &didDeleteRow);
-    if (event == Ion::Events::Up || event == Ion::Events::Left || event == Ion::Events::Right || (event == Ion::Events::Down && !didDeleteRow)) {
+    if (event == Ion::Events::Up || event == Ion::Events::Left ||
+        event == Ion::Events::Right ||
+        (event == Ion::Events::Down && !didDeleteRow)) {
       /* Do nothing if down was pressed and the row is deleted since
        * it already selects the next row. */
       selectableTableView()->handleEvent(event);
     }
     return true;
   }
-  bool result = EditableCellTableViewController::textFieldDidFinishEditing(textField, text, event);
+  bool result = EditableCellTableViewController::textFieldDidFinishEditing(
+      textField, text, event);
   if (wasSeriesValid != m_store->seriesIsActive(series)) {
     // Series changed validity, series' cells have changed color.
     reloadSeriesVisibleCells(series);
@@ -51,17 +64,18 @@ bool StoreController::textFieldDidFinishEditing(AbstractTextField * textField, c
 }
 
 int StoreController::numberOfColumns() const {
-  return DoublePairStore::k_numberOfColumnsPerSeries * DoublePairStore::k_numberOfSeries;
+  return DoublePairStore::k_numberOfColumnsPerSeries *
+         DoublePairStore::k_numberOfSeries;
 }
 
-HighlightCell * StoreController::reusableCell(int index, int type) {
+HighlightCell *StoreController::reusableCell(int index, int type) {
   assert(index >= 0);
   switch (type) {
     case k_titleCellType:
-      assert(index < k_numberOfTitleCells);
+      assert(index < k_maxNumberOfDisplayableColumns);
       return &m_titleCells[index];
     case k_editableCellType:
-      assert(index < k_maxNumberOfEditableCells);
+      assert(index < k_maxNumberOfDisplayableCells);
       return &m_editableCells[index];
     default:
       assert(false);
@@ -70,48 +84,67 @@ HighlightCell * StoreController::reusableCell(int index, int type) {
 }
 
 int StoreController::reusableCellCount(int type) {
-  return type == k_titleCellType ? k_numberOfTitleCells : k_maxNumberOfEditableCells;
+  return type == k_titleCellType ? k_maxNumberOfDisplayableColumns
+                                 : k_maxNumberOfDisplayableCells;
 }
 
-int StoreController::typeAtLocation(int i, int j) {
-  return j == 0 ? k_titleCellType : k_editableCellType;
+int StoreController::typeAtLocation(int column, int row) {
+  return row == 0 ? k_titleCellType : k_editableCellType;
 }
 
-void StoreController::willDisplayCellAtLocation(HighlightCell * cell, int i, int j) {
+void StoreController::fillCellForLocation(HighlightCell *cell, int column,
+                                          int row) {
   // Handle hidden cells
-  const int numberOfElementsInCol = numberOfElementsInColumn(i);
-  if (j > numberOfElementsInCol + 1) {
-    StoreCell * myCell = static_cast<StoreCell *>(cell);
+  const int numberOfElementsInCol = numberOfElementsInColumn(column);
+  if (row > numberOfElementsInCol + 1) {
+    Escher::AbstractEvenOddEditableTextCell *myCell =
+        static_cast<Escher::AbstractEvenOddEditableTextCell *>(cell);
     myCell->editableTextCell()->textField()->setText("");
     myCell->hide();
     return;
   }
-  if (typeAtLocation(i, j) == k_editableCellType) {
-    Shared::StoreCell * myCell = static_cast<StoreCell *>(cell);
+  if (typeAtLocation(column, row) == k_editableCellType) {
+    Escher::AbstractEvenOddEditableTextCell *myCell =
+        static_cast<Escher::AbstractEvenOddEditableTextCell *>(cell);
     myCell->show();
-    myCell->setSeparatorLeft(i > 0 && (m_store->relativeColumnIndex(i) == 0));
-    KDColor textColor = (m_store->seriesIsActive(m_store->seriesAtColumn(i)) || m_store->numberOfPairsOfSeries(m_store->seriesAtColumn(i)) == 0) ? KDColorBlack : Palette::GrayDark;
+    KDColor textColor =
+        (m_store->seriesIsActive(m_store->seriesAtColumn(column)) ||
+         m_store->numberOfPairsOfSeries(m_store->seriesAtColumn(column)) == 0)
+            ? KDColorBlack
+            : Palette::GrayDark;
     myCell->editableTextCell()->textField()->setTextColor(textColor);
   }
-  willDisplayCellAtLocationWithDisplayMode(cell, i, j, Preferences::sharedPreferences()->displayMode());
+  fillCellForLocationWithDisplayMode(
+      cell, column, row, Preferences::sharedPreferences->displayMode());
 }
 
-void StoreController::setTitleCellText(HighlightCell * cell, int columnIndex) {
+KDCoordinate StoreController::separatorBeforeColumn(int column) {
+  return column > 0 && m_store->relativeColumn(column) == 0
+             ? Escher::Metric::TableSeparatorThickness
+             : 0;
+}
+
+void StoreController::viewWillAppear() {
+  resetMemoization();  // In case the number of columns changed
+  EditableCellTableViewController::viewWillAppear();
+}
+
+void StoreController::setTitleCellText(HighlightCell *cell, int column) {
   // Default : put column name in titleCell
-  StoreTitleCell * myTitleCell = static_cast<StoreTitleCell *>(cell);
-  fillColumnName(columnIndex, const_cast<char *>(myTitleCell->text()));
+  BufferFunctionTitleCell *myTitleCell =
+      static_cast<BufferFunctionTitleCell *>(cell);
+  fillColumnName(column, const_cast<char *>(myTitleCell->text()));
 }
 
-void StoreController::setTitleCellStyle(HighlightCell * cell, int columnIndex) {
-  int seriesIndex = m_store->seriesAtColumn(columnIndex);
-  int realColumnIndex = m_store->relativeColumnIndex(columnIndex);
-  Shared::StoreTitleCell * myCell = static_cast<Shared::StoreTitleCell *>(cell);
-  myCell->setColor(!m_store->seriesIsActive(seriesIndex) ? Palette::GrayDark : DoublePairStore::colorOfSeriesAtIndex(seriesIndex)); // TODO Share GrayDark with graph/list_controller
-  myCell->setSeparatorLeft(columnIndex > 0 && ( realColumnIndex == 0));
-}
-
-const char * StoreController::title() {
-  return I18n::translate(I18n::Message::DataTab);
+void StoreController::setTitleCellStyle(HighlightCell *cell, int column) {
+  int seriesIndex = m_store->seriesAtColumn(column);
+  Shared::BufferFunctionTitleCell *myCell =
+      static_cast<Shared::BufferFunctionTitleCell *>(cell);
+  // TODO Share GrayDark with graph/list_controller
+  myCell->setColor(!m_store->seriesIsActive(seriesIndex)
+                       ? Palette::GrayDark
+                       : DoublePairStore::colorOfSeriesAtIndex(seriesIndex));
+  myCell->setFont(KDFont::Size::Small);
 }
 
 bool StoreController::handleEvent(Ion::Events::Event event) {
@@ -131,16 +164,17 @@ bool StoreController::handleEvent(Ion::Events::Event event) {
   return false;
 }
 
-void StoreController::handleDeleteEvent(bool authorizeNonEmptyRowDeletion, bool * didDeleteRow) {
-  int i = selectedColumn();
-  int j = selectedRow();
-  assert(i >= 0 && i < numberOfColumns());
-  int series = m_store->seriesAtColumn(i);
-  assert(j >= 0);
-  if (j == 0 || j > numberOfElementsInColumn(i)) {
+void StoreController::handleDeleteEvent(bool authorizeNonEmptyRowDeletion,
+                                        bool *didDeleteRow) {
+  int col = selectedColumn();
+  int row = selectedRow();
+  assert(col >= 0 && col < numberOfColumns());
+  int series = m_store->seriesAtColumn(col);
+  assert(row >= 0);
+  if (row == 0 || row > numberOfElementsInColumn(col)) {
     return;
   }
-  if (deleteCellValue(series, i, j, authorizeNonEmptyRowDeletion)) {
+  if (deleteCellValue(series, col, row, authorizeNonEmptyRowDeletion)) {
     // A row has been deleted
     if (didDeleteRow) {
       *didDeleteRow = true;
@@ -152,6 +186,7 @@ void StoreController::handleDeleteEvent(bool authorizeNonEmptyRowDeletion, bool 
     }
     reloadSeriesVisibleCells(series);
   }
+  resetMemoizedFormulasOfEmptyColumns(series);
 }
 
 void StoreController::didBecomeFirstResponder() {
@@ -167,37 +202,73 @@ int StoreController::numberOfRowsAtColumn(int i) const {
   return m_store->numberOfPairsOfSeries(s) + 2;
 }
 
-bool StoreController::deleteCellValue(int series, int i, int j, bool authorizeNonEmptyRowDeletion) {
-  return m_store->deleteValueAtIndex(series, m_store->relativeColumnIndex(i), j - 1, authorizeNonEmptyRowDeletion);
+bool StoreController::deleteCellValue(int series, int i, int j,
+                                      bool authorizeNonEmptyRowDeletion) {
+  return m_store->deleteValueAtIndex(series, m_store->relativeColumn(i), j - 1,
+                                     authorizeNonEmptyRowDeletion);
 }
 
-StackViewController * StoreController::stackController() const {
-  return static_cast<StackViewController *>(parentResponder()->parentResponder());
+StackViewController *StoreController::stackController() const {
+  return static_cast<StackViewController *>(
+      parentResponder()->parentResponder());
 }
 
-Escher::TabViewController * StoreController::tabController() const {
-  return static_cast<Escher::TabViewController *>(parentResponder()->parentResponder()->parentResponder());
+Escher::TabViewController *StoreController::tabController() const {
+  return static_cast<Escher::TabViewController *>(
+      parentResponder()->parentResponder()->parentResponder());
 }
 
-bool StoreController::cellAtLocationIsEditable(int columnIndex, int rowIndex) {
-  return typeAtLocation(columnIndex, rowIndex) == k_editableCellType;
+bool StoreController::cellAtLocationIsEditable(int column, int row) {
+  return typeAtLocation(column, row) == k_editableCellType;
 }
 
-bool StoreController::checkDataAtLocation(double floatBody, int columnIndex, int rowIndex) const {
-  return m_store->valueValidInColumn(floatBody, m_store->relativeColumnIndex(columnIndex));
+bool StoreController::checkDataAtLocation(double floatBody, int column,
+                                          int row) const {
+  return m_store->valueValidInColumn(floatBody,
+                                     m_store->relativeColumn(column));
 }
 
-bool StoreController::setDataAtLocation(double floatBody, int columnIndex, int rowIndex) {
-  assert(checkDataAtLocation(floatBody, columnIndex, rowIndex));
-  return m_store->set(floatBody, m_store->seriesAtColumn(columnIndex), m_store->relativeColumnIndex(columnIndex), rowIndex-1, false, true);
+bool StoreController::setDataAtLocation(double floatBody, int column, int row) {
+  assert(checkDataAtLocation(floatBody, column, row));
+  return m_store->set(floatBody, m_store->seriesAtColumn(column),
+                      m_store->relativeColumn(column), row - 1, false, true);
 }
 
-double StoreController::dataAtLocation(int columnIndex, int rowIndex) {
-  return m_store->get(m_store->seriesAtColumn(columnIndex), m_store->relativeColumnIndex(columnIndex), rowIndex-1);
+double StoreController::dataAtLocation(int column, int row) {
+  return m_store->get(m_store->seriesAtColumn(column),
+                      m_store->relativeColumn(column), row - 1);
 }
 
-int StoreController::numberOfElementsInColumn(int columnIndex) const {
-  return m_store->numberOfPairsOfSeries(m_store->seriesAtColumn(columnIndex));
+int StoreController::numberOfElementsInColumn(int column) const {
+  return m_store->numberOfPairsOfSeries(m_store->seriesAtColumn(column));
 }
 
+void StoreController::resetMemoizedFormulasOfEmptyColumns(int series) {
+  assert(series >= 0 && series < DoublePairStore::k_numberOfSeries);
+  for (int i = 0; i < DoublePairStore::k_numberOfColumnsPerSeries; i++) {
+    if (m_store->lengthOfColumn(series, i) == 0) {
+      memoizeFormula(Layout(),
+                     series * DoublePairStore::k_numberOfColumnsPerSeries + i);
+    }
+  }
 }
+
+void StoreController::loadMemoizedFormulasFromSnapshot() {
+  for (int i = 0; i < StoreApp::Snapshot::k_numberOfMemoizedFormulas; i++) {
+    if (m_store->numberOfPairsOfSeries(m_store->seriesAtColumn(i)) == 0) {
+      /* The series could have been emptied outside of the app. If it's the
+       * case, reset the memoized formula. */
+      m_memoizedFormulas[i] = Layout();
+    } else {
+      m_memoizedFormulas[i] =
+          StoreApp::storeApp()->storeAppSnapshot()->memoizedFormula(i);
+    }
+  }
+}
+
+void StoreController::memoizeFormula(Poincare::Layout formula, int index) {
+  m_memoizedFormulas[index] = formula;
+  StoreApp::storeApp()->storeAppSnapshot()->memoizeFormula(formula, index);
+}
+
+}  // namespace Shared

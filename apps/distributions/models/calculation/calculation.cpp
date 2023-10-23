@@ -1,13 +1,18 @@
 #include "calculation.h"
+
+#include <cmath>
+
+#include "../distribution/distribution.h"
 #include "discrete_calculation.h"
 #include "finite_integral_calculation.h"
 #include "left_integral_calculation.h"
 #include "right_integral_calculation.h"
-#include <cmath>
 
 namespace Distributions {
 
-bool Calculation::Initialize(Calculation * calculation, Type type, Distribution * distribution, bool forceReinitialisation) {
+bool Calculation::Initialize(Calculation* calculation, Type type,
+                             Distribution* distribution,
+                             bool forceReinitialisation) {
   bool changedType = false;
   if (calculation->type() != type || forceReinitialisation) {
     changedType = true;
@@ -29,16 +34,16 @@ bool Calculation::Initialize(Calculation * calculation, Type type, Distribution 
         assert(false);
     }
   }
-  calculation->compute(0);
+  if (distribution->allParametersAreInitialized()) {
+    calculation->compute(0);
+  } else {
+    calculation->computeUnknownDistributionParameter();
+  }
   return changedType;
 }
 
-double Calculation::lowerBound() const {
-  return -INFINITY;
-}
+double Calculation::lowerBound() const { return -INFINITY; }
 
-double Calculation::upperBound() const {
-  return INFINITY;
-}
+double Calculation::upperBound() const { return INFINITY; }
 
-}
+}  // namespace Distributions

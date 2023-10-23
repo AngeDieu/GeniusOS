@@ -6,7 +6,7 @@ SFLAGS += -fPIE
 TARGET ?= $(HOST)
 
 COVERAGE =
-ifneq ($(filter coverage,$(MAKECMDGOALS)),)
+ifneq ($(findstring coverage,$(MAKECMDGOALS)),)
 COVERAGE = coverage
 endif
 

@@ -2,139 +2,153 @@
 #define ESCHER_LAYOUT_FIELD_H
 
 #include <escher/editable_field.h>
-#include <escher/expression_view.h>
 #include <escher/layout_field_delegate.h>
+#include <escher/layout_view.h>
 #include <escher/scrollable_view.h>
 #include <escher/text_cursor_view.h>
 #include <escher/text_field.h>
 #include <kandinsky/point.h>
 #include <poincare/layout_cursor.h>
+#include <poincare/preferences.h>
 
 // See TODO in EditableField
 
 namespace Escher {
 
-class LayoutField : public WithBlinkingTextCursor<ScrollableView>, public ScrollViewDataSource, public EditableField {
-  friend class ExpressionField;
-public:
-  LayoutField(Responder * parentResponder, InputEventHandlerDelegate * inputEventHandlerDelegate, LayoutFieldDelegate * delegate = nullptr, KDFont::Size font = KDFont::Size::Large) :
-    WithBlinkingTextCursor<ScrollableView>(parentResponder, &m_contentView, this),
-    EditableField(inputEventHandlerDelegate),
-    m_contentView(font),
-    m_insertionCursorEvent(Ion::Events::None),
-    m_delegate(delegate)
-  {}
-  void setDelegates(InputEventHandlerDelegate * inputEventHandlerDelegate, LayoutFieldDelegate * delegate) { m_inputEventHandlerDelegate = inputEventHandlerDelegate; m_delegate = delegate; }
-  Poincare::Context * context() const;
+class LayoutField : public TextCursorView::WithBlinkingCursor<
+                        ScrollableView<ScrollView::NoDecorator>>,
+                    public ScrollViewDataSource,
+                    public EditableField {
+ public:
+  LayoutField(Responder* parentResponder,
+              InputEventHandlerDelegate* inputEventHandlerDelegate,
+              LayoutFieldDelegate* layoutFieldDelegate = nullptr,
+              KDGlyph::Format format = {});
+  void setDelegates(InputEventHandlerDelegate* inputEventHandlerDelegate,
+                    LayoutFieldDelegate* layoutFieldDelegate);
+  Poincare::Context* context() const;
   bool isEditing() const override { return m_contentView.isEditing(); }
-  void setEditing(bool isEditing) override;
+  void setEditing(bool isEditing) override final;
   void clearLayout();
-  void scrollToCursor() {
-    scrollToBaselinedRect(m_contentView.cursorRect(), m_contentView.cursor()->baselineWithoutSelection(m_contentView.font()));
+  void clearAndSetEditing(bool isEditing);
+  void scrollToCursor();
+
+  bool isEmpty() const { return layout().isEmpty(); }
+  Poincare::Layout layout() const {
+    return m_contentView.layoutView()->layout();
   }
-  bool hasText() const { return layout().hasText(); }
-  Poincare::Layout layout() const { return m_contentView.expressionView()->layout(); }
-  bool layoutHasNode() const { return m_contentView.expressionView()->layoutHasNode(); }
+  bool layoutHasNode() const {
+    return m_contentView.layoutView()->layoutHasNode();
+  }
   bool addXNTCodePoint(CodePoint defaultXNTCodePoint) override;
-  void putCursorOnOneSide(Poincare::LayoutCursor::Position side);
-  void setInsertionCursorEvent(Ion::Events::Event event) { m_insertionCursorEvent = event; }
+  void putCursorOnOneSide(OMG::HorizontalDirection side);
   void setLayout(Poincare::Layout newLayout);
-  size_t dumpContent(char * buffer, size_t bufferSize, int * cursorOffset, Poincare::LayoutCursor::Position * position);
+  size_t dumpContent(char* buffer, size_t bufferSize, int* cursorOffset,
+                     int* position);
 
   // ScrollableView
-  void setBackgroundColor(KDColor c) override  {
-    ScrollableView::setBackgroundColor(c);
-    m_contentView.setBackgroundColor(c);
-  }
+  void setBackgroundColor(KDColor c) override;
   /* Always keep the full margins on a layout field, as it would otherwise lead
    * to weird cropping during edition. */
   float marginPortionTolerance() const override { return 0.f; }
+  using ScrollView::layoutSubviews;
 
   /* Responder */
-  bool handleEventWithText(const char * text, bool indentation = false, bool forceCursorRightOfText = false) override;
+  bool handleEventWithText(const char* text, bool indentation = false,
+                           bool forceCursorRightOfText = false) override;
   bool handleEvent(Ion::Events::Event event) override;
   bool handleStoreEvent() override;
   // TODO: factorize with TextField (see TODO of EditableField)
   bool shouldFinishEditing(Ion::Events::Event event) override;
+  void didBecomeFirstResponder() override;
 
-  // Selection
-  bool resetSelection() { return m_contentView.resetSelection(); }
-  void deleteSelection();
+  /* View */
+  KDSize minimalSizeForOptimalDisplay() const override;
 
-  Poincare::LayoutCursor * cursor() { return m_contentView.cursor(); }
+  Poincare::LayoutCursor* cursor() { return m_contentView.cursor(); }
+  const LayoutView* layoutView() const { return m_contentView.layoutView(); }
+  LayoutView* layoutView() { return m_contentView.layoutView(); }
 
-private:
+  /* Warning: this function is VERY dangerous! Indeed: sometimes the
+   * m_layoutField might overflow the m_textBuffer once serialized
+   * and still have been accepted before because the model can hold a longer
+   * buffer. This is the case in the application 'Calculation' and we do not
+   * use text() there... TODO: change text() for fillTextInBuffer?*/
+  const char* text();
+  void setText(const char* text);
+  bool inputViewHeightDidChange();
+  void reload();
+  void restoreContent(const char* buffer, size_t size, int* cursorOffset,
+                      int* position);
+  void setTextEditionBuffer(char* buffer, size_t bufferSize);
+
+  virtual KDCoordinate inputViewHeight() const;
+
+ protected:
+  bool linearMode() const {
+    return Poincare::Preferences::sharedPreferences->editionMode() ==
+           Poincare::Preferences::EditionMode::Edition1D;
+  }
+
+ private:
   constexpr static int k_maxNumberOfLayouts = 220;
-  static_assert(k_maxNumberOfLayouts == TextField::MaxBufferSize(), "Maximal number of layouts in a layout field should be equal to max number of char in text field");
+  constexpr static KDCoordinate k_minimalHeight =
+      KDFont::GlyphHeight(KDFont::Size::Large);
+  static_assert(k_maxNumberOfLayouts == TextField::MaxBufferSize(),
+                "Maximal number of layouts in a layout field should be equal "
+                "to max number of char in text field");
   void reload(KDSize previousSize);
-  virtual bool privateHandleEvent(Ion::Events::Event event);
-  bool privateHandleMoveEvent(Ion::Events::Event event, bool * shouldRecomputeLayout);
-  bool privateHandleSelectionEvent(Ion::Events::Event event, bool * shouldRecomputeLayout);
-  void scrollRightOfLayout(Poincare::Layout layoutR);
+  bool privateHandleEvent(Ion::Events::Event event, bool* shouldRedrawLayout,
+                          bool* shouldUpdateCursor);
+  bool privateHandleMoveEvent(Ion::Events::Event event,
+                              bool* shouldRedrawLayout);
   void scrollToBaselinedRect(KDRect rect, KDCoordinate baseline);
-  void insertLayoutAtCursor(Poincare::Layout layoutR, Poincare::Expression correspondingExpression, bool forceCursorRightOfLayout = false, bool forceCursorLeftOfText = false);
-  bool eventShouldUpdateInsertionCursor(Ion::Events::Event event) { return event == m_insertionCursorEvent; }
-  Poincare::Context * delegateContext() { return m_delegate ? m_delegate->context() : nullptr; }
-  TextCursorView * textCursorView() override { return m_contentView.textCursorView(); }
+  void insertLayoutAtCursor(Poincare::Layout layoutR,
+                            bool forceCursorRightOfLayout = false,
+                            bool forceCursorLeftOfLayout = false);
+  TextCursorView::CursorFieldView* cursorCursorFieldView() override {
+    return &m_contentView;
+  }
 
-  class ContentView : public View {
-  public:
-    ContentView(KDFont::Size font);
+  class ContentView : public TextCursorView::CursorFieldView {
+   public:
+    ContentView(KDGlyph::Format format);
     bool isEditing() const { return m_isEditing; }
-    bool setEditing(bool isEditing); // returns True if LayoutField should reload
-    void setBackgroundColor(KDColor c) { m_expressionView.setBackgroundColor(c); }
+    // returns True if LayoutField should reload
+    bool setEditing(bool isEditing);
+    void setBackgroundColor(KDColor c) { m_layoutView.setBackgroundColor(c); }
     void setCursor(Poincare::LayoutCursor cursor) { m_cursor = cursor; }
     void cursorPositionChanged() { layoutCursorSubview(false); }
-    KDRect cursorRect() { return m_cursorView.frame(); }
-    Poincare::LayoutCursor * cursor() { return &m_cursor; }
-    const ExpressionView * expressionView() const { return &m_expressionView; }
-    ExpressionView * expressionView() { return &m_expressionView; }
+    Poincare::LayoutCursor* cursor() { return &m_cursor; }
+    const LayoutView* layoutView() const { return &m_layoutView; }
+    LayoutView* layoutView() { return &m_layoutView; }
     void clearLayout();
     // View
     KDSize minimalSizeForOptimalDisplay() const override;
     // Selection
-    Poincare::Layout * selectionStart() { return &m_selectionStart; }
-    Poincare::Layout * selectionEnd() { return &m_selectionEnd; }
-    void addSelection(Poincare::Layout addedLayout);
-    bool resetSelection(); // returns true if the selection was indeed reset
-    void copySelection(Poincare::Context * context, bool intoStoreMenu);
-    bool selectionIsEmpty() const;
-    void deleteSelection();
-    void invalidateInsertionCursor() { m_insertionCursor = Poincare::LayoutCursor(); }
-    void updateInsertionCursor();
-    KDFont::Size font() const { return m_expressionView.font(); }
-    TextCursorView * textCursorView() { return &m_cursorView; }
+    void copySelection(Poincare::Context* context, bool intoStoreMenu);
+    KDFont::Size font() const { return m_layoutView.font(); }
 
-  private:
-    int numberOfSubviews() const override { return 2; }
-    View * subviewAtIndex(int index) override;
+    KDRect cursorRect() const override;
+
+   private:
+    int numberOfSubviews() const override {
+      return 1 + TextCursorView::CursorFieldView::numberOfSubviews();
+    }
+    View* subviewAtIndex(int index) override;
     void layoutSubviews(bool force = false) override;
-    void layoutCursorSubview(bool force);
-    void useInsertionCursor();
-    KDRect selectionRect() const;
-    Poincare::LayoutCursor m_cursor;
-    /* The insertion cursor is a secondary cursor that determines where text
-     * should be inserted. Most of the time this cursor is useless (and is
-     * therefore disabled), but in an interface where the user can navigate out
-     * of the field, it's important to keep track of where inserted text should
-     * go even if the main cursor was moved.
-     * For instance, this is useful in the Calculation app when the user wants
-     * to type a division and scroll up the history to insert something at the
-     * denominator. */
-    Poincare::LayoutCursor m_insertionCursor;
-    ExpressionView m_expressionView;
-    TextCursorView m_cursorView;
-    /* The selection starts on the left of m_selectionStart, and ends on the
-     * right of m_selectionEnd. */
-    Poincare::Layout m_selectionStart;
-    Poincare::Layout m_selectionEnd;
+    mutable Poincare::LayoutCursor m_cursor;
+    LayoutViewWithCursor m_layoutView;
     bool m_isEditing;
   };
+
   ContentView m_contentView;
-  Ion::Events::Event m_insertionCursorEvent;
-  LayoutFieldDelegate * m_delegate;
+  LayoutFieldDelegate* m_layoutFieldDelegate;
+  KDCoordinate m_inputViewMemoizedHeight;
+  char* m_draftBuffer;
+  size_t m_draftBufferSize;
 };
 
-}
+}  // namespace Escher
 
 #endif

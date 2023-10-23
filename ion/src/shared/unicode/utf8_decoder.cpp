@@ -1,9 +1,54 @@
+#include <assert.h>
 #include <ion/unicode/utf8_decoder.h>
 #include <string.h>
-#include <assert.h>
+
+size_t UnicodeDecoder::nextGlyphPosition() {
+  CodePoint followingCodePoint = nextCodePoint();
+  size_t resultGlyphPosition = m_position;
+  followingCodePoint = nextCodePoint();
+  while (followingCodePoint != UCodePointNull &&
+         followingCodePoint.isCombining()) {
+    resultGlyphPosition = m_position;
+    followingCodePoint = nextCodePoint();
+  }
+  m_position = resultGlyphPosition;
+  return resultGlyphPosition;
+}
+
+size_t UnicodeDecoder::previousGlyphPosition() {
+  assert(m_position > 0);
+  CodePoint previousCP = previousCodePoint();
+  size_t resultGlyphPosition = m_position;
+  while (m_position > 0 && previousCP.isCombining()) {
+    previousCP = previousCodePoint();
+    resultGlyphPosition = m_position;
+  }
+  return resultGlyphPosition;
+}
+
+size_t UnicodeDecoder::printInBuffer(char* buffer, size_t bufferSize,
+                                     size_t printLength) {
+  assert(m_end == k_noSize || printLength == k_noSize ||
+         m_position + printLength <= m_end);
+  size_t result = 0;
+  while (result < printLength) {
+    CodePoint c = nextCodePoint();
+    if (c == UCodePointNull) {
+      break;
+    }
+    if (result + UTF8Decoder::CharSizeOfCodePoint(c) >= bufferSize) {
+      buffer[0] = 0;
+      return 0;
+    }
+    result +=
+        UTF8Decoder::CodePointToChars(c, buffer + result, bufferSize - result);
+  }
+  buffer[result] = 0;
+  return result;
+}
 
 static inline int leading_ones(uint8_t value) {
-  for (int i=0; i<8; i++) {
+  for (int i = 0; i < 8; i++) {
     if (!(value & 0x80)) {
       assert(i <= 4);
       return i;
@@ -15,20 +60,21 @@ static inline int leading_ones(uint8_t value) {
 }
 
 static inline uint8_t last_k_bits(uint8_t value, uint8_t bits) {
-  return (value & ((1<<bits)-1));
+  return (value & ((1 << bits) - 1));
 }
 
 CodePoint UTF8Decoder::nextCodePoint() {
-  assert((m_stringPosition == m_string || *(m_stringPosition - 1) != 0) && (m_stringEnd == nullptr || m_stringPosition <= m_stringEnd));
+  assert((stringPosition() == m_string || *(stringPosition() - 1) != 0) &&
+         (stringEnd() == nullptr || m_position <= m_end));
   bool returnCodePointNull = false;
-  if (m_stringEnd != nullptr && m_stringPosition == m_stringEnd) {
+  if (stringEnd() != nullptr && stringPosition() == stringEnd()) {
     returnCodePointNull = true;
   }
-  int leadingOnes = leading_ones(*m_stringPosition);
-  uint32_t result = last_k_bits(*m_stringPosition++, 8-leadingOnes-1);
+  int leadingOnes = leading_ones(*stringPosition());
+  uint32_t result = last_k_bits(nextByte(), 8 - leadingOnes - 1);
   for (int i = 0; i < leadingOnes - 1; i++) {
     result <<= 6;
-    char nextChunk = *m_stringPosition++;
+    char nextChunk = nextByte();
     if (!nextChunk && 0x80) {
       /* The code point is not properly written. This might be due to a code
        * point being translated into chars in a too small buffer. */
@@ -40,64 +86,41 @@ CodePoint UTF8Decoder::nextCodePoint() {
 }
 
 CodePoint UTF8Decoder::previousCodePoint() {
-  assert(m_stringPosition > m_string);
-  m_stringPosition--;
-  int leadingOnes = leading_ones(*m_stringPosition);
+  assert(stringPosition() > m_string);
+  previousByte();
+  int leadingOnes = leading_ones(*stringPosition());
   if (leadingOnes == 0) {
     // The current code point is one char long
-    return *m_stringPosition;
+    return *stringPosition();
   }
   // The current code point spans over multiple chars
   assert(leadingOnes == 1);
   uint32_t result = 0;
   int i = 0;
   while (leadingOnes == 1) {
-    assert(m_stringPosition > m_string);
-    result += (*m_stringPosition & 0x3F) << (6 * i);
+    assert(stringPosition() > m_string);
+    result += (*stringPosition() & 0x3F) << (6 * i);
     i++;
-    m_stringPosition--;
-    leadingOnes = leading_ones(*m_stringPosition);
+    previousByte();
+    leadingOnes = leading_ones(*stringPosition());
   }
 
   assert(i <= 3);
   assert(leadingOnes > 1 && leadingOnes <= 4);
-  assert(m_stringPosition >= m_string);
+  assert(stringPosition() >= m_string);
 
-  result+= last_k_bits(*m_stringPosition, 8 - leadingOnes - 1) << (6 * i);
+  result += last_k_bits(*stringPosition(), 8 - leadingOnes - 1) << (6 * i);
   return CodePoint(result);
 }
 
-const char * UTF8Decoder::nextGlyphPosition() {
-  assert(*m_stringPosition != 0 && (m_stringPosition == m_string || *(m_stringPosition - 1) != 0));
-  CodePoint followingCodePoint = nextCodePoint();
-  const char * resultGlyphPosition = m_stringPosition;
-  followingCodePoint = nextCodePoint();
-  while (followingCodePoint != UCodePointNull && followingCodePoint.isCombining()) {
-    resultGlyphPosition = m_stringPosition;
-    followingCodePoint = nextCodePoint();
-  }
-  m_stringPosition = resultGlyphPosition;
-  return resultGlyphPosition;
-}
-
-const char * UTF8Decoder::previousGlyphPosition() {
-  assert(m_stringPosition > m_string);
-  CodePoint previousCP = previousCodePoint();
-  const char * resultGlyphPosition = m_stringPosition;
-  while (m_stringPosition > m_string && previousCP.isCombining()) {
-    previousCP = previousCodePoint();
-    resultGlyphPosition = m_stringPosition;
-  }
-  return resultGlyphPosition;
-}
-
-void UTF8Decoder::setPosition(const char * position) {
-  assert(position >= m_string && position <= m_string + strlen(m_string));
+void UTF8Decoder::setPosition(const char* position) {
+  assert(position >= string() && position <= string() + strlen(string()));
   assert(!IsInTheMiddleOfACodePoint(*position));
-  m_stringPosition = position;
+  m_position = position - m_string;
 }
 
-size_t UTF8Decoder::CodePointToChars(CodePoint c, char * buffer, size_t bufferLength) {
+size_t UTF8Decoder::CodePointToChars(CodePoint c, char* buffer,
+                                     size_t bufferLength) {
   size_t i = 0;
   size_t charCount = CharSizeOfCodePoint(c);
   assert(bufferLength >= charCount);
@@ -121,7 +144,9 @@ size_t UTF8Decoder::CodePointToChars(CodePoint c, char * buffer, size_t bufferLe
   return charCount;
 }
 
-size_t UTF8Decoder::CodePointToCharsWithNullTermination(CodePoint c, char * buffer, size_t bufferSize) {
+size_t UTF8Decoder::CodePointToCharsWithNullTermination(CodePoint c,
+                                                        char* buffer,
+                                                        size_t bufferSize) {
   size_t result = CodePointToChars(c, buffer, bufferSize - 1);
   assert(result < bufferSize);
   buffer[result] = 0;

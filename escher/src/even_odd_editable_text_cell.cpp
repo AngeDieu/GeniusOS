@@ -1,39 +1,30 @@
-#include <escher/even_odd_editable_text_cell.h>
-#include <escher/container.h>
 #include <assert.h>
+#include <escher/container.h>
+#include <escher/even_odd_editable_text_cell.h>
 
 namespace Escher {
 
-EvenOddEditableTextCell::EvenOddEditableTextCell(Responder * parentResponder, InputEventHandlerDelegate * inputEventHandlerDelegate, TextFieldDelegate * delegate, KDFont::Size font, float horizontalAlignment, float verticalAlignment) :
-  EvenOddCell(),
-  Responder(parentResponder),
-  m_editableCell(this, inputEventHandlerDelegate, delegate, font, horizontalAlignment, verticalAlignment, KDColorBlack, KDColorWhite)
-{
+void AbstractEvenOddEditableTextCell::
+    updateSubviewsBackgroundAfterChangingState() {
+  editableTextCell()->textField()->setBackgroundColor(backgroundColor());
 }
 
-EditableTextCell * EvenOddEditableTextCell::editableTextCell() {
-  return &m_editableCell;
-}
+int AbstractEvenOddEditableTextCell::numberOfSubviews() const { return 1; }
 
-void EvenOddEditableTextCell::updateSubviewsBackgroundAfterChangingState() {
-  m_editableCell.textField()->setBackgroundColor(backgroundColor());
-}
-
-int EvenOddEditableTextCell::numberOfSubviews() const {
-  return 1;
-}
-
-View * EvenOddEditableTextCell::subviewAtIndex(int index) {
+View* AbstractEvenOddEditableTextCell::subviewAtIndex(int index) {
   assert(index == 0);
-  return &m_editableCell;
+  return editableTextCell();
 }
 
-void EvenOddEditableTextCell::layoutSubviews(bool force) {
-  m_editableCell.setFrame(bounds(), force);
+void AbstractEvenOddEditableTextCell::layoutSubviews(bool force) {
+  setChildFrame(editableTextCell(),
+                KDRect(bounds().left(), bounds().top(),
+                       bounds().width() - k_rightMargin, bounds().height()),
+                force);
 }
 
-void EvenOddEditableTextCell::didBecomeFirstResponder() {
-  Container::activeApp()->setFirstResponder(&m_editableCell);
+void AbstractEvenOddEditableTextCell::didBecomeFirstResponder() {
+  Container::activeApp()->setFirstResponder(editableTextCell());
 }
 
-}
+}  // namespace Escher

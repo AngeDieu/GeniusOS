@@ -1,131 +1,102 @@
+#include <assert.h>
 #include <poincare/binomial_coefficient.h>
 #include <poincare/binomial_coefficient_layout.h>
-#include <poincare/parenthesis_layout.h>
 #include <poincare/layout_helper.h>
+#include <poincare/parenthesis_layout.h>
 #include <poincare/serialization_helper.h>
-#include <assert.h>
+
 #include <algorithm>
 
 namespace Poincare {
 
-void BinomialCoefficientLayoutNode::moveCursorLeft(LayoutCursor * cursor, bool * shouldRecomputeLayout, bool forSelection) {
-  if (cursor->position() == LayoutCursor::Position::Left
-      && (cursor->layoutNode() == nLayout()
-        || cursor->layoutNode() == kLayout()))
-  {
-    // Case: Left of the children. Go Left.
-    cursor->setLayoutNode(this);
-    return;
+int BinomialCoefficientLayoutNode::indexAfterHorizontalCursorMove(
+    OMG::HorizontalDirection direction, int currentIndex,
+    bool* shouldRedrawLayout) {
+  if (currentIndex == k_outsideIndex) {
+    /* When coming from the left, go to the n layout.
+     * When coming from the right, go to the k layout. */
+    return direction.isRight() ? k_nLayoutIndex : k_kLayoutIndex;
   }
-
-  assert(cursor->layoutNode() == this);
-  if (cursor->position() == LayoutCursor::Position::Right) {
-    // Case: Right. Go to the kLayout.
-    cursor->setLayoutNode(kLayout());
-    return;
-  }
-  // Case: Left. Ask the parent.
-  assert(cursor->position() == LayoutCursor::Position::Left);
-  LayoutNode * parentNode = parent();
-  if (parentNode != nullptr) {
-    parentNode->moveCursorLeft(cursor, shouldRecomputeLayout);
-  }
+  return k_outsideIndex;
 }
 
-void BinomialCoefficientLayoutNode::moveCursorRight(LayoutCursor * cursor, bool * shouldRecomputeLayout, bool forSelection) {
-  if (cursor->position() == LayoutCursor::Position::Right
-      && (cursor->layoutNode() == nLayout()
-        || cursor->layoutNode() == kLayout()))
-  {
-    // Case: Right of the children. Go Right.
-    cursor->setLayoutNode(this);
-    return;
+int BinomialCoefficientLayoutNode::indexAfterVerticalCursorMove(
+    OMG::VerticalDirection direction, int currentIndex,
+    PositionInLayout positionAtCurrentIndex, bool* shouldRedrawLayout) {
+  if (currentIndex == k_kLayoutIndex && direction.isUp()) {
+    return k_nLayoutIndex;
   }
-
-  assert(cursor->layoutNode() == this);
-  if (cursor->position() == LayoutCursor::Position::Left) {
-    // Case: Left. Go Left of the nLayout.
-    cursor->setLayoutNode(nLayout());
-    return;
+  if (currentIndex == k_nLayoutIndex && direction.isDown()) {
+    return k_kLayoutIndex;
   }
-  // Case: Right. Ask the parent.
-  assert(cursor->position() == LayoutCursor::Position::Right);
-  LayoutNode * parentNode = parent();
-  if (parentNode != nullptr) {
-    parentNode->moveCursorRight(cursor, shouldRecomputeLayout);
-  }
+  return k_cantMoveIndex;
 }
 
-void BinomialCoefficientLayoutNode::moveCursorUp(LayoutCursor * cursor, bool * shouldRecomputeLayout, bool equivalentPositionVisited, bool forSelection) {
-  if (cursor->layoutNode()->hasAncestor(kLayout(), true)) {
-    // Case: kLayout. Move to nLayout.
-    return nLayout()->moveCursorUpInDescendants(cursor, shouldRecomputeLayout);
+LayoutNode::DeletionMethod
+BinomialCoefficientLayoutNode::deletionMethodForCursorLeftOfChild(
+    int childIndex) const {
+  if (childIndex == k_nLayoutIndex && kLayout()->isEmpty()) {
+    return DeletionMethod::DeleteParent;
   }
-  LayoutNode::moveCursorUp(cursor, shouldRecomputeLayout, equivalentPositionVisited);
+  if (childIndex == k_kLayoutIndex) {
+    return DeletionMethod::BinomialCoefficientMoveFromKtoN;
+  }
+  return DeletionMethod::MoveLeft;
 }
 
-void BinomialCoefficientLayoutNode::moveCursorDown(LayoutCursor * cursor, bool * shouldRecomputeLayout, bool equivalentPositionVisited, bool forSelection) {
-  if (cursor->layoutNode()->hasAncestor(nLayout(), true)) {
-    // Case: nLayout. Move to kLayout.
-    return kLayout()->moveCursorDownInDescendants(cursor, shouldRecomputeLayout);
-  }
-  LayoutNode::moveCursorDown(cursor, shouldRecomputeLayout, equivalentPositionVisited);
-}
-
-void BinomialCoefficientLayoutNode::deleteBeforeCursor(LayoutCursor * cursor) {
-  if (cursor->position() == LayoutCursor::Position::Left) {
-    if (cursor->layoutNode() == kLayout()) {
-      // After deleting the bottom line, go to the upper one
-      cursor->setLayout(nLayout());
-      cursor->setPosition(LayoutCursor::Position::Right);
-      return;
-    }
-    if (cursor->layoutNode() == nLayout() && !kLayout()->isEmpty()) {
-      /* If the k is not empty and user is deleting left of n, just move left.
-       * This case is handled now because otherwise
-       * deleteBeforeCursorForLayoutContainingArgument would delete the whole layout.
-       */
-      bool temp;
-      moveCursorLeft(cursor, &temp, false);
-      return;
-    }
-  }
-  if (!deleteBeforeCursorForLayoutContainingArgument(nLayout(), cursor)) {
-    LayoutNode::deleteBeforeCursor(cursor);
-  }
-}
-
-int BinomialCoefficientLayoutNode::serialize(char * buffer, int bufferSize, Preferences::PrintFloatMode floatDisplayMode, int numberOfSignificantDigits) const {
-  return SerializationHelper::Prefix(this, buffer, bufferSize, floatDisplayMode, numberOfSignificantDigits, BinomialCoefficient::s_functionHelper.aliasesList().mainAlias(), SerializationHelper::ParenthesisType::System);
+int BinomialCoefficientLayoutNode::serialize(
+    char* buffer, int bufferSize, Preferences::PrintFloatMode floatDisplayMode,
+    int numberOfSignificantDigits) const {
+  return SerializationHelper::Prefix(
+      this, buffer, bufferSize, floatDisplayMode, numberOfSignificantDigits,
+      BinomialCoefficient::s_functionHelper.aliasesList().mainAlias(),
+      SerializationHelper::ParenthesisType::System);
 }
 
 KDSize BinomialCoefficientLayoutNode::computeSize(KDFont::Size font) {
-  KDSize coefficientsSize = KDSize(
-      std::max(nLayout()->layoutSize(font).width(), kLayout()->layoutSize(font).width()),
-      knHeight(font));
-  KDCoordinate width = coefficientsSize.width() + 2*ParenthesisLayoutNode::k_parenthesisWidth;
+  KDSize coefficientsSize =
+      KDSize(std::max(nLayout()->layoutSize(font).width(),
+                      kLayout()->layoutSize(font).width()),
+             knHeight(font));
+  KDCoordinate width =
+      coefficientsSize.width() + 2 * ParenthesisLayoutNode::k_parenthesisWidth;
   return KDSize(width, coefficientsSize.height());
 }
 
 KDCoordinate BinomialCoefficientLayoutNode::computeBaseline(KDFont::Size font) {
-  return (knHeight(font)+1)/2;
+  return (knHeight(font) + 1) / 2;
 }
 
-KDPoint BinomialCoefficientLayoutNode::positionOfChild(LayoutNode * child, KDFont::Size font) {
-  KDCoordinate horizontalCenter = ParenthesisLayoutNode::k_parenthesisWidth + std::max(nLayout()->layoutSize(font).width(), kLayout()->layoutSize(font).width())/2;
+KDPoint BinomialCoefficientLayoutNode::positionOfChild(LayoutNode* child,
+                                                       KDFont::Size font) {
+  KDCoordinate horizontalCenter =
+      ParenthesisLayoutNode::k_parenthesisWidth +
+      std::max(nLayout()->layoutSize(font).width(),
+               kLayout()->layoutSize(font).width()) /
+          2;
   if (child == nLayout()) {
-    return KDPoint(horizontalCenter - nLayout()->layoutSize(font).width()/2, 0);
+    return KDPoint(horizontalCenter - nLayout()->layoutSize(font).width() / 2,
+                   0);
   }
   assert(child == kLayout());
-  return KDPoint(horizontalCenter - kLayout()->layoutSize(font).width()/2, knHeight(font) - kLayout()->layoutSize(font).height());
+  return KDPoint(horizontalCenter - kLayout()->layoutSize(font).width() / 2,
+                 knHeight(font) - kLayout()->layoutSize(font).height());
 }
 
-void BinomialCoefficientLayoutNode::render(KDContext * ctx, KDPoint p, KDFont::Size font, KDColor expressionColor, KDColor backgroundColor, Layout * selectionStart, Layout * selectionEnd, KDColor selectionColor) {
+void BinomialCoefficientLayoutNode::render(KDContext* ctx, KDPoint p,
+                                           KDGlyph::Style style) {
   // Render the parentheses.
-  KDCoordinate childHeight = knHeight(font);
-  KDCoordinate rightParenthesisPointX = std::max(nLayout()->layoutSize(font).width(), kLayout()->layoutSize(font).width()) + ParenthesisLayoutNode::k_parenthesisWidth;
-  ParenthesisLayoutNode::RenderWithChildHeight(true, childHeight, ctx, p, expressionColor, backgroundColor);
-  ParenthesisLayoutNode::RenderWithChildHeight(false, childHeight, ctx, p.translatedBy(KDPoint(rightParenthesisPointX, 0)), expressionColor, backgroundColor);
+  KDCoordinate childHeight = knHeight(style.font);
+  KDCoordinate rightParenthesisPointX =
+      std::max(nLayout()->layoutSize(style.font).width(),
+               kLayout()->layoutSize(style.font).width()) +
+      ParenthesisLayoutNode::k_parenthesisWidth;
+  ParenthesisLayoutNode::RenderWithChildHeight(
+      true, childHeight, ctx, p, style.glyphColor, style.backgroundColor);
+  ParenthesisLayoutNode::RenderWithChildHeight(
+      false, childHeight, ctx,
+      p.translatedBy(KDPoint(rightParenthesisPointX, 0)), style.glyphColor,
+      style.backgroundColor);
 }
 
-}
+}  // namespace Poincare

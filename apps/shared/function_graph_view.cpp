@@ -1,8 +1,10 @@
 #include "function_graph_view.h"
-#include <poincare/circuit_breaker_checkpoint.h>
+
 #include <assert.h>
-#include <cmath>
 #include <float.h>
+#include <poincare/circuit_breaker_checkpoint.h>
+
+#include <cmath>
 
 using namespace Poincare;
 
@@ -10,7 +12,8 @@ namespace Shared {
 
 // FunctionGraphPolicy
 
-void FunctionGraphPolicy::drawPlot(const AbstractPlotView * plotView, KDContext * ctx, KDRect rect) const {
+void FunctionGraphPolicy::drawPlot(const AbstractPlotView* plotView,
+                                   KDContext* ctx, KDRect rect) const {
   int n = numberOfDrawnRecords();
   int selectedIndex = selectedRecordIndex();
   bool firstDrawnRecord = true;
@@ -30,52 +33,69 @@ void FunctionGraphPolicy::drawPlot(const AbstractPlotView * plotView, KDContext 
       continue;
     }
 
-    // Get the record before the checkpoint because it can change the pool
-    Ion::Storage::Record record = functionStore()->activeRecordAtIndex(index);
+    /* In case it's not already memoized, init the model in the function store
+     * before the checkpoint because it can change the pool. */
+    Ion::Storage::Record record = initModelBeforeDrawingPlot(index);
 
-    CircuitBreakerCheckpoint checkpoint(Ion::CircuitBreaker::CheckpointType::Back);
+    CircuitBreakerCheckpoint checkpoint(
+        Ion::CircuitBreaker::CheckpointType::Back);
     if (CircuitBreakerRun(checkpoint)) {
       drawRecord(record, index, ctx, rect, firstDrawnRecord);
     } else {
       setFunctionInterrupted(index);
-      tidyModel(index);
-      m_context->tidyDownstreamPoolFrom();
+      tidyModel(index, checkpoint.endOfPoolBeforeCheckpoint());
+      m_context->tidyDownstreamPoolFrom(checkpoint.endOfPoolBeforeCheckpoint());
     }
     firstDrawnRecord = false;
   }
+}
+
+Ion::Storage::Record FunctionGraphPolicy::initModelBeforeDrawingPlot(
+    int modelIndex) const {
+  Ion::Storage::Record record =
+      functionStore()->activeRecordAtIndex(modelIndex);
+  functionStore()->modelForRecord(record);
+  return record;
 }
 
 bool FunctionGraphPolicy::allFunctionsInterrupted() const {
   /* The number of functions displayed at the same time is theoretically
    * unbounded, but we only store the status of 32 functions. */
   int numberOfFunctions = numberOfDrawnRecords();
-  if (numberOfFunctions <= 0 || static_cast<size_t>(numberOfFunctions) > 8 * sizeof(m_functionsInterrupted)) {
+  if (numberOfFunctions <= 0 ||
+      static_cast<size_t>(numberOfFunctions) >
+          OMG::BitHelper::numberOfBitsIn(m_functionsInterrupted)) {
     return false;
   }
-  return m_functionsInterrupted == static_cast<uint32_t>((1 << numberOfFunctions) - 1);
+  return m_functionsInterrupted ==
+         static_cast<uint32_t>((1 << numberOfFunctions) - 1);
 }
 
 bool FunctionGraphPolicy::functionWasInterrupted(int index) const {
-  if (index < 0 || static_cast<size_t>(index) >= 8 * sizeof(m_functionsInterrupted)) {
+  if (index < 0 || static_cast<size_t>(index) >=
+                       OMG::BitHelper::numberOfBitsIn(m_functionsInterrupted)) {
     return false;
   }
-  return (1 << index) & m_functionsInterrupted;
+  return OMG::BitHelper::bitAtIndex(m_functionsInterrupted, index);
 }
 
 void FunctionGraphPolicy::setFunctionInterrupted(int index) const {
-  if (index >= 0 && static_cast<size_t>(index) < 8 * sizeof(m_functionsInterrupted)) {
-    m_functionsInterrupted |= 1 << index;
+  if (index >= 0 && static_cast<size_t>(index) < OMG::BitHelper::numberOfBitsIn(
+                                                     m_functionsInterrupted)) {
+    OMG::BitHelper::setBitAtIndex(m_functionsInterrupted, index, true);
   }
 }
 
 // FunctionGraphView
 
-FunctionGraphView::FunctionGraphView(InteractiveCurveViewRange * range, CurveViewCursor * cursor, BannerView * bannerView, CursorView * cursorView) :
-  PlotView(range),
-  m_highlightedStart(NAN),
-  m_highlightedEnd(NAN),
-  m_shouldColorHighlighted(false)
-{
+FunctionGraphView::FunctionGraphView(InteractiveCurveViewRange* range,
+                                     CurveViewCursor* cursor,
+                                     BannerView* bannerView,
+                                     CursorView* cursorView)
+    : PlotView(range),
+      m_highlightedStart(NAN),
+      m_highlightedEnd(NAN),
+      m_shouldColorHighlighted(false) {
   // FunctionGraphPolicy
   m_functionsInterrupted = 0;
   m_context = nullptr;
@@ -86,7 +106,7 @@ FunctionGraphView::FunctionGraphView(InteractiveCurveViewRange * range, CurveVie
   m_cursorView = cursorView;
 }
 
-void FunctionGraphView::drawRect(KDContext * ctx, KDRect rect) const {
+void FunctionGraphView::drawRect(KDContext* ctx, KDRect rect) const {
   if (!allFunctionsInterrupted()) {
     PlotView::drawRect(ctx, rect);
   }
@@ -143,12 +163,25 @@ void FunctionGraphView::reloadBetweenBounds(float start, float end) {
   if (start == end) {
     return;
   }
-  KDCoordinate pixelLowerBound = floatToKDCoordinatePixel(Axis::Horizontal, start) - 2;
-  KDCoordinate pixelUpperBound = floatToKDCoordinatePixel(Axis::Horizontal, end) + 4;
+  KDCoordinate pixelLowerBound =
+      floatToKDCoordinatePixel(Axis::Horizontal, start) - 2;
+  KDCoordinate pixelUpperBound =
+      floatToKDCoordinatePixel(Axis::Horizontal, end) + 4;
   /* We exclude the banner frame from the dirty zone to avoid unnecessary
    * redrawing */
-  KDRect dirtyZone(KDRect(pixelLowerBound, 0, pixelUpperBound - pixelLowerBound, bounds().height() - m_banner->bounds().height()));
+  KDRect dirtyZone(KDRect(pixelLowerBound, 0, pixelUpperBound - pixelLowerBound,
+                          bounds().height() - m_banner->bounds().height()));
   markRectAsDirty(dirtyZone);
 }
 
+Ion::Storage::Record FunctionGraphView::initModelBeforeDrawingPlot(
+    int modelIndex) const {
+  Ion::Storage::Record record =
+      FunctionGraphPolicy::initModelBeforeDrawingPlot(modelIndex);
+  if (record == m_selectedRecord && !m_secondSelectedRecord.isNull()) {
+    functionStore()->modelForRecord(m_secondSelectedRecord);
+  }
+  return record;
 }
+
+}  // namespace Shared

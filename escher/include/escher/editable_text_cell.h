@@ -1,47 +1,61 @@
 #ifndef ESCHER_EDITABLE_TEXT_CELL_H
 #define ESCHER_EDITABLE_TEXT_CELL_H
 
-#include <escher/responder.h>
 #include <escher/highlight_cell.h>
 #include <escher/metric.h>
-#include <escher/text_field_delegate.h>
+#include <escher/responder.h>
 #include <escher/text_field.h>
+#include <escher/text_field_delegate.h>
 #include <poincare/print_float.h>
 
 namespace Escher {
 
-class EditableTextCell : public HighlightCell, public Responder {
-public:
-  EditableTextCell(Responder * parentResponder = nullptr,
-                   InputEventHandlerDelegate * inputEventHandlerDelegate = nullptr,
-                   TextFieldDelegate * delegate = nullptr,
-                   KDFont::Size font = KDFont::Size::Large,
-                   float horizontalAlignment = KDContext::k_alignLeft,
-                   float verticalAlignment = KDContext::k_alignCenter,
-                   KDColor textColor = KDColorBlack,
-                   KDColor backgroundColor = KDColorWhite);
-  TextField * textField();
+class AbstractEditableTextCell : public HighlightCell, public Responder {
+ public:
+  AbstractEditableTextCell(Responder* parentResponder)
+      : HighlightCell(), Responder(parentResponder) {}
+  virtual TextField* textField() = 0;
   void setHighlighted(bool highlight) override;
-  Responder * responder() override {
-    return this;
-  }
-  const char * text() const override {
-    if (!m_textField.isEditing()) {
-      return m_textField.text();
-    }
-    return nullptr;
-  }
+  Responder* responder() override { return this; }
+  const char* text() const override;
   int numberOfSubviews() const override;
-  View * subviewAtIndex(int index) override;
+  View* subviewAtIndex(int index) override;
   void layoutSubviews(bool force = false) override;
   void didBecomeFirstResponder() override;
   KDSize minimalSizeForOptimalDisplay() const override;
-private:
-  constexpr static KDCoordinate k_separatorThickness = Metric::CellSeparatorThickness;
-  TextField m_textField;
-  char m_textBody[Poincare::PrintFloat::k_maxFloatCharSize];
+
+ private:
+  constexpr static KDCoordinate k_separatorThickness =
+      Metric::CellSeparatorThickness;
+  virtual char* textBody() = 0;
 };
 
-}
+template <int NumberOfSignificantDigits =
+              Poincare::PrintFloat::k_numberOfStoredSignificantDigits>
+class EditableTextCell : public AbstractEditableTextCell {
+ public:
+  EditableTextCell(
+      Responder* parentResponder = nullptr,
+      InputEventHandlerDelegate* inputEventHandlerDelegate = nullptr,
+      TextFieldDelegate* delegate = nullptr, KDGlyph::Format format = {})
+      : AbstractEditableTextCell(parentResponder),
+        m_textField(this, m_textBody, k_bufferSize, inputEventHandlerDelegate,
+                    delegate, format) {
+    m_textBody[0] = 0;
+  }
+
+  constexpr static size_t k_bufferSize =
+      Poincare::PrintFloat::charSizeForFloatsWithPrecision(
+          NumberOfSignificantDigits);
+
+  TextField* textField() override { return &m_textField; }
+
+ private:
+  char* textBody() override { return m_textBody; }
+  TextField m_textField;
+  char m_textBody[k_bufferSize];
+};
+
+}  // namespace Escher
 
 #endif

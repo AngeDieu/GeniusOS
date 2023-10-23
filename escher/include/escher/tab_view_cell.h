@@ -1,31 +1,34 @@
 #ifndef ESCHER_TAB_VIEW_CELL_H
 #define ESCHER_TAB_VIEW_CELL_H
 
-#include <escher/view.h>
 #include <escher/i18n.h>
 #include <escher/text_view.h>
-#include <escher/view_controller.h>
+#include <escher/view.h>
 
 namespace Escher {
 
+class TabViewController;
+
 class TabViewCell : public View {
-public:
+ public:
   TabViewCell();
-  void drawRect(KDContext * ctx, KDRect rect) const override;
-  void setNamedController(ViewController * controller);
+  void drawRect(KDContext *ctx, KDRect rect) const override;
+  void setTabController(TabViewController *controller, uint8_t tabNumber);
   void setActive(bool active);
   void setSelected(bool selected);
   KDSize minimalSizeForOptimalDisplay() const override;
-protected:
+
+ protected:
 #if ESCHER_VIEW_LOGGING
-  const char * className() const override;
+  const char *className() const override;
   void logAttributes(std::ostream &os) const override;
 #endif
-private:
+ private:
+  uint8_t m_tabNumber;
   bool m_active;
   bool m_selected;
-  ViewController * m_controller;
+  TabViewController *m_controller;
 };
 
-}
+}  // namespace Escher
 #endif

@@ -1,8 +1,12 @@
 #include "app.h"
-#include "../apps_container.h"
+
 #include <apps/global_preferences.h>
-#include "sequence_icon.h"
+
+#include <array>
+
+#include "../apps_container.h"
 #include "../shared/global_context.h"
+#include "sequence_icon.h"
 
 using namespace Poincare;
 using namespace Escher;
@@ -17,25 +21,26 @@ I18n::Message App::Descriptor::upperName() const {
   return I18n::Message::SequenceAppCapital;
 }
 
-const Image * App::Descriptor::icon() const {
-  return ImageStore::SequenceIcon;
-}
+const Image *App::Descriptor::icon() const { return ImageStore::SequenceIcon; }
 
-App::Snapshot::Snapshot() :
-  Shared::FunctionApp::Snapshot::Snapshot(),
-  m_intervalModifiedByUser(false)
-{
+App::Snapshot::Snapshot()
+    : Shared::FunctionApp::Snapshot::Snapshot(),
+      m_intervalModifiedByUser(false) {
   // Register u, v and w as reserved names to the sharedStorage.
-  Ion::Storage::FileSystem::sharedFileSystem()->recordNameVerifier()->registerArrayOfReservedNames(Shared::SequenceStore::k_sequenceNames, Ion::Storage::seqExtension, 0, sizeof(Shared::SequenceStore::k_sequenceNames) / sizeof(char *));
+  Ion::Storage::FileSystem::sharedFileSystem->recordNameVerifier()
+      ->registerArrayOfReservedNames(
+          Shared::SequenceStore::k_sequenceNames, Ion::Storage::seqExtension, 0,
+          std::size(Shared::SequenceStore::k_sequenceNames));
 }
 
-App * App::Snapshot::unpack(Container * container) {
+App *App::Snapshot::unpack(Container *container) {
   return new (container->currentAppBuffer()) App(this);
 }
 
 void App::Snapshot::resetInterval() {
   m_interval.reset();
-  m_interval.parameters()->setStart(GlobalPreferences::sharedGlobalPreferences()->sequencesInitialRank());
+  m_interval.parameters()->setStart(
+      GlobalPreferences::sharedGlobalPreferences->sequencesInitialRank());
   m_interval.forceRecompute();
   setIntervalModifiedByUser(false);
 }
@@ -43,7 +48,8 @@ void App::Snapshot::resetInterval() {
 void App::Snapshot::updateInterval() {
   if (!intervalModifiedByUser()) {
     int smallestInitRank = functionStore()->smallestInitialRank();
-    if (smallestInitRank < Shared::Sequence::k_maxInitialRank && smallestInitRank != interval()->parameters()->start()) {
+    if (smallestInitRank < Shared::Sequence::k_maxInitialRank &&
+        smallestInitRank != interval()->parameters()->start()) {
       interval()->translateTo(smallestInitRank);
     }
   }
@@ -59,27 +65,38 @@ void App::Snapshot::reset() {
 
 constexpr static App::Descriptor sDescriptor;
 
-const App::Descriptor * App::Snapshot::descriptor() const {
+const App::Descriptor *App::Snapshot::descriptor() const {
   return &sDescriptor;
 }
 
 void App::Snapshot::tidy() {
   m_graphRange.setDelegate(nullptr);
-  functionStore()->tidyDownstreamPoolFrom();
+  Shared::SharedApp::Snapshot::tidy();
 }
 
-bool App::isAcceptableExpression(const Poincare::Expression exp) {
-  /* Complete ExpressionFieldDelegateApp acceptable conditions by not accepting
+bool App::isAcceptableExpression(Escher::EditableField *field,
+                                 const Poincare::Expression exp) {
+  /* Complete LayoutFieldDelegateApp acceptable conditions by not accepting
    * any OperatorType. */
-  return ExpressionFieldDelegateApp::isAcceptableExpression(exp) && exp.type() != ExpressionNode::Type::Comparison;
+  return LayoutFieldDelegateApp::isAcceptableExpression(field, exp) &&
+         exp.type() != ExpressionNode::Type::Comparison;
 }
 
-App::App(Snapshot * snapshot) :
-  FunctionApp(snapshot, &m_listController, &m_graphController, &m_valuesController),
-  m_listController(&m_listFooter, this, &m_listHeader, &m_listFooter),
-  m_graphController(&m_graphAlternateEmptyViewController, this, snapshot->functionStore(), snapshot->graphRange(), snapshot->cursor(), snapshot->indexFunctionSelectedByCursor(), &m_graphHeader),
-  m_valuesController(&m_valuesAlternateEmptyViewController, this, &m_valuesHeader)
-{
-}
+App::ListTab::ListTab()
+    : Shared::FunctionApp::ListTab(&m_listController),
+      m_listController(&m_listFooter, app(), &m_listHeader, &m_listFooter) {}
 
-}
+App::GraphTab::GraphTab()
+    : Shared::FunctionApp::GraphTab(&m_graphController),
+      m_graphController(&m_graphAlternateEmptyViewController, app(),
+                        &m_graphHeader, app()->snapshot()->graphRange(),
+                        app()->snapshot()->cursor(),
+                        app()->snapshot()->selectedCurveIndex(),
+                        app()->snapshot()->functionStore()) {}
+
+App::ValuesTab::ValuesTab()
+    : Shared::FunctionApp::ValuesTab(&m_valuesController),
+      m_valuesController(&m_valuesAlternateEmptyViewController, app(),
+                         &m_valuesHeader) {}
+
+}  // namespace Sequence

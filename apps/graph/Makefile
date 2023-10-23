@@ -21,15 +21,14 @@ app_graph_src = $(addprefix apps/graph/,\
   graph/preimage_parameter_controller.cpp\
   graph/root_graph_controller.cpp \
   graph/tangent_graph_controller.cpp \
+  list/editable_function_cell.cpp \
   list/function_cell.cpp \
   list/function_models_parameter_controller.cpp \
-  list/function_toolbox.cpp \
   list/list_controller.cpp \
   shared/details_parameter_controller.cpp \
   shared/domain_parameter_controller.cpp \
   shared/function_parameter_controller.cpp \
-  values/abscissa_title_cell.cpp \
-  values/derivative_parameter_controller.cpp \
+  shared/function_toolbox.cpp \
   values/interval_parameter_selector_controller.cpp \
   values/values_controller.cpp \
 )

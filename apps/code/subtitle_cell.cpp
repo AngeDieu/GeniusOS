@@ -1,18 +1,26 @@
 #include "subtitle_cell.h"
-#include <escher/palette.h>
+
 #include <assert.h>
+#include <escher/palette.h>
 
 using namespace Escher;
 
 namespace Code {
 
-constexpr KDColor SubtitleCell::k_backgroundColor;
-constexpr KDColor SubtitleCell::k_textColor;
+SubtitleCell::SubtitleCell()
+    : Bordered(),
+      HighlightCell(),
+      m_textView({.style = {.glyphColor = k_textColor,
+                            .backgroundColor = k_backgroundColor,
+                            .font = KDFont::Size::Small}}) {}
 
-SubtitleCell::SubtitleCell() : BufferTableCell(KDFont::Size::Small, KDContext::k_alignLeft, KDContext::k_alignCenter, k_textColor, k_backgroundColor, k_maxNumberOfCharsInBuffer)
-{}
+void SubtitleCell::drawRect(KDContext *ctx, KDRect rect) const {
+  KDColor backColor = isHighlighted() ? Palette::Select : k_backgroundColor;
+  drawInnerRect(ctx, bounds(), backColor);
+  drawBorderOfRect(ctx, bounds(), Palette::GrayBright);
+}
 
-void SubtitleCell::layoutSubviews(bool force)  {
+void SubtitleCell::layoutSubviews(bool force) {
   KDCoordinate width = bounds().width();
   KDCoordinate height = bounds().height();
   if (width == 0 || height == 0) {
@@ -29,7 +37,7 @@ void SubtitleCell::layoutSubviews(bool force)  {
 
   assert(width > 0 && height > 0);
 
-  m_labelView.setFrame(KDRect(x, y, width, height), force);
+  setChildFrame(&m_textView, KDRect(x, y, width, height), force);
 }
 
-}
+}  // namespace Code

@@ -1,11 +1,13 @@
-#include "isr.h"
-#include <ion.h>
 #include <config/board.h>
+#include <ion.h>
+#include <ion/src/shared/init.h>
 #include <shared/boot/rt0.h>
 #include <shared/drivers/usb.h>
 
+#include "isr.h"
+
 extern "C" {
-  void abort();
+void abort();
 }
 
 void abort() {
@@ -19,6 +21,7 @@ void abort() {
 
 void __attribute__((noinline)) start() {
   Ion::Device::Init::configureRAM();
+  Ion::Init();
   // Initialize slotInfo to be accessible to Kernel
   Ion::Device::USB::slotInfo();
   Ion::ExternalApps::deleteApps();

@@ -9,17 +9,24 @@ namespace Ion {
 namespace Device {
 namespace Board {
 
-KernelHeader * kernelHeader();
-UserlandHeader * userlandHeader();
+enum class Slot : bool {
+  A,
+  B,
+};
+
+KernelHeader* kernelHeader();
+UserlandHeader* userlandHeader();
+UserlandHeader* userlandHeader(Slot slot);
 uint32_t userlandStart();
-uint32_t userlandEnd();
+uint32_t userlandStart(Slot slot);
+uint32_t userlandEnd(Slot slot);
 uint32_t writableSRAMEndAddress();
 uint32_t writableSRAMStartAddress();
 bool isRunningSlotA();
 uint32_t securityLevel();
 
-}
-}
-}
+}  // namespace Board
+}  // namespace Device
+}  // namespace Ion
 
 #endif

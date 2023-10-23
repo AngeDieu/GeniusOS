@@ -1,20 +1,23 @@
-#include <escher/editable_expression_cell.h>
+#include <assert.h>
 #include <escher/container.h>
+#include <escher/editable_expression_cell.h>
 #include <escher/palette.h>
 #include <poincare/print_float.h>
-#include <assert.h>
 
 namespace Escher {
 
-EditableExpressionCell::EditableExpressionCell(Responder * parentResponder, InputEventHandlerDelegate * inputEventHandlerDelegate, TextFieldDelegate * textDelegate, LayoutFieldDelegate * layoutDelegate) :
-  HighlightCell(),
-  Responder(parentResponder),
-  m_expressionField(this, inputEventHandlerDelegate, textDelegate, layoutDelegate)
-{
+EditableExpressionCell::EditableExpressionCell(
+    Responder* parentResponder,
+    InputEventHandlerDelegate* inputEventHandlerDelegate,
+    LayoutFieldDelegate* layoutDelegate)
+    : HighlightCell(),
+      Responder(parentResponder),
+      m_layoutField(this, inputEventHandlerDelegate, layoutDelegate) {
+  m_layoutField.setMargins(k_topMargin, k_margin, k_margin, k_margin);
   m_expressionBody[0] = 0;
 }
 
-void EditableExpressionCell::drawRect(KDContext * ctx, KDRect rect) const {
+void EditableExpressionCell::drawRect(KDContext* ctx, KDRect rect) const {
   drawBorderOfRect(ctx, bounds(), Palette::GrayBright);
 }
 
@@ -24,16 +27,18 @@ void EditableExpressionCell::setHighlighted(bool highlight) {
 }
 
 void EditableExpressionCell::layoutSubviews(bool force) {
-  KDRect cellBounds = bounds();
-  m_expressionField.setFrame(KDRect(cellBounds.x() + k_separatorThickness,
-                                    cellBounds.y(),
-                                    cellBounds.width() - 2 * k_separatorThickness,
-                                    cellBounds.height() - k_separatorThickness),
-                             force);
+  setChildFrame(&m_layoutField, bounds().trimmedBy(k_separatorThickness),
+                force);
 }
 
 void EditableExpressionCell::didBecomeFirstResponder() {
-  Container::activeApp()->setFirstResponder(&m_expressionField);
+  Container::activeApp()->setFirstResponder(&m_layoutField);
 }
 
+KDSize EditableExpressionCell::minimalSizeForOptimalDisplay() const {
+  KDSize size = m_layoutField.minimalSizeForOptimalDisplay();
+  return KDSize(size.width(),
+                std::clamp(size.height(), k_minimalHeight, k_maximalHeight));
 }
+
+}  // namespace Escher

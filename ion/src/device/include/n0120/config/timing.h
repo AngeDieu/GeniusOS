@@ -1,5 +1,5 @@
-#ifndef ION_DEVICE_N0110_SHARED_DRIVERS_CONFIG_TIMING_H
-#define ION_DEVICE_N0110_SHARED_DRIVERS_CONFIG_TIMING_H
+#ifndef ION_DEVICE_N0120_SHARED_DRIVERS_CONFIG_TIMING_H
+#define ION_DEVICE_N0120_SHARED_DRIVERS_CONFIG_TIMING_H
 
 namespace Ion {
 namespace Device {
@@ -15,9 +15,9 @@ constexpr static int LoopsPerMillisecondLowFrequency = 146;
 #endif
 constexpr static int LoopsPerMicrosecond = 86;
 
-}
-}
-}
-}
+}  // namespace Config
+}  // namespace Timing
+}  // namespace Device
+}  // namespace Ion
 
 #endif

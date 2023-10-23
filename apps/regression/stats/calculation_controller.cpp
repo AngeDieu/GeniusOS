@@ -1,14 +1,14 @@
 #include "calculation_controller.h"
+
 #include <apps/apps_container_helper.h>
-#include <apps/exam_mode_configuration.h>
 #include <apps/shared/editable_cell_table_view_controller.h>
 #include <apps/shared/poincare_helpers.h>
-#include <poincare/code_point_layout.h>
-#include <poincare/vertical_offset_layout.h>
-#include <poincare/preferences.h>
-#include <poincare/helpers.h>
-#include <algorithm>
 #include <assert.h>
+#include <poincare/code_point_layout.h>
+#include <poincare/helpers.h>
+#include <poincare/vertical_offset_layout.h>
+
+#include <algorithm>
 
 using namespace Poincare;
 using namespace Shared;
@@ -16,10 +16,10 @@ using namespace Escher;
 
 namespace Regression {
 
-CalculationController::CalculationController(Responder * parentResponder, ButtonRowController * header, Store * store) :
-  DoublePairTableController(parentResponder, header),
-  m_store(store)
-{
+CalculationController::CalculationController(Responder *parentResponder,
+                                             ButtonRowController *header,
+                                             Store *store)
+    : DoublePairTableController(parentResponder, header), m_store(store) {
   for (int i = 0; i < Store::k_numberOfSeries; i++) {
     m_columnTitleCells[i].setParentResponder(&m_selectableTableView);
   }
@@ -27,9 +27,10 @@ CalculationController::CalculationController(Responder * parentResponder, Button
     m_doubleCalculationCells[i].setParentResponder(&m_selectableTableView);
   }
   for (int i = 0; i < k_maxNumberOfDisplayableRows; i++) {
-    m_titleCells[i].setAlignment(KDContext::k_alignRight, KDContext::k_alignCenter);
+    m_titleCells[i].setAlignment(KDGlyph::k_alignRight, KDGlyph::k_alignCenter);
     m_titleCells[i].setMessageFont(KDFont::Size::Small);
-    m_titleSymbolCells[i].setAlignment(KDContext::k_alignCenter, KDContext::k_alignCenter);
+    m_titleSymbolCells[i].setAlignment(KDGlyph::k_alignCenter,
+                                       KDGlyph::k_alignCenter);
     m_titleSymbolCells[i].setMessageFont(KDFont::Size::Small);
   }
   for (int i = 0; i < k_numberOfHeaderColumns; i++) {
@@ -43,209 +44,289 @@ void CalculationController::viewWillAppear() {
   Shared::DoublePairTableController::viewWillAppear();
 }
 
-void CalculationController::tableViewDidChangeSelection(SelectableTableView * t, int previousSelectedCellX, int previousSelectedCellY, bool withinTemporarySelection) {
-  if (withinTemporarySelection) {
-    return;
-  }
-  /* To prevent selecting cell with no content (top left corner of the table),
-   * as soon as the selected cell is the top left corner, we either reselect
-   * the previous cell or select the tab controller depending on from which cell
-   * the selection comes. This trick does not create an endless loop as the
-   * previous cell cannot be the top left corner cell if it also is the
-   * selected one. */
-  if (t->selectedRow() == 0 && t->selectedColumn() <= 1) {
-    if (previousSelectedCellX <= 1 && previousSelectedCellY == 1) {
-      selectableTableView()->deselectTable();
-      tabController()->selectTab();
-    } else {
-      t->selectCellAtLocation(selectedColumn(), 1);
-    }
-  }
-}
-
-void CalculationController::tableViewDidChangeSelectionAndDidScroll(SelectableTableView * t, int previousSelectedCellX, int previousSelectedCellY, bool withinTemporarySelection) {
-  if (withinTemporarySelection) {
-    return;
-  }
-  if (t->selectedColumn() > 1 && t->selectedRow() >= 0 && t->selectedRow() <= k_numberOfDoubleBufferCalculations) {
-    /* If we are on a double text cell, we have to choose which subcell to select
-     * It has to be done after the scroll for the selectedCell to be defined */
-    EvenOddDoubleBufferTextCellWithSeparator * myCell = (EvenOddDoubleBufferTextCellWithSeparator *)t->selectedCell();
+void CalculationController::tableViewDidChangeSelectionAndDidScroll(
+    SelectableTableView *t, int previousSelectedCol, int previousSelectedRow,
+    KDPoint previousOffset, bool withinTemporarySelection) {
+  assert(t == &m_selectableTableView);
+  if (!withinTemporarySelection && t->selectedColumn() > 1 &&
+      t->selectedRow() >= 0 &&
+      t->selectedRow() <= k_numberOfDoubleBufferCalculations) {
+    /* If we are on a double text cell, we have to choose which subcell to
+     * select It has to be done after the scroll for the selectedCell to be
+     * defined */
+    EvenOddDoubleBufferTextCell *myCell =
+        static_cast<EvenOddDoubleBufferTextCell *>(t->selectedCell());
     // Default selected subcell is the left one
     bool firstSubCellSelected = true;
-    if (previousSelectedCellX > 1 && previousSelectedCellY >= 0 && previousSelectedCellY <= k_numberOfDoubleBufferCalculations) {
-      // If we come from another double text cell, we have to update subselection
-      EvenOddDoubleBufferTextCellWithSeparator * myPreviousCell = (EvenOddDoubleBufferTextCellWithSeparator *)t->cellAtLocation(previousSelectedCellX, previousSelectedCellY);
+    if (previousSelectedCol > 1 && previousSelectedRow >= 0 &&
+        previousSelectedRow <= k_numberOfDoubleBufferCalculations) {
+      /* If we come from another double text cell, we have to update
+       * subselection */
+      EvenOddDoubleBufferTextCell *myPreviousCell =
+          static_cast<EvenOddDoubleBufferTextCell *>(
+              t->cellAtLocation(previousSelectedCol, previousSelectedRow));
       /* If the selection stays in the same column, we copy the subselection
        * from previous cell. Otherwise, the selection has jumped to another
        * column, we thus subselect the other subcell. */
-       assert(myPreviousCell);
-      firstSubCellSelected = t->selectedColumn() == previousSelectedCellX ? myPreviousCell->firstTextSelected() : !myPreviousCell->firstTextSelected();
+      assert(myPreviousCell);
+      firstSubCellSelected = t->selectedColumn() == previousSelectedCol
+                                 ? myPreviousCell->firstTextSelected()
+                                 : !myPreviousCell->firstTextSelected();
     }
     myCell->selectFirstText(firstSubCellSelected);
   }
 }
 
+bool CalculationController::canStoreContentOfCellAtLocation(
+    Escher::SelectableTableView *t, int col, int row) const {
+  if (!Shared::DoublePairTableController::canStoreContentOfCellAtLocation(
+          t, col, row)) {
+    return false;
+  }
+  assert(row > 0 && col > 1);
+  const Calculation c = calculationForRow(row);
+  if (c == Calculation::Regression) {
+    return false;
+  }
+  if (c == Calculation::CorrelationCoeff || c > Calculation::Regression) {
+    AbstractEvenOddBufferTextCell *bufferCell =
+        static_cast<AbstractEvenOddBufferTextCell *>(
+            t->cellAtLocation(col, row));
+    return strcmp(bufferCell->text(), I18n::translate(I18n::Message::Dash)) &&
+           strcmp(bufferCell->text(), I18n::translate(I18n::Message::Disabled));
+  }
+  return true;
+}
+
 int CalculationController::numberOfRows() const {
-  /* Rows for : title + Mean ... Variance + Number of points + Covariance + ∑xy
-   * + r + (Regression) + Coefficients + (R2) */
-  return 1 + k_numberOfDoubleBufferCalculations + k_numberOfSingleBufferCalculations + 1 + hasSeriesDisplaying(&DisplayRegression) + numberOfDisplayedCoefficients() + hasSeriesDisplaying(&DisplayR2);
+  /* Rows for : title + Mean ... Sum of Products + (CorrelationCoeff) +
+   * (Regression) + (Coefficients) + (Residual stddev) + (R2) */
+  return 1 + (static_cast<int>(Calculation::SumOfProducts) + 1) +
+         m_store->AnyActiveSeriesSatisfies(Store::DisplayR) +
+         m_store->AnyActiveSeriesSatisfies(Store::HasCoefficients) +
+         numberOfDisplayedCoefficients() +
+         m_store->AnyActiveSeriesSatisfies(
+             Store::DisplayResidualStandardDeviation) +
+         m_store->AnyActiveSeriesSatisfies(Store::DisplayR2) +
+         m_store->AnyActiveSeriesSatisfies(Store::DisplayRSquared);
 }
 
 int CalculationController::numberOfColumns() const {
-  return 2 + m_store->numberOfValidSeries();
+  return 2 + m_store->numberOfActiveSeries();
 }
 
-void CalculationController::willDisplayCellAtLocation(HighlightCell * cell, int i, int j) {
-  if (i <= 1 && j == 0) {
+void DashBufferCell(AbstractEvenOddBufferTextCell *bufferCell) {
+  bufferCell->setText(I18n::translate(I18n::Message::Dash));
+}
+
+void DisableBufferCell(AbstractEvenOddBufferTextCell *bufferCell) {
+  bufferCell->setTextColor(Palette::GrayDark);
+  bufferCell->setText(I18n::translate(I18n::Message::Disabled));
+}
+
+void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
+                                                int row) {
+  if (column <= 1 && row == 0) {
     return;
   }
-  EvenOddCell * myCell = static_cast<EvenOddCell *>(cell);
-  myCell->setEven(j%2 == 0);
-  myCell->setHighlighted(i == selectedColumn() && j == selectedRow());
+  EvenOddCell *myCell = static_cast<EvenOddCell *>(cell);
+  myCell->setEven(row % 2 == 0);
 
   // Coordinate and series title
-  if (j == 0 && i > 1) {
-    ColumnTitleCell * myCell = static_cast<ColumnTitleCell *>(cell);
-    size_t seriesNumber = m_store->indexOfKthValidSeries(i - k_numberOfHeaderColumns);
-    assert(seriesNumber < DoublePairStore::k_numberOfSeries);
+  if (row == 0 && column > 1) {
+    ColumnTitleCell *myCell = static_cast<ColumnTitleCell *>(cell);
+    size_t series = m_store->seriesIndexFromActiveSeriesIndex(
+        column - k_numberOfHeaderColumns);
+    assert(series < DoublePairStore::k_numberOfSeries);
     char buffer[Shared::ClearColumnHelper::k_maxSizeOfColumnName];
-    m_store->fillColumnName(seriesNumber, 0, buffer);
+    m_store->fillColumnName(series, 0, buffer);
     myCell->setFirstText(buffer);
-    m_store->fillColumnName(seriesNumber, 1, buffer);
+    m_store->fillColumnName(series, 1, buffer);
     myCell->setSecondText(buffer);
-    assert(seriesNumber < Palette::numberOfDataColors());
-    myCell->setColor(Palette::DataColor[seriesNumber]);
+    assert(series < Palette::numberOfDataColors());
+    myCell->setColor(Palette::DataColor[series]);
     return;
   }
 
-  const int calculationIndex = getCalculationIndex(j);
+  const Calculation c = calculationForRow(row);
+  bool forbidStatsDiagnostics =
+      Preferences::sharedPreferences->examMode().forbidStatsDiagnostics();
   // Calculation title and symbols
-  if (i <= 1) {
-    EvenOddMessageTextCell * myCell = static_cast<EvenOddMessageTextCell *>(cell);
-    myCell->setTextColor(i == 0 ? KDColorBlack : Palette::GrayDark);
-    I18n::Message message = (i == 0) ? MessageForCalculation(calculationIndex) : SymbolForCalculation(calculationIndex);
+  if (column <= 1) {
+    EvenOddMessageTextCell *myCell =
+        static_cast<EvenOddMessageTextCell *>(cell);
+    myCell->setTextColor(column == 0 ? KDColorBlack : Palette::GrayDark);
+    I18n::Message message =
+        (column == 0) ? MessageForCalculation(c) : SymbolForCalculation(c);
     myCell->setMessage(message);
-    if (calculationIndex >= k_numberOfBufferCalculations + 1 + k_maxNumberOfDistinctCoefficients && ExamModeConfiguration::statsDiagnosticsAreForbidden()) {
+    if ((c == Calculation::CorrelationCoeff ||
+         c == Calculation::DeterminationCoeff || c == Calculation::RSquared) &&
+        forbidStatsDiagnostics) {
       // R and R2 messages should be grayed out.
       myCell->setTextColor(Palette::GrayDark);
     }
     return;
   }
 
-  size_t seriesNumber = m_store->indexOfKthValidSeries(i - k_numberOfHeaderColumns);
-  assert(seriesNumber < DoublePairStore::k_numberOfSeries);
+  size_t series = m_store->seriesIndexFromActiveSeriesIndex(
+      column - k_numberOfHeaderColumns);
+  assert(series < DoublePairStore::k_numberOfSeries);
+  Model::Type type = m_store->seriesRegressionType(series);
 
-  assert(i > 1 && j > 0);
-  // Calculation cell
-  const int numberSignificantDigits = Preferences::VeryLargeNumberOfSignificantDigits;
-  if (calculationIndex < k_numberOfDoubleBufferCalculations) {
-    ArgCalculPointer calculationMethods[k_numberOfDoubleBufferCalculations] = {
-      &Store::meanOfColumn,
-      &Store::sumOfColumn,
-      &Store::squaredValueSumOfColumn,
-      &Store::standardDeviationOfColumn,
-      &Store::varianceOfColumn,
-      &Store::sampleStandardDeviationOfColumn,
-    };
-    double * calculation1 = m_memoizedDoubleCalculationCells[seriesNumber][0] + calculationIndex;
-    double * calculation2 = m_memoizedDoubleCalculationCells[seriesNumber][1] + calculationIndex;
+  // Regression cell
+  if (c == Calculation::Regression) {
+    Model *model = m_store->modelForSeries(series);
+    I18n::Message message = Store::HasCoefficients(type)
+                                ? model->formulaMessage()
+                                : I18n::Message::Dash;
+    static_cast<AbstractEvenOddBufferTextCell *>(cell)->setText(
+        I18n::translate(message));
+    static_cast<AbstractEvenOddBufferTextCell *>(cell)->setTextColor(
+        KDColorBlack);
+    return;
+  }
+
+  assert(column > 1 && row > 0);
+  constexpr int bufferSize = PrintFloat::charSizeForFloatsWithPrecision(
+      AbstractEvenOddBufferTextCell::k_defaultPrecision);
+  char buffer[bufferSize];
+
+  // Double calculation cells
+  if (c <= Calculation::SampleStandardDeviationS) {
+    int calculationIndex = static_cast<int>(c);
+    using DoubleCalculation =
+        double (Store::*)(int, int, Store::CalculationOptions) const;
+    constexpr DoubleCalculation
+        calculationMethods[k_numberOfDoubleBufferCalculations] = {
+            &Store::meanOfColumn,
+            &Store::sumOfColumn,
+            &Store::squaredValueSumOfColumn,
+            &Store::standardDeviationOfColumn,
+            &Store::varianceOfColumn,
+            &Store::sampleStandardDeviationOfColumn,
+        };
+    double *calculation1 =
+        m_memoizedDoubleCalculationCells[series][0] + calculationIndex;
+    double *calculation2 =
+        m_memoizedDoubleCalculationCells[series][1] + calculationIndex;
     if (std::isnan(*calculation1) || std::isnan(*calculation2)) {
-      *calculation1 = (m_store->*calculationMethods[calculationIndex])(seriesNumber, 0, false);
-      *calculation2 = (m_store->*calculationMethods[calculationIndex])(seriesNumber, 1, false);
+      *calculation1 = (m_store->*calculationMethods[calculationIndex])(
+          series, 0, Store::CalculationOptions());
+      *calculation2 = (m_store->*calculationMethods[calculationIndex])(
+          series, 1, Store::CalculationOptions());
     }
-    assert(Poincare::Helpers::EqualOrBothNan(*calculation1, (m_store->*calculationMethods[calculationIndex])(seriesNumber, 0, false)) &&
-           Poincare::Helpers::EqualOrBothNan(*calculation2, (m_store->*calculationMethods[calculationIndex])(seriesNumber, 1, false)));
-    EvenOddDoubleBufferTextCellWithSeparator * myCell = static_cast<EvenOddDoubleBufferTextCellWithSeparator *>(cell);
-    constexpr int bufferSize = PrintFloat::charSizeForFloatsWithPrecision(numberSignificantDigits);
-    char buffer[bufferSize];
-    PoincareHelpers::ConvertFloatToText<double>(*calculation1, buffer, bufferSize, numberSignificantDigits);
+    assert(Poincare::Helpers::EqualOrBothNan(
+               *calculation1, (m_store->*calculationMethods[calculationIndex])(
+                                  series, 0, Store::CalculationOptions())) &&
+           Poincare::Helpers::EqualOrBothNan(
+               *calculation2, (m_store->*calculationMethods[calculationIndex])(
+                                  series, 1, Store::CalculationOptions())));
+    EvenOddDoubleBufferTextCell *myCell =
+        static_cast<EvenOddDoubleBufferTextCell *>(cell);
+    PoincareHelpers::ConvertFloatToText<double>(
+        *calculation1, buffer, bufferSize,
+        AbstractEvenOddBufferTextCell::k_defaultPrecision);
     myCell->setFirstText(buffer);
-    PoincareHelpers::ConvertFloatToText<double>(*calculation2, buffer, bufferSize, numberSignificantDigits);
+    PoincareHelpers::ConvertFloatToText<double>(
+        *calculation2, buffer, bufferSize,
+        AbstractEvenOddBufferTextCell::k_defaultPrecision);
     myCell->setSecondText(buffer);
     return;
   }
-  SeparatorEvenOddBufferTextCell * bufferCell = static_cast<SeparatorEvenOddBufferTextCell *>(cell);
+
+  // Single calculation cells
+  Poincare::Context *globContext =
+      AppsContainerHelper::sharedAppsContainerGlobalContext();
+  AbstractEvenOddBufferTextCell *bufferCell =
+      static_cast<AbstractEvenOddBufferTextCell *>(cell);
   bufferCell->setTextColor(KDColorBlack);
-  if (calculationIndex < k_numberOfBufferCalculations) {
-    const int singleCalculationIndex = calculationIndex - k_numberOfDoubleBufferCalculations;
-    double * calculation = m_memoizedSimpleCalculationCells[seriesNumber] + singleCalculationIndex;
+  double result = NAN;
+
+  if (c >= Calculation::NumberOfDots && c <= Calculation::SumOfProducts) {
+    int calculationIndex =
+        static_cast<int>(c) - static_cast<int>(Calculation::NumberOfDots);
+    using SingleCalculation = double (Store::*)(int) const;
+    constexpr SingleCalculation
+        calculationMethods[k_numberOfMemoizedSingleBufferCalculations] = {
+            &Store::doubleCastedNumberOfPairsOfSeries, &Store::covariance,
+            &Store::columnProductSum};
+    double *calculation =
+        m_memoizedSimpleCalculationCells[series] + calculationIndex;
     if (std::isnan(*calculation)) {
-      if (singleCalculationIndex == 0) {
-        *calculation = m_store->doubleCastedNumberOfPairsOfSeries(seriesNumber);
-      } else if (singleCalculationIndex == 1) {
-        *calculation = m_store->covariance(seriesNumber);
-      } else {
-        assert(singleCalculationIndex == 2);
-        *calculation = m_store->columnProductSum(seriesNumber);
-      }
+      *calculation = (m_store->*calculationMethods[calculationIndex])(series);
     }
-    assert((singleCalculationIndex == 0 && Poincare::Helpers::EqualOrBothNan(*calculation, m_store->doubleCastedNumberOfPairsOfSeries(seriesNumber))) ||
-           (singleCalculationIndex == 1 && Poincare::Helpers::EqualOrBothNan(*calculation, m_store->covariance(seriesNumber))) ||
-           (singleCalculationIndex == 2 && Poincare::Helpers::EqualOrBothNan(*calculation, m_store->columnProductSum(seriesNumber))));
-    constexpr int bufferSize = PrintFloat::charSizeForFloatsWithPrecision(numberSignificantDigits);
-    char buffer[bufferSize];
-    PoincareHelpers::ConvertFloatToText<double>(*calculation, buffer, bufferSize, numberSignificantDigits);
-    bufferCell->setText(buffer);
-    return;
-  }
-  if (calculationIndex == k_numberOfBufferCalculations) {
-    Model * model = m_store->modelForSeries(seriesNumber);
-    I18n::Message message = shouldSeriesDisplay(seriesNumber, &DisplayRegression) ? model->formulaMessage() : I18n::Message::Dash;
-    bufferCell->setText(I18n::translate(message));
-    return;
-  }
-  Poincare::Context * globContext = AppsContainerHelper::sharedAppsContainerGlobalContext();
-  if (calculationIndex < k_numberOfBufferCalculations + 1 + k_maxNumberOfDistinctCoefficients) {
-    if (!m_store->coefficientsAreDefined(seriesNumber, globContext)) {
+    assert((c == Calculation::NumberOfDots &&
+            Poincare::Helpers::EqualOrBothNan(
+                *calculation,
+                m_store->doubleCastedNumberOfPairsOfSeries(series))) ||
+           (c == Calculation::Covariance &&
+            Poincare::Helpers::EqualOrBothNan(*calculation,
+                                              m_store->covariance(series))) ||
+           (c == Calculation::SumOfProducts &&
+            Poincare::Helpers::EqualOrBothNan(
+                *calculation, m_store->columnProductSum(series))));
+    result = *calculation;
+  } else if (c >= Calculation::CoefficientM && c <= Calculation::CoefficientE) {
+    if (!m_store->coefficientsAreDefined(series, globContext)) {
       // Put dashes if regression is not defined
-      bufferCell->setText(I18n::translate(I18n::Message::Dash));
-      return;
+      return DashBufferCell(bufferCell);
     }
-    int coefficientIndex = calculationIndex - (k_numberOfBufferCalculations + 1) - 1;
-    int numberOfCoefficients = m_store->modelForSeries(seriesNumber)->numberOfCoefficients();
-    if (shouldDisplayMCoefficient() && m_store->seriesRegressionType(seriesNumber) == Model::Type::LinearAxpb && coefficientIndex <= 0) {
+    int coefficientIndex =
+        static_cast<int>(c) - static_cast<int>(Calculation::CoefficientA);
+    int numberOfCoefficients =
+        m_store->modelForSeries(series)->numberOfCoefficients();
+    if (coefficientIndex <= 0 && Store::HasCoefficientM(type)) {
+      assert(!Store::HasCoefficientA(type));
       // In that case only, M is coefficientIndex 0 and A is coefficientIndex -1
       coefficientIndex = -coefficientIndex - 1;
     }
     if (coefficientIndex < 0 || coefficientIndex >= numberOfCoefficients) {
-      bufferCell->setText(I18n::translate(I18n::Message::Dash));
-      return;
+      return DashBufferCell(bufferCell);
     }
-    double * coefficients = m_store->coefficientsForSeries(seriesNumber, globContext);
-    constexpr int bufferSize = PrintFloat::charSizeForFloatsWithPrecision(numberSignificantDigits);
-    char buffer[bufferSize];
-    PoincareHelpers::ConvertFloatToText<double>(coefficients[coefficientIndex], buffer, bufferSize, numberSignificantDigits);
-    bufferCell->setText(buffer);
-    return;
+    result =
+        m_store->coefficientsForSeries(series, globContext)[coefficientIndex];
+  } else if (c == Calculation::CorrelationCoeff) {
+    // This could be memoized but don't seem to slow the table down for now.
+    if (!Store::DisplayR(type)) {
+      return DashBufferCell(bufferCell);
+    }
+    if (forbidStatsDiagnostics) {
+      return DisableBufferCell(bufferCell);
+    }
+    result = m_store->correlationCoefficient(series);
+  } else if (c == Calculation::ResidualStandardDeviation) {
+    if (!Store::DisplayResidualStandardDeviation(type)) {
+      return DashBufferCell(bufferCell);
+    }
+    result = m_store->residualStandardDeviation(series, globContext);
+  } else {
+    assert(c == Calculation::DeterminationCoeff || c == Calculation::RSquared);
+    if ((c == Calculation::DeterminationCoeff && Store::DisplayR2(type)) ||
+        (c == Calculation::RSquared && Store::DisplayRSquared(type))) {
+      if (forbidStatsDiagnostics) {
+        return DisableBufferCell(bufferCell);
+      }
+      result = m_store->determinationCoefficientForSeries(series, globContext);
+    } else {
+      return DashBufferCell(bufferCell);
+    }
   }
-  // Calculation is either R or R2
-  assert(calculationIndex >= k_numberOfBufferCalculations + 1 + k_maxNumberOfDistinctCoefficients);
-  if (ExamModeConfiguration::statsDiagnosticsAreForbidden()) {
-    bufferCell->setTextColor(Palette::GrayDark);
-    bufferCell->setText(I18n::translate(I18n::Message::Disabled));
-    return;
-  }
-  bool calculationIsR = (calculationIndex == k_maxNumberOfRows - 2);
-  if (!calculationIsR && !shouldSeriesDisplay(seriesNumber, DisplayR2)) {
-    bufferCell->setText(I18n::translate(I18n::Message::Dash));
-    return;
-  }
-  double calculation = calculationIsR ? m_store->correlationCoefficient(seriesNumber) : m_store->determinationCoefficientForSeries(seriesNumber, globContext);
-  constexpr int bufferSize = PrintFloat::charSizeForFloatsWithPrecision(numberSignificantDigits);
-  char buffer[bufferSize];
-  PoincareHelpers::ConvertFloatToText<double>(calculation, buffer, bufferSize, numberSignificantDigits);
+  PoincareHelpers::ConvertFloatToText<double>(
+      result, buffer, bufferSize,
+      AbstractEvenOddBufferTextCell::k_defaultPrecision);
   bufferCell->setText(buffer);
 }
 
-KDCoordinate CalculationController::nonMemoizedColumnWidth(int i) {
-  if (i == 0) {
+KDCoordinate CalculationController::nonMemoizedColumnWidth(int column) {
+  if (column == 0) {
     return k_titleCalculationCellWidth;
   }
-  if (i == 1) {
+  if (column == 1) {
     return k_symbolColumnWidth;
   }
-  Model::Type currentType = m_store->seriesRegressionType(m_store->indexOfKthValidSeries(i - k_numberOfHeaderColumns));
+  Model::Type currentType =
+      m_store->seriesRegressionType(m_store->seriesIndexFromActiveSeriesIndex(
+          column - k_numberOfHeaderColumns));
   if (currentType == Model::Type::Quartic) {
     return k_quarticCalculationCellWidth;
   }
@@ -255,7 +336,7 @@ KDCoordinate CalculationController::nonMemoizedColumnWidth(int i) {
   return k_minCalculationCellWidth;
 }
 
-HighlightCell * CalculationController::reusableCell(int index, int type) {
+HighlightCell *CalculationController::reusableCell(int index, int type) {
   if (type == k_standardCalculationTitleCellType) {
     assert(index >= 0 && index < k_maxNumberOfDisplayableRows);
     return &m_titleCells[index];
@@ -276,12 +357,13 @@ HighlightCell * CalculationController::reusableCell(int index, int type) {
     assert(index >= 0 && index < k_numberOfHeaderColumns);
     return &m_hideableCell[index];
   }
-  assert(index >= 0 && index < k_numberOfCalculationCells);
+  assert(index >= 0 && index < k_numberOfDisplayableCalculationCells);
   return &m_calculationCells[index];
 }
 
 int CalculationController::reusableCellCount(int type) {
-  if (type == k_standardCalculationTitleCellType || type == k_symbolCalculationTitleCellType) {
+  if (type == k_standardCalculationTitleCellType ||
+      type == k_symbolCalculationTitleCellType) {
     return k_maxNumberOfDisplayableRows;
   }
   if (type == k_columnTitleCellType) {
@@ -291,175 +373,154 @@ int CalculationController::reusableCellCount(int type) {
     return k_numberOfDoubleCalculationCells;
   }
   if (type == k_hideableCellType) {
-    return 2;
+    return k_numberOfHeaderColumns;
   }
   assert(type == k_standardCalculationCellType);
-  return k_numberOfCalculationCells;
+  return k_numberOfDisplayableCalculationCells;
 }
 
-int CalculationController::typeAtLocation(int i, int j) {
-  if (i <= 1 && j == 0) {
+int CalculationController::typeAtLocation(int column, int row) {
+  if (column <= 1 && row == 0) {
     return k_hideableCellType;
   }
-  if (i == 0) {
+  if (column == 0) {
     return k_standardCalculationTitleCellType;
   }
-  if (i == 1) {
+  if (column == 1) {
     return k_symbolCalculationTitleCellType;
   }
-  if (j == 0) {
+  if (row == 0) {
     return k_columnTitleCellType;
   }
-  if (j > 0 && j <= k_numberOfDoubleBufferCalculations) {
+  if (row > 0 && row <= k_numberOfDoubleBufferCalculations) {
     return k_doubleBufferCalculationCellType;
   }
   return k_standardCalculationCellType;
 }
 
-
-I18n::Message CalculationController::MessageForCalculation(int calculationIndex) {
-  I18n::Message messages[k_maxNumberOfRows] = {
-    I18n::Message::Mean,
-    I18n::Message::Sum,
-    I18n::Message::SquareSum,
-    I18n::Message::StandardDeviation,
-    I18n::Message::Deviation,
-    I18n::Message::SampleStandardDeviationS,
-    I18n::Message::NumberOfDots,
-    I18n::Message::Covariance,
-    I18n::Message::SumOfProducts,
-    I18n::Message::Regression,
-    I18n::Message::CoefficientM,
-    I18n::Message::CoefficientA,
-    I18n::Message::CoefficientB,
-    I18n::Message::CoefficientC,
-    I18n::Message::CoefficientD,
-    I18n::Message::CoefficientE,
-    I18n::Message::CorrelationCoeff,
-    I18n::Message::DeterminationCoeff
-  };
-  return messages[calculationIndex];
+I18n::Message CalculationController::MessageForCalculation(Calculation c) {
+  constexpr I18n::Message
+      messages[static_cast<int>(Calculation::NumberOfRows)] = {
+          I18n::Message::Mean,
+          I18n::Message::Sum,
+          I18n::Message::SquareSum,
+          I18n::Message::StandardDeviation,
+          I18n::Message::Deviation,
+          I18n::Message::SampleStandardDeviationS,
+          I18n::Message::NumberOfDots,
+          I18n::Message::Covariance,
+          I18n::Message::SumOfProducts,
+          I18n::Message::CorrelationCoeff,
+          I18n::Message::Regression,
+          I18n::Message::CoefficientM,
+          I18n::Message::CoefficientA,
+          I18n::Message::CoefficientB,
+          I18n::Message::CoefficientC,
+          I18n::Message::CoefficientD,
+          I18n::Message::CoefficientE,
+          I18n::Message::ResidualStandardDeviationMessageInTable,
+          I18n::Message::DeterminationCoeff,
+          I18n::Message::DeterminationCoeff,
+      };
+  int index = static_cast<int>(c);
+  assert(index >= 0 && index < static_cast<int>(Calculation::NumberOfRows));
+  return messages[index];
 }
 
-I18n::Message CalculationController::SymbolForCalculation(int calculationIndex) {
-  I18n::Message messages[k_maxNumberOfRows] = {
-    I18n::Message::MeanSymbol,
-    I18n::Message::SumValuesSymbol,
-    I18n::Message::SumSquareValuesSymbol,
-    I18n::Message::StandardDeviationSigmaSymbol,
-    I18n::Message::DeviationSymbol,
-    I18n::Message::SampleStandardDeviationSSymbol,
-    I18n::Message::UpperN,
-    I18n::Message::Cov,
-    I18n::Message::Sxy,
-    I18n::Message::Y,
-    I18n::Message::M,
-    I18n::Message::A,
-    I18n::Message::B,
-    I18n::Message::C,
-    I18n::Message::D,
-    I18n::Message::E,
-    I18n::Message::R,
-    I18n::Message::R2
-  };
-  return messages[calculationIndex];
+I18n::Message CalculationController::SymbolForCalculation(Calculation c) {
+  constexpr I18n::Message
+      messages[static_cast<int>(Calculation::NumberOfRows)] = {
+          I18n::Message::MeanSymbol,
+          I18n::Message::SumValuesSymbol,
+          I18n::Message::SumSquareValuesSymbol,
+          I18n::Message::StandardDeviationSigmaSymbol,
+          I18n::Message::DeviationSymbol,
+          I18n::Message::SampleStandardDeviationSSymbol,
+          I18n::Message::UpperN,
+          I18n::Message::Cov,
+          I18n::Message::Sxy,
+          I18n::Message::R,
+          I18n::Message::Y,
+          I18n::Message::M,
+          I18n::Message::A,
+          I18n::Message::B,
+          I18n::Message::C,
+          I18n::Message::D,
+          I18n::Message::E,
+          I18n::Message::ResidualStandardDeviationSymbol,
+          I18n::Message::R2,
+          I18n::Message::RSquared,
+      };
+  int index = static_cast<int>(c);
+  assert(index >= 0 && index < static_cast<int>(Calculation::NumberOfRows));
+  return messages[index];
 }
 
-int CalculationController::getCalculationIndex(int j) const {
-  assert(j > 0 && j < numberOfRows());
+CalculationController::Calculation CalculationController::calculationForRow(
+    int row) const {
+  assert(row > 0 && row < numberOfRows());
   // Ignore top row
-  int calculationIndex = j - 1;
-  if (calculationIndex < k_numberOfBufferCalculations) {
-    return calculationIndex;
+  row--;
+  if (row < static_cast<int>(Calculation::CorrelationCoeff)) {
+    return static_cast<Calculation>(row);
   }
-  if (calculationIndex == k_numberOfBufferCalculations) {
-    // Correlation coefficient
-    return k_maxNumberOfRows - 2;
+  row += !m_store->AnyActiveSeriesSatisfies(Store::DisplayR);
+  if (row == static_cast<int>(Calculation::CorrelationCoeff)) {
+    return Calculation::CorrelationCoeff;
   }
-  calculationIndex -= 1;
-  bool displayRegression = hasSeriesDisplaying(&DisplayRegression);
-  if (calculationIndex < k_numberOfBufferCalculations + displayRegression) {
-    return calculationIndex;
+  row += !m_store->AnyActiveSeriesSatisfies(Store::HasCoefficients);
+  if (row == static_cast<int>(Calculation::Regression)) {
+    return Calculation::Regression;
   }
-  calculationIndex += !displayRegression;
-  bool displayCoeffM = shouldDisplayMCoefficient();
-  if (calculationIndex < k_numberOfBufferCalculations + 1 + displayCoeffM) {
-    return calculationIndex;
+  row += !m_store->AnyActiveSeriesSatisfies(Store::HasCoefficientM);
+  if (row == static_cast<int>(Calculation::CoefficientM)) {
+    return Calculation::CoefficientM;
   }
-  calculationIndex += !displayCoeffM;
-  bool displayCoeffA = shouldDisplayACoefficient();
-  if (calculationIndex < k_numberOfBufferCalculations + 2 + displayCoeffA) {
-    return calculationIndex;
+  row += !m_store->AnyActiveSeriesSatisfies(Store::HasCoefficientA);
+  if (row == static_cast<int>(Calculation::CoefficientA)) {
+    return Calculation::CoefficientA;
   }
-  calculationIndex += !displayCoeffA;
   int displayedBCDECoeffs = numberOfDisplayedBCDECoefficients();
-  if (calculationIndex < k_numberOfBufferCalculations + 3 + displayedBCDECoeffs) {
-    return calculationIndex;
+  if (row <=
+      static_cast<int>(Calculation::CoefficientA) + displayedBCDECoeffs) {
+    return static_cast<Calculation>(row);
   }
-  calculationIndex += k_maxNumberOfDistinctCoefficients - 2 - displayedBCDECoeffs;
-  assert(calculationIndex == k_maxNumberOfRows - 2 && hasSeriesDisplaying(&DisplayR2));
-  return calculationIndex + 1;
-}
-
-bool CalculationController::shouldSeriesDisplay(int series, DisplayCondition condition) const {
-  return condition(m_store->seriesRegressionType(series));
-}
-
-bool CalculationController::hasSeriesDisplaying(DisplayCondition condition) const {
-  int numberOfDefinedSeries = m_store->numberOfValidSeries();
-  for (int i = 0; i < numberOfDefinedSeries; i++) {
-    if (shouldSeriesDisplay(m_store->indexOfKthValidSeries(i), condition)) {
-      return true;
-    }
+  row += static_cast<int>(Calculation::CoefficientE) -
+         static_cast<int>(Calculation::CoefficientB) + 1 - displayedBCDECoeffs;
+  row += !m_store->AnyActiveSeriesSatisfies(
+      Store::DisplayResidualStandardDeviation);
+  if (row == static_cast<int>(Calculation::ResidualStandardDeviation)) {
+    return Calculation::ResidualStandardDeviation;
   }
-  return false;
+  row += !m_store->AnyActiveSeriesSatisfies(Store::DisplayR2);
+  if (row == static_cast<int>(Calculation::DeterminationCoeff)) {
+    return Calculation::DeterminationCoeff;
+  }
+  assert(row == static_cast<int>(Calculation::NumberOfRows) - 1 &&
+         m_store->AnyActiveSeriesSatisfies(Store::DisplayRSquared));
+  return static_cast<Calculation>(row);
 }
 
 int CalculationController::numberOfDisplayedCoefficients() const {
-  return shouldDisplayMCoefficient() + shouldDisplayACoefficient() + numberOfDisplayedBCDECoefficients();
+  return m_store->AnyActiveSeriesSatisfies(Store::HasCoefficientM) +
+         m_store->AnyActiveSeriesSatisfies(Store::HasCoefficientA) +
+         numberOfDisplayedBCDECoefficients();
 }
 
 int CalculationController::numberOfDisplayedBCDECoefficients() const {
   int maxNumberCoefficients = 0;
-  int numberOfDefinedSeries = m_store->numberOfValidSeries();
+  int numberOfDefinedSeries = m_store->numberOfActiveSeries();
   /* "mx+b" is the only model having a "m": coefficient. It is only available in
-   * Variant1 of RegressionModelOrder. */
+   * Variant1 of RegressionApp. */
   for (int i = 0; i < numberOfDefinedSeries; i++) {
-    int series = m_store->indexOfKthValidSeries(i);
-    int numberOfCoefficients = m_store->modelForSeries(series)->numberOfCoefficients();
+    int series = m_store->seriesIndexFromActiveSeriesIndex(i);
+    int numberOfCoefficients =
+        m_store->modelForSeries(series)->numberOfCoefficients();
     // Ignore the first coefficient A or M
-    maxNumberCoefficients = std::max(maxNumberCoefficients, numberOfCoefficients - 1);
+    maxNumberCoefficients =
+        std::max(maxNumberCoefficients, numberOfCoefficients - 1);
   }
   return maxNumberCoefficients;
-}
-
-bool CalculationController::shouldDisplayMCoefficient() const {
-  if (GlobalPreferences::sharedGlobalPreferences()->regressionModelOrder() != CountryPreferences::RegressionModelOrder::Variant1) {
-    // LinearAxpb is displayed as mx+b in Variant1 only
-    return false;
-  }
-  int numberOfDefinedSeries = m_store->numberOfValidSeries();
-  for (int i = 0; i < numberOfDefinedSeries; i++) {
-    int series = m_store->indexOfKthValidSeries(i);
-    if (m_store->seriesRegressionType(series) == Model::Type::LinearAxpb) {
-      // This series needs a M coefficient.
-      return true;
-    }
-  }
-  return false;
-}
-
-bool CalculationController::shouldDisplayACoefficient() const {
-  bool canDisplayM = (GlobalPreferences::sharedGlobalPreferences()->regressionModelOrder() == CountryPreferences::RegressionModelOrder::Variant1);
-  int numberOfDefinedSeries = m_store->numberOfValidSeries();
-  for (int i = 0; i < numberOfDefinedSeries; i++) {
-    int series = m_store->indexOfKthValidSeries(i);
-    if (!(canDisplayM && m_store->seriesRegressionType(series) == Model::Type::LinearAxpb) && m_store->modelForSeries(series)->numberOfCoefficients() > 0) {
-      // This series needs a A coefficient.
-      return true;
-    }
-  }
-  return false;
 }
 
 void CalculationController::resetMemoization(bool force) {
@@ -470,10 +531,10 @@ void CalculationController::resetMemoization(bool force) {
         m_memoizedDoubleCalculationCells[s][i][j] = NAN;
       }
     }
-    for (int i = 0; i < k_numberOfBufferCalculations - k_numberOfDoubleBufferCalculations; i++) {
+    for (int i = 0; i < k_numberOfMemoizedSingleBufferCalculations; i++) {
       m_memoizedSimpleCalculationCells[s][i] = NAN;
     }
   }
 }
 
-}
+}  // namespace Regression

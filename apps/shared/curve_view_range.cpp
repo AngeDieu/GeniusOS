@@ -1,38 +1,48 @@
 #include "curve_view_range.h"
-#include <cmath>
+
+#include <assert.h>
+#include <float.h>
 #include <ion.h>
 #include <poincare/ieee754.h>
-#include <assert.h>
 #include <stddef.h>
-#include <float.h>
+
+#include <cmath>
 
 namespace Shared {
 
 uint32_t CurveViewRange::rangeChecksum() {
-  float data[7] = {xMin(), xMax(), yMin(), yMax(), xGridUnit(), yGridUnit(), offscreenYAxis()};
+  float data[7] = {xMin(),      xMax(),      yMin(),          yMax(),
+                   xGridUnit(), yGridUnit(), offscreenYAxis()};
   size_t dataLengthInBytes = sizeof(data);
-  assert((dataLengthInBytes & 0x3) == 0); // Assert that dataLengthInBytes is a multiple of 4
-  return Ion::crc32Word((uint32_t *)data, dataLengthInBytes/sizeof(uint32_t));
+  // Assert that dataLengthInBytes is a multiple of 4
+  assert((dataLengthInBytes & 0x3) == 0);
+  return Ion::crc32Word((uint32_t *)data, dataLengthInBytes / sizeof(uint32_t));
 }
 
-float CurveViewRange::computeGridUnit(float minNumberOfUnits, float maxNumberOfUnits, float range) const {
+float CurveViewRange::computeGridUnit(float minNumberOfUnits,
+                                      float maxNumberOfUnits,
+                                      float range) const {
   int a = 0;
   int b = 0;
   constexpr int unitsCount = 3;
-  float units[unitsCount] = {k_smallGridUnitMantissa, k_mediumGridUnitMantissa, k_largeGridUnitMantissa};
+  float units[unitsCount] = {k_smallGridUnitMantissa, k_mediumGridUnitMantissa,
+                             k_largeGridUnitMantissa};
   // An infinite range would return an exponentBase10 of 39 and a null gridUnit
   assert(range > 0.0f && std::isfinite(range));
   for (int k = 0; k < unitsCount; k++) {
     float currentA = units[k];
-    int b1 = Poincare::IEEE754<float>::exponentBase10(range/(currentA*maxNumberOfUnits));
-    int b2 = Poincare::IEEE754<float>::exponentBase10(range/(currentA*minNumberOfUnits));
+    int b1 = Poincare::IEEE754<float>::exponentBase10(
+        range / (currentA * maxNumberOfUnits));
+    int b2 = Poincare::IEEE754<float>::exponentBase10(
+        range / (currentA * minNumberOfUnits));
     if (b1 != b2) {
       b = b2;
       a = currentA;
     }
   }
-  return a*std::pow(10.0f,b);
+  return a * std::pow(10.0f, b);
 
+  // clang-format off
   /* Proof of the algorithm:
    *
    * We want to find gridUnit = a*10^b, with a in {1; 2; 5} and b an integer
@@ -116,6 +126,7 @@ float CurveViewRange::computeGridUnit(float minNumberOfUnits, float maxNumberOfU
    *           E1^--------------------^E2                                      <- shift by log10(2) = 0.3
    *
    * */
+  // clang-format on
 }
 
-}
+}  // namespace Shared

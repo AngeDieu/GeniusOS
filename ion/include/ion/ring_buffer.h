@@ -2,14 +2,15 @@
 #define ION_RING_BUFFER_H
 
 #include <assert.h>
+#include <stddef.h>
 
 namespace Ion {
 
 // All implementations are in header to avoid having to specify templates
 
-template<typename T, int N>
+template <typename T, int N>
 class RingBuffer {
-public:
+ public:
   RingBuffer() : m_start(0), m_length(0) {}
 
   void push(T element) {
@@ -36,7 +37,7 @@ public:
     return res;
   }
 
-  T * elementAtIndex(int index) {
+  T* elementAtIndex(int index) {
     assert(index >= 0 && index < static_cast<int>(length()));
     return &m_stack[(m_start + index) % N];
   }
@@ -51,16 +52,14 @@ public:
 
   void reset() { m_length = 0; }
 
-private:
-  int nextElementIndex() const {
-    return (m_start + length()) % N;
-  }
+ private:
+  int nextElementIndex() const { return (m_start + length()) % N; }
 
   T m_stack[N];
   int m_start;
   int m_length;
 };
 
-}
+}  // namespace Ion
 
 #endif

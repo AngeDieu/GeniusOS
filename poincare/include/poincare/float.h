@@ -2,8 +2,8 @@
 #define POINCARE_FLOAT_H
 
 #include <float.h>
-#include <poincare/number.h>
 #include <poincare/approximation_helper.h>
+#include <poincare/number.h>
 
 namespace Poincare {
 
@@ -18,10 +18,10 @@ namespace Poincare {
  * methods of expression are not implemented to avoid code duplication with
  * Decimal. */
 
-template<typename T>
+template <typename T>
 class FloatNode final : public NumberNode {
-public:
-  FloatNode(T value = 0.0) : m_value(value) {}
+ public:
+  FloatNode(T value = static_cast<T>(0.0)) : m_value(value) {}
 
   T value() const { return m_value; }
   void setValue(T value) { m_value = value; }
@@ -29,48 +29,76 @@ public:
   // TreeNode
   size_t size() const override { return sizeof(FloatNode<T>); }
 #if POINCARE_TREE_LOG
-  void logNodeName(std::ostream & stream) const override {
-    stream << "Float";
-  }
-  void logAttributes(std::ostream & stream) const override {
-    stream << " value=\"" << m_value << "\" type=\"" << (sizeof(T) == sizeof(float) ? "float" : "double") << "\"";
+  void logNodeName(std::ostream& stream) const override { stream << "Float"; }
+  void logAttributes(std::ostream& stream) const override {
+    stream << " value=\"" << m_value << "\" type=\""
+           << (sizeof(T) == sizeof(float) ? "float" : "double") << "\"";
   }
 #endif
 
   // Properties
-  Type type() const override { return (sizeof(T) == sizeof(float)) ? Type::Float : Type::Double; }
-  TrinaryBoolean isPositive(Context * context) const override { return std::isnan(m_value) ? TrinaryBoolean::Unknown : BinaryToTrinaryBool(m_value >= 0.0); }
-  TrinaryBoolean isNull(Context * context) const override { return BinaryToTrinaryBool(m_value == 0.0); }
-  int simplificationOrderSameType(const ExpressionNode * e, bool ascending, bool ignoreParentheses) const override;
+  Type type() const override {
+    return (sizeof(T) == sizeof(float)) ? Type::Float : Type::Double;
+  }
+  TrinaryBoolean isPositive(Context* context) const override {
+    return std::isnan(m_value)
+               ? TrinaryBoolean::Unknown
+               : BinaryToTrinaryBool(m_value >= static_cast<T>(0.0));
+  }
 
+  int simplificationOrderSameType(const ExpressionNode* e, bool ascending,
+                                  bool ignoreParentheses) const override;
 
   // NumberNode
   void setNegative(bool negative) override {
-    if ((m_value < 0.0) != negative) {
-      m_value = -1.0 * m_value;
+    if ((m_value < static_cast<T>(0.0)) != negative) {
+      m_value = static_cast<T>(-1.0) * m_value;
     }
+  }
+  bool isZero() const override { return m_value == static_cast<T>(0.0); }
+  bool isOne() const override { return m_value == static_cast<T>(1.0); }
+  bool isMinusOne() const override { return m_value == static_cast<T>(-1.0); }
+  bool isInteger() const override { return m_value == std::floor(m_value); }
+  Integer integerValue() const override {
+    assert(isInteger());
+    return Integer(static_cast<double_native_int_t>(std::floor(m_value)));
   }
 
   // Layout
-  int serialize(char * buffer, int bufferSize, Preferences::PrintFloatMode floatDisplayMode, int numberOfSignificantDigits) const override;
+  int serialize(char* buffer, int bufferSize,
+                Preferences::PrintFloatMode floatDisplayMode,
+                int numberOfSignificantDigits) const override;
   /* Layout */
-  Layout createLayout(Preferences::PrintFloatMode floatDisplayMode, int numberOfSignificantDigits, Context * context) const override;
+  Layout createLayout(Preferences::PrintFloatMode floatDisplayMode,
+                      int numberOfSignificantDigits,
+                      Context* context) const override;
   /* Evaluation */
-  Evaluation<float> approximate(SinglePrecision p, const ApproximationContext& approximationContext) const override { return templatedApproximate<float>(approximationContext); }
-  Evaluation<double> approximate(DoublePrecision p, const ApproximationContext& approximationContext) const override { return templatedApproximate<double>(approximationContext); }
-private:
+  Evaluation<float> approximate(
+      SinglePrecision p,
+      const ApproximationContext& approximationContext) const override {
+    return templatedApproximate<float>(approximationContext);
+  }
+  Evaluation<double> approximate(
+      DoublePrecision p,
+      const ApproximationContext& approximationContext) const override {
+    return templatedApproximate<double>(approximationContext);
+  }
+
+ private:
   // Simplification
   LayoutShape leftLayoutShape() const override { return LayoutShape::Decimal; }
 
-  template<typename U> Evaluation<U> templatedApproximate(const ApproximationContext& approximationContext) const {
+  template <typename U>
+  Evaluation<U> templatedApproximate(
+      const ApproximationContext& approximationContext) const {
     return Complex<U>::Builder((U)m_value);
   }
   T m_value;
 };
 
-template<typename T>
+template <typename T>
 class Float final : public Number {
-public:
+ public:
   static Float Builder(T value);
   constexpr static T EpsilonLax();
   constexpr static T Epsilon();
@@ -79,8 +107,11 @@ public:
   constexpr static T Max();
   T value() const { return node()->value(); }
   void setValue(T value) { node()->setValue(value); }
-private:
-  FloatNode<T> * node() const { return static_cast<FloatNode<T> *>(Number::node()); }
+
+ private:
+  FloatNode<T>* node() const {
+    return static_cast<FloatNode<T>*>(Number::node());
+  }
 };
 
 /* To prevent incorrect approximations, such as cos(1.5707963267949) = 0
@@ -94,17 +125,47 @@ private:
  * When it is a float, we accept more agressive approximations
  * -> precision_float = x10^(-6). */
 
-template <> constexpr inline float Float<float>::EpsilonLax() { return 1E-6f; }
-template <> constexpr inline double Float<double>::EpsilonLax() { return 1E-15; }
-template <> constexpr inline float Float<float>::Epsilon() { return FLT_EPSILON; }
-template <> constexpr inline double Float<double>::Epsilon() { return DBL_EPSILON; }
-template <> constexpr inline float Float<float>::SqrtEpsilonLax() { return 1e-3f; }
-template <> constexpr inline double Float<double>::SqrtEpsilonLax() { return 3e-8f; }
-template <> constexpr inline float Float<float>::Min() { return FLT_MIN; }
-template <> constexpr inline double Float<double>::Min() { return DBL_MIN; }
-template <> constexpr inline float Float<float>::Max() { return FLT_MAX; }
-template <> constexpr inline double Float<double>::Max() { return DBL_MAX; }
-
+template <>
+constexpr inline float Float<float>::EpsilonLax() {
+  return 1E-6f;
 }
+template <>
+constexpr inline double Float<double>::EpsilonLax() {
+  return 1E-15;
+}
+template <>
+constexpr inline float Float<float>::Epsilon() {
+  return FLT_EPSILON;
+}
+template <>
+constexpr inline double Float<double>::Epsilon() {
+  return DBL_EPSILON;
+}
+template <>
+constexpr inline float Float<float>::SqrtEpsilonLax() {
+  return 1e-3f;
+}
+template <>
+constexpr inline double Float<double>::SqrtEpsilonLax() {
+  return 3e-8f;
+}
+template <>
+constexpr inline float Float<float>::Min() {
+  return FLT_MIN;
+}
+template <>
+constexpr inline double Float<double>::Min() {
+  return DBL_MIN;
+}
+template <>
+constexpr inline float Float<float>::Max() {
+  return FLT_MAX;
+}
+template <>
+constexpr inline double Float<double>::Max() {
+  return DBL_MAX;
+}
+
+}  // namespace Poincare
 
 #endif

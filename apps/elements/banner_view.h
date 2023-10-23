@@ -1,29 +1,33 @@
 #ifndef ELEMENTS_BANNER_VIEW_H
 #define ELEMENTS_BANNER_VIEW_H
 
-#include "elements_view_data_source.h"
-#include "suggestion_text_field.h"
 #include <escher/ellipsis_view.h>
-#include <escher/expression_view.h>
+#include <escher/layout_view.h>
 #include <escher/palette.h>
 #include <escher/solid_color_view.h>
 #include <escher/view.h>
 #include <ion/display.h>
 
+#include "elements_view_data_source.h"
+#include "suggestion_text_field.h"
+
 namespace Elements {
 
 class BannerView : public Escher::View {
-public:
-  BannerView(Escher::Responder * textFieldParent, Escher::TextFieldDelegate * textFieldDelegate);
+ public:
+  BannerView(Escher::Responder* textFieldParent,
+             Escher::TextFieldDelegate* textFieldDelegate);
 
   // Escher::View
-  void drawRect(KDContext * ctx, KDRect rect) const override;
-  KDSize minimalSizeForOptimalDisplay() const override { return KDSize(Ion::Display::Width, k_bannerHeight + k_borderHeight); }
+  void drawRect(KDContext* ctx, KDRect rect) const override;
+  KDSize minimalSizeForOptimalDisplay() const override {
+    return KDSize(Ion::Display::Width, k_bannerHeight + k_borderHeight);
+  }
 
   void reload();
-  SuggestionTextField * textField() { return &m_textField; }
+  SuggestionTextField* textField() { return &m_textField; }
 
-private:
+ private:
   constexpr static KDColor k_backgroundColor = Escher::Palette::GrayWhite;
   constexpr static KDColor k_borderColor = Escher::Palette::GrayMiddle;
   constexpr static KDColor k_legendColor = Escher::Palette::GrayVeryDark;
@@ -37,40 +41,45 @@ private:
   constexpr static KDFont::Size k_legendSize = KDFont::Size::Small;
 
   class DotView : public Escher::View {
-  public:
+   public:
     DotView() : m_color(k_backgroundColor) {}
 
     // Escher::View
-    void drawRect(KDContext * ctx, KDRect rect) const override;
-    KDSize minimalSizeForOptimalDisplay() const override { return KDSize(k_dotDiameter, k_dotDiameter); }
+    void drawRect(KDContext* ctx, KDRect rect) const override;
+    KDSize minimalSizeForOptimalDisplay() const override {
+      return KDSize(k_dotDiameter, k_dotDiameter);
+    }
 
     void setColor(KDColor color);
 
-  private:
+   private:
     KDColor m_color;
   };
 
   class EllipsisButton : public Escher::SolidColorView {
-  public:
+   public:
     using Escher::SolidColorView::SolidColorView;
-  private:
+
+   private:
     int numberOfSubviews() const override { return 1; }
-    Escher::View * subviewAtIndex(int index) override { return &m_ellipsisView; }
-    void layoutSubviews(bool force = false) override { m_ellipsisView.setFrame(bounds(), force); }
+    Escher::View* subviewAtIndex(int index) override { return &m_ellipsisView; }
+    void layoutSubviews(bool force = false) override {
+      setChildFrame(&m_ellipsisView, bounds(), force);
+    }
     Escher::EllipsisView m_ellipsisView;
   };
 
   int numberOfSubviews() const override { return displayTextField() ? 1 : 3; }
-  Escher::View * subviewAtIndex(int index) override;
+  Escher::View* subviewAtIndex(int index) override;
   void layoutSubviews(bool force = false) override;
   bool displayTextField() const { return m_textField.isEditing(); }
 
   SuggestionTextField m_textField;
   DotView m_dotView;
-  Escher::ExpressionView m_legendView;
+  Escher::LayoutView m_legendView;
   EllipsisButton m_button;
 };
 
-}
+}  // namespace Elements
 
 #endif

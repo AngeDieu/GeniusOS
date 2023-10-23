@@ -9,22 +9,30 @@ namespace OMG {
 namespace BitHelper {
 
 constexpr static size_t k_numberOfBitsInByte = 8;
-constexpr static size_t k_numberOfBitsInInt = sizeof(int) * k_numberOfBitsInByte;
+constexpr static size_t k_numberOfBitsInInt =
+    sizeof(int) * k_numberOfBitsInByte;
+constexpr static size_t k_numberOfBitsInUint32 =
+    sizeof(uint32_t) * k_numberOfBitsInByte;
 
 template <typename T>
-constexpr size_t numberOfBitsInType() {
+constexpr size_t numberOfBitsIn() {
   return sizeof(T) * k_numberOfBitsInByte;
 }
 
 template <typename T>
+constexpr size_t numberOfBitsIn(const T&) {
+  return numberOfBitsIn<T>();
+}
+
+template <typename T>
 constexpr bool bitAtIndex(T mask, size_t i) {
-  assert(i >= 0 && i < numberOfBitsInType<T>());
+  assert(i >= 0 && i < numberOfBitsIn<T>());
   return (mask >> i) & 1U;
 }
 
 template <typename T>
-constexpr void setBitAtIndex(T & mask, size_t i, bool b) {
-  assert(i < numberOfBitsInType<T>());
+constexpr void setBitAtIndex(T& mask, size_t i, bool b) {
+  assert(i < numberOfBitsIn<T>());
   T one = 1;
   if (b) {
     mask |= (one << i);
@@ -46,7 +54,7 @@ constexpr inline size_t numberOfOnes(uint32_t i) {
 }
 
 constexpr inline size_t indexOfMostSignificantBit(uint32_t i) {
-  return numberOfBitsInType<uint32_t>() - countLeadingZeros(i) - 1;
+  return numberOfBitsIn<uint32_t>() - countLeadingZeros(i) - 1;
 }
 
 constexpr inline size_t numberOfBitsToCountUpTo(uint32_t i) {
@@ -56,17 +64,19 @@ constexpr inline size_t numberOfBitsToCountUpTo(uint32_t i) {
 
 template <typename T>
 uint8_t log2(T v) {
-  constexpr int nativeUnsignedIntegerBitCount = k_numberOfBitsInByte * sizeof(T);
-  static_assert(nativeUnsignedIntegerBitCount < 256, "uint8_t cannot contain the log2 of a templated class T");
+  constexpr int nativeUnsignedIntegerBitCount =
+      k_numberOfBitsInByte * sizeof(T);
+  static_assert(nativeUnsignedIntegerBitCount < 256,
+                "uint8_t cannot contain the log2 of a templated class T");
   for (uint8_t i = 0; i < nativeUnsignedIntegerBitCount; i++) {
     if (v < (static_cast<T>(1) << i)) {
       return i;
     }
   }
-  return numberOfBitsInType<T>();
+  return numberOfBitsIn<T>();
 }
 
-}
-}
+}  // namespace BitHelper
+}  // namespace OMG
 
 #endif

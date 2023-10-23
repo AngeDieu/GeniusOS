@@ -8,24 +8,25 @@
 namespace Calculation {
 
 class ComplexListController : public IllustratedExpressionsListController {
-public:
-  ComplexListController(EditExpressionController * editExpressionController) :
-    IllustratedExpressionsListController(editExpressionController),
-    m_complexGraphCell(&m_model) {}
+ public:
+  ComplexListController(EditExpressionController* editExpressionController)
+      : IllustratedExpressionsListController(editExpressionController),
+        m_complexGraphCell(&m_model) {}
 
-  // ViewController
-  void viewWillAppear() override;
+  void setExactAndApproximateExpression(
+      Poincare::Expression exactExpression,
+      Poincare::Expression approximateExpression) override;
 
-  void setExactAndApproximateExpression(Poincare::Expression exactExpression, Poincare::Expression approximateExpression) override;
-private:
+ private:
   constexpr static CodePoint k_symbol = 'z';
-  Escher::HighlightCell * illustrationCell() override { return &m_complexGraphCell; }
-  I18n::Message messageAtIndex(int index) override { return I18n::Message::Default; };
+  IllustrationCell* illustrationCell() override { return &m_complexGraphCell; }
+  I18n::Message messageAtIndex(int index) override {
+    return I18n::Message::Default;
+  };
   ComplexGraphCell m_complexGraphCell;
   ComplexModel m_model;
 };
 
-}
+}  // namespace Calculation
 
 #endif
-

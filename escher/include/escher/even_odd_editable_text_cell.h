@@ -7,26 +7,48 @@
 
 namespace Escher {
 
-class EvenOddEditableTextCell : public EvenOddCell, public Responder {
-public:
-  EvenOddEditableTextCell(Responder * parentResponder = nullptr,
-                          InputEventHandlerDelegate * inputEventHandlerDelegate = nullptr,
-                          TextFieldDelegate * delegate = nullptr,
-                          KDFont::Size font = KDFont::Size::Large,
-                          float horizontalAlignment = KDContext::k_alignRight,
-                          float verticalAlignment = KDContext::k_alignCenter);
-  EditableTextCell * editableTextCell();
-  Responder * responder() override { return this; }
-  const char * text() const override { return m_editableCell.text(); }
+class AbstractEvenOddEditableTextCell : public EvenOddCell, public Responder {
+ public:
+  AbstractEvenOddEditableTextCell(Responder* parentResponder)
+      : EvenOddCell(), Responder(parentResponder) {}
+  virtual AbstractEditableTextCell* editableTextCell() = 0;
+  Responder* responder() override { return this; }
+  const char* text() const override { return editableTextCell()->text(); }
   void didBecomeFirstResponder() override;
-  void setFont(KDFont::Size font) { m_editableCell.textField()->setFont(font); }
+  void setFont(KDFont::Size font) {
+    editableTextCell()->textField()->setFont(font);
+  }
 
-private:
+ private:
+  constexpr static KDCoordinate k_rightMargin = Escher::Metric::SmallCellMargin;
+  const AbstractEditableTextCell* editableTextCell() const {
+    return const_cast<AbstractEvenOddEditableTextCell*>(this)
+        ->editableTextCell();
+  }
   void updateSubviewsBackgroundAfterChangingState() override;
   int numberOfSubviews() const override;
-  View * subviewAtIndex(int index) override;
+  View* subviewAtIndex(int index) override;
   void layoutSubviews(bool force = false) override;
-  EditableTextCell m_editableCell;
+};
+
+template <int NumberOfSignificantDigits =
+              Poincare::Preferences::VeryLargeNumberOfSignificantDigits>
+class EvenOddEditableTextCell : public AbstractEvenOddEditableTextCell {
+ public:
+  EvenOddEditableTextCell(
+      Responder* parentResponder = nullptr,
+      InputEventHandlerDelegate* inputEventHandlerDelegate = nullptr,
+      TextFieldDelegate* delegate = nullptr,
+      KDGlyph::Format format = k_smallCellDefaultFormat)
+      : AbstractEvenOddEditableTextCell(parentResponder),
+        m_editableCell(this, inputEventHandlerDelegate, delegate, format) {}
+
+  AbstractEditableTextCell* editableTextCell() override {
+    return &m_editableCell;
+  }
+
+ private:
+  EditableTextCell<NumberOfSignificantDigits> m_editableCell;
 };
 
 }  // namespace Escher

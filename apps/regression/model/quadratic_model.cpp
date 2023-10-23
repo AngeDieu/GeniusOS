@@ -1,61 +1,70 @@
 #include "quadratic_model.h"
-#include "../../shared/poincare_helpers.h"
+
 #include <assert.h>
+#include <poincare/based_integer.h>
 #include <poincare/code_point_layout.h>
-#include <poincare/horizontal_layout.h>
-#include <poincare/vertical_offset_layout.h>
 #include <poincare/decimal.h>
-#include <poincare/number.h>
-#include <poincare/symbol.h>
-#include <poincare/addition.h>
+#include <poincare/horizontal_layout.h>
 #include <poincare/multiplication.h>
+#include <poincare/number.h>
 #include <poincare/power.h>
 #include <poincare/print.h>
+#include <poincare/symbol.h>
+#include <poincare/vertical_offset_layout.h>
+
+#include "../../shared/poincare_helpers.h"
 
 using namespace Poincare;
 using namespace Shared;
 
 namespace Regression {
 
-Layout QuadraticModel::layout() {
-  if (m_layout.isUninitialized()) {
-    m_layout = HorizontalLayout::Builder({
+Layout QuadraticModel::templateLayout() const {
+  return HorizontalLayout::Builder({
       CodePointLayout::Builder('a'),
       CodePointLayout::Builder(UCodePointMiddleDot),
       CodePointLayout::Builder('x'),
       VerticalOffsetLayout::Builder(
-        CodePointLayout::Builder('2'),
-        VerticalOffsetLayoutNode::VerticalPosition::Superscript
-      ),
+          CodePointLayout::Builder('2'),
+          VerticalOffsetLayoutNode::VerticalPosition::Superscript),
       CodePointLayout::Builder('+'),
       CodePointLayout::Builder('b'),
       CodePointLayout::Builder(UCodePointMiddleDot),
       CodePointLayout::Builder('x'),
       CodePointLayout::Builder('+'),
       CodePointLayout::Builder('c'),
-    });
-  }
-  return m_layout;
+  });
 }
 
-int QuadraticModel::buildEquationTemplate(char * buffer, size_t bufferSize, double * modelCoefficients, int significantDigits, Poincare::Preferences::PrintFloatMode displayMode) const {
-  return Poincare::Print::SafeCustomPrintf(buffer, bufferSize, "%*.*ed·x^2%+*.*ed·x%+*.*ed",
-      modelCoefficients[0], displayMode, significantDigits,
-      modelCoefficients[1], displayMode, significantDigits,
-      modelCoefficients[2], displayMode, significantDigits);
-}
-
-double QuadraticModel::evaluate(double * modelCoefficients, double x) const {
+Expression QuadraticModel::privateExpression(double* modelCoefficients) const {
   double a = modelCoefficients[0];
   double b = modelCoefficients[1];
   double c = modelCoefficients[2];
-  return a*x*x+b*x+c;
+  // a*x^2+b*x+c
+  return AdditionOrSubtractionBuilder(
+      AdditionOrSubtractionBuilder(
+          Multiplication::Builder(Number::DecimalNumber(a),
+                                  Power::Builder(Symbol::Builder(k_xSymbol),
+                                                 BasedInteger::Builder(2))),
+          Multiplication::Builder(Number::DecimalNumber(std::fabs(b)),
+                                  Symbol::Builder(k_xSymbol)),
+          b >= 0.0),
+      Number::DecimalNumber(std::fabs(c)), c >= 0.0);
 }
 
-double QuadraticModel::partialDerivate(double * modelCoefficients, int derivateCoefficientIndex, double x) const {
+double QuadraticModel::evaluate(double* modelCoefficients, double x) const {
+  double a = modelCoefficients[0];
+  double b = modelCoefficients[1];
+  double c = modelCoefficients[2];
+  return a * x * x + b * x + c;
+}
+
+double QuadraticModel::partialDerivate(double* modelCoefficients,
+                                       int derivateCoefficientIndex,
+                                       double x) const {
   if (derivateCoefficientIndex == 0) {
     // Derivate with respect to a: x^2
-    return x*x;
+    return x * x;
   }
   if (derivateCoefficientIndex == 1) {
     // Derivate with respect to b: x
@@ -66,25 +75,4 @@ double QuadraticModel::partialDerivate(double * modelCoefficients, int derivateC
   return 1.0;
 }
 
-Expression QuadraticModel::expression(double * modelCoefficients) {
-  double a = modelCoefficients[0];
-  double b = modelCoefficients[1];
-  double c = modelCoefficients[2];
-  // a*x^2+b*x+c
-  return Addition::Builder({
-    Multiplication::Builder({
-      Number::DecimalNumber(a),
-      Power::Builder(
-        Symbol::Builder('x'),
-        Decimal::Builder(2.0)
-      )
-    }),
-    Multiplication::Builder({
-      Number::DecimalNumber(b),
-      Symbol::Builder('x')
-    }),
-    Number::DecimalNumber(c)
-  });
-}
-
-}
+}  // namespace Regression

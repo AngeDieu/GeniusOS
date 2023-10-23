@@ -7,25 +7,27 @@ namespace Shared {
 
 // SingleRangeController
 
-SingleRangeController::SingleRangeController(Responder * parentResponder, InputEventHandlerDelegate * inputEventHandlerDelegate, Shared::MessagePopUpController * confirmPopUpController) :
-  FloatParameterController<float>(parentResponder),
-  m_autoCell(I18n::Message::DefaultSetting),
-  m_confirmPopUpController(confirmPopUpController)
-{
+SingleRangeController::SingleRangeController(
+    Responder *parentResponder,
+    InputEventHandlerDelegate *inputEventHandlerDelegate,
+    Shared::MessagePopUpController *confirmPopUpController)
+    : FloatParameterController<float>(parentResponder),
+      m_confirmPopUpController(confirmPopUpController) {
   for (int i = 0; i < k_numberOfTextCells; i++) {
-    m_boundsCells[i].setParentResponder(&m_selectableTableView);
+    m_boundsCells[i].setParentResponder(&m_selectableListView);
     m_boundsCells[i].setDelegates(inputEventHandlerDelegate, this);
   }
+  m_autoCell.label()->setMessage(I18n::Message::DefaultSetting);
 }
 
 void SingleRangeController::viewWillAppear() {
   extractParameters();
-  m_boundsCells[0].setMessage(parameterMessage(0));
-  m_boundsCells[1].setMessage(parameterMessage(1));
+  m_boundsCells[0].label()->setMessage(parameterMessage(0));
+  m_boundsCells[1].label()->setMessage(parameterMessage(1));
   FloatParameterController<float>::viewWillAppear();
 }
 
-HighlightCell * SingleRangeController::reusableCell(int index, int type) {
+HighlightCell *SingleRangeController::reusableCell(int index, int type) {
   if (type == k_autoCellType) {
     return &m_autoCell;
   }
@@ -35,22 +37,34 @@ HighlightCell * SingleRangeController::reusableCell(int index, int type) {
   return FloatParameterController<float>::reusableCell(index, type);
 }
 
-KDCoordinate SingleRangeController::nonMemoizedRowHeight(int j) {
-  int type = typeAtIndex(j);
-  HighlightCell * cell = type == k_autoCellType ? static_cast<HighlightCell *>(&m_autoCell) : type == k_parameterCellType ? static_cast<HighlightCell *>(&m_boundsCells[j - 1]) : nullptr;
-  return cell ? heightForCellAtIndex(cell, j) : FloatParameterController<float>::nonMemoizedRowHeight(j);
+KDCoordinate SingleRangeController::nonMemoizedRowHeight(int row) {
+  int type = typeAtRow(row);
+  HighlightCell *cell =
+      type == k_autoCellType ? static_cast<HighlightCell *>(&m_autoCell)
+      : type == k_parameterCellType
+          ? static_cast<HighlightCell *>(&m_boundsCells[row - 1])
+          : nullptr;
+  return cell ? protectedNonMemoizedRowHeight(cell, row)
+              : FloatParameterController<float>::nonMemoizedRowHeight(row);
 }
 
-void SingleRangeController::willDisplayCellForIndex(Escher::HighlightCell * cell, int index) {
-  int type = typeAtIndex(index);
+void SingleRangeController::fillCellForRow(Escher::HighlightCell *cell,
+                                           int row) {
+  int type = typeAtRow(row);
   if (type == k_autoCellType) {
-    m_autoCell.setState(m_autoParam);
+    m_autoCell.accessory()->setState(m_autoParam);
     return;
   }
-  FloatParameterController<float>::willDisplayCellForIndex(cell, index);
+  FloatParameterController<float>::fillCellForRow(cell, row);
 }
 
 bool SingleRangeController::handleEvent(Ion::Events::Event event) {
+  if (typeAtRow(selectedRow()) == k_autoCellType &&
+      m_autoCell.canBeActivatedByEvent(event)) {
+    // Update auto status
+    setAutoStatus(!m_autoParam);
+    return true;
+  }
   if (event == Ion::Events::Left || event == Ion::Events::Back) {
     if (parametersAreDifferent()) {
       m_confirmPopUpController->presentModally();
@@ -59,17 +73,27 @@ bool SingleRangeController::handleEvent(Ion::Events::Event event) {
     }
     return true;
   }
-  if (selectedRow() == 0 && (event == Ion::Events::OK || event == Ion::Events::EXE)) {
-    // Update auto status
-    setAutoStatus(!m_autoParam);
-    return true;
-  }
   return FloatParameterController<float>::handleEvent(event);
 }
 
-HighlightCell * SingleRangeController::reusableParameterCell(int index, int type) {
+HighlightCell *SingleRangeController::reusableParameterCell(int index,
+                                                            int type) {
   assert(index >= 1 && index < k_numberOfTextCells + 1);
   return &m_boundsCells[index - 1];
+}
+
+bool SingleRangeController::setParameterAtIndex(int parameterIndex, float f) {
+  assert(parameterIndex == 1 || parameterIndex == 2);
+  parameterIndex == 1 ? m_rangeParam.setMin(f, limit())
+                      : m_rangeParam.setMax(f, limit());
+  return true;
+}
+
+TextField *SingleRangeController::textFieldOfCellAtIndex(HighlightCell *cell,
+                                                         int index) {
+  assert(typeAtRow(index) == k_parameterCellType);
+  return static_cast<MenuCellWithEditableText<MessageTextView> *>(cell)
+      ->textField();
 }
 
 void SingleRangeController::buttonAction() {
@@ -77,9 +101,15 @@ void SingleRangeController::buttonAction() {
   pop(true);
 }
 
-bool SingleRangeController::textFieldDidFinishEditing(Escher::AbstractTextField * textField, const char * text, Ion::Events::Event event) {
-  setAutoStatus(false);
-  return FloatParameterController<float>::textFieldDidFinishEditing(textField, text, event);
+bool SingleRangeController::textFieldDidFinishEditing(
+    Escher::AbstractTextField *textField, const char *text,
+    Ion::Events::Event event) {
+  bool result = FloatParameterController<float>::textFieldDidFinishEditing(
+      textField, text, event);
+  if (result) {
+    setAutoStatus(false);
+  }
+  return result;
 }
 
 float SingleRangeController::parameterAtIndex(int index) {
@@ -87,4 +117,18 @@ float SingleRangeController::parameterAtIndex(int index) {
   return (index == 1 ? m_rangeParam.min() : m_rangeParam.max());
 }
 
+void SingleRangeController::setAutoStatus(bool autoParam) {
+  if (m_autoParam == autoParam) {
+    return;
+  }
+  m_autoParam = autoParam;
+  if (m_autoParam) {
+    setAutoRange();
+    resetMemoization();
+    m_selectableListView.reloadData();
+  } else {
+    m_selectableListView.reloadCell(0);
+  }
 }
+
+}  // namespace Shared

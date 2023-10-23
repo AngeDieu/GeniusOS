@@ -16,6 +16,7 @@ ion_src += $(addprefix ion/src/shared/dummy/, \
 
 ion_src += $(addprefix ion/src/simulator/shared/, \
   clipboard.cpp \
+  clipboard_helper.cpp \
   console.cpp \
   compilation_flags.cpp \
   crc32.cpp \
@@ -23,8 +24,8 @@ ion_src += $(addprefix ion/src/simulator/shared/, \
   events.cpp \
   events_platform.cpp \
   framebuffer.cpp \
+  init.cpp \
   keyboard.cpp \
-  layout.py \
   main.cpp \
   persisting_bytes.cpp \
   random.cpp \
@@ -52,7 +53,7 @@ $(eval $(call rule_for, \
   global \
 ))
 
-$(call object_for,$(ion_src)): $(BUILD_DIR)/ion/src/simulator/shared/layout.cpp
+ion_src += $(BUILD_DIR)/ion/src/simulator/shared/layout.cpp
 
 include ion/src/simulator/$(TARGET)/Makefile
 include ion/src/simulator/external/Makefile

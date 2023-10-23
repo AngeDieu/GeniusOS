@@ -4,44 +4,34 @@
 #include <stdint.h>
 
 class CodePoint {
-public:
+ public:
   constexpr static int MaxCodePointCharLength = sizeof(uint32_t) / sizeof(char);
   constexpr CodePoint(uint32_t c) : m_code(c) {}
   constexpr operator uint32_t() const { return m_code; }
   char getChar() const;
 
-  bool isBinaryDigit() const {
-    return '0' <= m_code && m_code <= '1';
-  }
-  bool isDecimalDigit() const {
-    return '0' <= m_code && m_code <= '9';
-  }
+  bool isBinaryDigit() const { return '0' <= m_code && m_code <= '1'; }
+  bool isDecimalDigit() const { return '0' <= m_code && m_code <= '9'; }
   bool isHexadecimalDigit() const {
-    return isDecimalDigit() || ('A' <= m_code && m_code <= 'F') || ('a' <= m_code && m_code <= 'f');
+    return isDecimalDigit() || ('A' <= m_code && m_code <= 'F') ||
+           ('a' <= m_code && m_code <= 'f');
   }
-  bool isLatinCapitalLetter() const {
-    return 'A' <= m_code && m_code <= 'Z';
-  }
-  bool isLatinSmallLetter() const {
-    return 'a' <= m_code && m_code <= 'z';
-  }
+  bool isLatinCapitalLetter() const { return 'A' <= m_code && m_code <= 'Z'; }
+  bool isLatinSmallLetter() const { return 'a' <= m_code && m_code <= 'z'; }
   bool isLatinLetter() const {
     return isLatinCapitalLetter() || isLatinSmallLetter();
   }
-  bool isCombining() const {
-    return (m_code >= 0x300 && m_code <= 0x036F);
-  }
+  bool isCombining() const { return (m_code >= 0x300 && m_code <= 0x036F); }
   bool isGreekCapitalLetter() const {
     return 0x391 <= m_code && m_code <= 0x3a9 && m_code != 0x3a2;
   }
-  bool isGreekSmallLetter() const {
-    return 0x3b1 <= m_code && m_code <= 0x3c9;
-  }
-  bool isEquationOperator() const; // <, =, >, ≤, ≥
-private:
+  bool isGreekSmallLetter() const { return 0x3b1 <= m_code && m_code <= 0x3c9; }
+  bool isEquationOperator() const;  // <, =, >, ≤, ≥
+ private:
   uint32_t m_code;
 };
 
+// clang-format off
 constexpr static CodePoint UCodePointNull                          = 0x0;
 
 // 0x1 and 0x2 are not used, so we can use them for another purpose
@@ -53,7 +43,8 @@ constexpr static CodePoint UCodePointLineFeed                      = 0xa;
 constexpr static CodePoint UCodePointCarriageReturn                = 0xd;
 
 // 0x11 to 0x15 are not used, so we can use them for another purpose
-constexpr static CodePoint UCodePointEmpty                         = 0x11; // Used to be parsed into EmptyExpression
+// Used to be parsed into EmptyExpression
+constexpr static CodePoint UCodePointEmpty                         = 0x11;
 /* Code points \x12 to \x14 are used to serialize expressions. UCodePointSystem
  * in particular is used to mark the next token in the parsed string as
  * reserved by the system. This allows generating arbitrary system tokens
@@ -89,5 +80,6 @@ constexpr static CodePoint UCodePointSuperiorEqual                 = 0x2265;  //
 constexpr static CodePoint UCodePointLeftAngleBracket              = 0x27E8;  // ⟨
 constexpr static CodePoint UCodePointRightAngleBracket             = 0x27E9;  // ⟩
 constexpr static CodePoint UCodePointReplacement                   = 0xFFFD;  // �
+// clang-format on
 
 #endif

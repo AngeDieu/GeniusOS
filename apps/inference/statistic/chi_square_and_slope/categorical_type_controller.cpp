@@ -3,41 +3,45 @@
 #include <apps/i18n.h>
 #include <escher/stack_view_controller.h>
 
+#include "inference/app.h"
 #include "input_goodness_controller.h"
 #include "input_homogeneity_controller.h"
-#include "inference/app.h"
 
 using namespace Inference;
 
 CategoricalTypeController::CategoricalTypeController(
-    Escher::StackViewController * parent,
-    Chi2Test * statistic,
-    InputGoodnessController * inputGoodnessController,
-    InputHomogeneityController * inputHomogeneityController) :
-      Escher::SelectableCellListPage<Escher::MessageTableCellWithChevron, k_numberOfCategoricalCells, Escher::RegularListViewDataSource>(parent),
+    Escher::StackViewController* parent, Chi2Test* statistic,
+    InputGoodnessController* inputGoodnessController,
+    InputHomogeneityController* inputHomogeneityController)
+    : Escher::SelectableCellListPage<
+          Escher::MenuCell<Escher::MessageTextView, Escher::EmptyCellWidget,
+                           Escher::ChevronView>,
+          k_numberOfCells, Escher::RegularListViewDataSource>(parent),
       m_statistic(statistic),
       m_inputGoodnessController(inputGoodnessController),
       m_inputHomogeneityController(inputHomogeneityController) {
   selectRow(0);  // Select first row by default
-  cellAtIndex(k_indexOfGoodnessCell)->setMessage(I18n::Message::GoodnessOfFit);
-  cellAtIndex(k_indexOfHomogeneityCell)->setMessage(I18n::Message::Homogeneity);
+  cellAtIndex(k_indexOfGoodnessCell)
+      ->label()
+      ->setMessage(I18n::Message::GoodnessOfFit);
+  cellAtIndex(k_indexOfHomogeneityCell)
+      ->label()
+      ->setMessage(I18n::Message::Homogeneity);
 
   // Init selection
   selectRow(0);
 }
 
-void CategoricalTypeController::stackOpenPage(Escher::ViewController * nextPage) {
+void CategoricalTypeController::stackOpenPage(
+    Escher::ViewController* nextPage) {
   selectRow(static_cast<int>(m_statistic->categoricalType()));
   ViewController::stackOpenPage(nextPage);
 }
 
-void CategoricalTypeController::didBecomeFirstResponder() {
-  Escher::Container::activeApp()->setFirstResponder(&m_selectableTableView);
-}
-
 bool CategoricalTypeController::handleEvent(Ion::Events::Event event) {
-  if (event == Ion::Events::OK || event == Ion::Events::EXE || event == Ion::Events::Right) {
-    Escher::ViewController * controller = nullptr;
+  // canBeActivatedByEvent can be called on any cell with chevron
+  if (cellAtIndex(0)->canBeActivatedByEvent(event)) {
+    Escher::ViewController* controller = nullptr;
     CategoricalType type;
     switch (selectedRow()) {
       case k_indexOfGoodnessCell:

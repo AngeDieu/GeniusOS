@@ -1,28 +1,37 @@
 #include "graph_controller.h"
-#include "../app.h"
+
 #include <apps/shared/poincare_helpers.h>
-#include <poincare/layout_helper.h>
-#include <poincare/multiplication.h>
 #include <poincare/cosine.h>
-#include <poincare/sine.h>
+#include <poincare/layout_helper.h>
 #include <poincare/matrix.h>
+#include <poincare/multiplication.h>
+#include <poincare/sine.h>
 #include <poincare/symbol.h>
+
 #include <algorithm>
+
+#include "../app.h"
 
 using namespace Poincare;
 using namespace Shared;
-using namespace Escher;
 
 namespace Graph {
 
-GraphController::GraphController(Responder * parentResponder, Escher::InputEventHandlerDelegate * inputEventHandlerDelegate, Shared::InteractiveCurveViewRange * curveViewRange, CurveViewCursor * cursor, int * indexFunctionSelectedByCursor, ButtonRowController * header) :
-  FunctionGraphController(parentResponder, inputEventHandlerDelegate, header, curveViewRange, &m_view, cursor, indexFunctionSelectedByCursor),
-  m_bannerView(this, inputEventHandlerDelegate, this),
-  m_view(curveViewRange, m_cursor, &m_bannerView, &m_cursorView),
-  m_graphRange(curveViewRange),
-  m_curveParameterController(inputEventHandlerDelegate, curveViewRange, &m_bannerView, m_cursor, &m_view, this),
-  m_functionSelectionController(this)
-{
+GraphController::GraphController(
+    Escher::Responder *parentResponder,
+    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
+    Escher::ButtonRowController *header,
+    Shared::InteractiveCurveViewRange *interactiveRange,
+    CurveViewCursor *cursor, int *selectedCurveIndex)
+    : FunctionGraphController(parentResponder, inputEventHandlerDelegate,
+                              header, interactiveRange, &m_view, cursor,
+                              selectedCurveIndex),
+      m_bannerView(this, inputEventHandlerDelegate, this),
+      m_view(interactiveRange, m_cursor, &m_bannerView, &m_cursorView),
+      m_graphRange(interactiveRange),
+      m_curveParameterController(inputEventHandlerDelegate, interactiveRange,
+                                 &m_bannerView, m_cursor, &m_view),
+      m_functionSelectionController(this) {
   m_graphRange->setDelegate(this);
 }
 
@@ -39,12 +48,11 @@ void GraphController::viewWillAppear() {
   m_cursorView.resetMemoization();
   m_view.setCursorView(&m_cursorView);
   FunctionGraphController::viewWillAppear();
-  selectFunctionWithCursor(indexFunctionSelectedByCursor(), true);
 }
 
 void GraphController::didBecomeFirstResponder() {
   FunctionGraphController::didBecomeFirstResponder();
-  m_view.selectRecord(functionStore()->activeRecordAtIndex(indexFunctionSelectedByCursor()));
+  m_view.selectRecord(recordAtSelectedCurveIndex());
 }
 
 bool GraphController::handleEvent(Ion::Events::Event event) {
@@ -56,64 +64,114 @@ bool GraphController::handleEvent(Ion::Events::Event event) {
   return Shared::FunctionGraphController::handleEvent(event);
 }
 
-template <typename T> static Coordinate2D<T> evaluator(T t, const void * model, Context * context) {
-  const ContinuousFunction * f = static_cast<const ContinuousFunction *>(model);
+template <typename T>
+static Coordinate2D<T> evaluator(T t, const void *model, Context *context) {
+  const ContinuousFunction *f = static_cast<const ContinuousFunction *>(model);
   return f->evaluateXYAtParameter(t, context);
 }
-template <typename T> static Coordinate2D<T> evaluatorSecondCurve(T t, const void * model, Context * context) {
-  const ContinuousFunction * f = static_cast<const ContinuousFunction *>(model);
+template <typename T>
+static Coordinate2D<T> evaluatorSecondCurve(T t, const void *model,
+                                            Context *context) {
+  const ContinuousFunction *f = static_cast<const ContinuousFunction *>(model);
   return f->evaluateXYAtParameter(t, context, 1);
 }
-template <typename T, int coordinate> static Coordinate2D<T> parametricExpressionEvaluator(T t, const void * model, Context * context) {
-  const Expression * e = static_cast<const Expression *>(model);
+template <typename T, int coordinate>
+static Coordinate2D<T> parametricExpressionEvaluator(T t, const void *model,
+                                                     Context *context) {
+  const Expression *e = static_cast<const Expression *>(model);
   assert(e->numberOfChildren() == 2);
   assert(coordinate == 0 || coordinate == 1);
-  T value = PoincareHelpers::ApproximateWithValueForSymbol<T>(e->childAtIndex(coordinate), ContinuousFunction::k_unknownName, t, context);
+  T value = PoincareHelpers::ApproximateWithValueForSymbol<T>(
+      e->childAtIndex(coordinate), ContinuousFunction::k_unknownName, t,
+      context);
   return Coordinate2D<T>(t, value);
 }
 
-Range2D GraphController::optimalRange(bool computeX, bool computeY, Range2D originalRange) const {
-  Context * context = App::app()->localContext();
-  Zoom zoom(NAN, NAN, InteractiveCurveViewRange::NormalYXRatio(), context, k_maxFloat);
-  ContinuousFunctionStore * store = functionStore();
+Range2D GraphController::optimalRange(bool computeX, bool computeY,
+                                      Range2D originalRange) const {
+  Context *context = App::app()->localContext();
+  Zoom zoom(NAN, NAN, InteractiveCurveViewRange::NormalYXRatio(), context,
+            k_maxFloat);
+  ContinuousFunctionStore *store = functionStore();
+  if (store->memoizationOverflows()) {
+    /* Do not compute autozoom if store is full because the computation is too
+     * slow. */
+    Range1D xRange(-Range1D::k_defaultHalfLength, Range1D::k_defaultHalfLength);
+    Range2D defaultRange(xRange, xRange);
+    defaultRange.setRatio(InteractiveCurveViewRange::NormalYXRatio(), true,
+                          k_maxFloat);
+    return Range2D(*(computeX ? defaultRange : originalRange).x(),
+                   *(computeY ? defaultRange : originalRange).y());
+  }
   int nbFunctions = store->numberOfActiveFunctions();
-  Range1D xBounds = computeX ? Range1D(-k_maxFloat, k_maxFloat) : *originalRange.x();
-  Range1D yBounds = computeY ? Range1D(-k_maxFloat, k_maxFloat) : *originalRange.y();
-  Range2D forcedRange = Range2D(computeX ? Range1D() : *originalRange.x(), computeY ? Range1D() : *originalRange.y());
+  Range1D xBounds =
+      computeX ? Range1D(-k_maxFloat, k_maxFloat) : *originalRange.x();
+  Range1D yBounds =
+      computeY ? Range1D(-k_maxFloat, k_maxFloat) : *originalRange.y();
+  Range2D forcedRange = Range2D(computeX ? Range1D() : *originalRange.x(),
+                                computeY ? Range1D() : *originalRange.y());
   zoom.setForcedRange(forcedRange);
 
   for (int i = 0; i < nbFunctions; i++) {
-    ExpiringPointer<ContinuousFunction> f = store->modelForRecord(store->activeRecordAtIndex(i));
-    if (f->basedOnCostlyAlgorithms(context)) {
+    ExpiringPointer<ContinuousFunction> f =
+        store->modelForRecord(store->activeRecordAtIndex(i));
+    if (f->approximationBasedOnCostlyAlgorithms(context)) {
       continue;
     }
-    if (f->properties().isPolar() || f->properties().isParametric()) {
+    if (f->properties().isPolar() || f->properties().isInversePolar() ||
+        f->properties().isParametric()) {
       assert(std::isfinite(f->tMin()) && std::isfinite(f->tMax()));
-      Expression e = f->expressionReduced(context);
-      if (f->properties().isPolar()) {
-        // Turn r(theta) into f(theta) = [x(theta), y(theta)]
-        Expression theta = Symbol::Builder(ContinuousFunction::k_unknownName, strlen(ContinuousFunction::k_unknownName));
-        // x(theta) = cos(theta)*r(theta)
-        Expression firstRow = Multiplication::Builder(Cosine::Builder(theta.clone()), e.clone());
-        // y(theta) = sin(theta)*r(theta)
-        Expression secondRow = Multiplication::Builder(Sine::Builder(theta.clone()), e.clone());
+      Expression e = f->expressionApproximated(context);
+      if (f->properties().isPolar() || f->properties().isInversePolar()) {
+        Expression firstRow, secondRow;
+        Expression unknown =
+            Symbol::Builder(ContinuousFunction::k_unknownName,
+                            strlen(ContinuousFunction::k_unknownName));
+        if (f->properties().isPolar()) {
+          /* Turn r(theta) into f(theta) = [x(theta), y(theta)]
+           *   x(theta) = cos(theta)*r(theta) */
+          firstRow = Multiplication::Builder(Cosine::Builder(unknown.clone()),
+                                             e.clone());
+          //   y(theta) = sin(theta)*r(theta)
+          secondRow = Multiplication::Builder(Sine::Builder(unknown.clone()),
+                                              e.clone());
+        } else {
+          /* Turn theta(r) into f(r) = [x(r), y(r)]
+           *   x(r) = r*cos(theta(r)) */
+          firstRow = Multiplication::Builder(unknown.clone(),
+                                             Cosine::Builder(e.clone()));
+          //  y(theta) = r*sin(theta(r))
+          secondRow = Multiplication::Builder(unknown.clone(),
+                                              Sine::Builder(e.clone()));
+        }
         Matrix parametricExpression = Matrix::Builder();
         parametricExpression.addChildAtIndexInPlace(firstRow, 0, 0);
         parametricExpression.addChildAtIndexInPlace(secondRow, 1, 1);
         parametricExpression.setDimensions(2, 1);
         e = parametricExpression;
       }
-      assert((e.type() == ExpressionNode::Type::Matrix && e.numberOfChildren() == 2)
-          || (e.type() == ExpressionNode::Type::Dependency && e.childAtIndex(0).type() == ExpressionNode::Type::Matrix && e.childAtIndex(0).numberOfChildren() == 2));
+      assert((e.type() == ExpressionNode::Type::Matrix &&
+              e.numberOfChildren() == 2) ||
+             (e.type() == ExpressionNode::Type::Dependency &&
+              e.childAtIndex(0).type() == ExpressionNode::Type::Matrix &&
+              e.childAtIndex(0).numberOfChildren() == 2));
 
       // Compute the ordinate range of x(t) and y(t)
       Range1D ranges[2];
-      Zoom::Function2DWithContext<float> floatEvaluators[2] = {parametricExpressionEvaluator<float, 0>, parametricExpressionEvaluator<float, 1>};
-      Zoom::Function2DWithContext<double> doubleEvaluators[2] = {parametricExpressionEvaluator<double, 0>, parametricExpressionEvaluator<double, 1>};
+      Zoom::Function2DWithContext<float> floatEvaluators[2] = {
+          parametricExpressionEvaluator<float, 0>,
+          parametricExpressionEvaluator<float, 1>};
+      Zoom::Function2DWithContext<double> doubleEvaluators[2] = {
+          parametricExpressionEvaluator<double, 0>,
+          parametricExpressionEvaluator<double, 1>};
       for (int coordinate = 0; coordinate < 2; coordinate++) {
-        Zoom zoomAlongCoordinate(NAN, NAN, InteractiveCurveViewRange::NormalYXRatio(), context, k_maxFloat);
+        Zoom zoomAlongCoordinate(NAN, NAN,
+                                 InteractiveCurveViewRange::NormalYXRatio(),
+                                 context, k_maxFloat);
         zoomAlongCoordinate.setBounds(f->tMin(), f->tMax());
-        zoomAlongCoordinate.fitPointsOfInterest(floatEvaluators[coordinate], &e, false, doubleEvaluators[coordinate]);
+        zoomAlongCoordinate.fitPointsOfInterest(floatEvaluators[coordinate], &e,
+                                                false,
+                                                doubleEvaluators[coordinate]);
         zoomAlongCoordinate.fitBounds(floatEvaluators[coordinate], &e, false);
         ranges[coordinate] = *zoomAlongCoordinate.range(false, false).y();
       }
@@ -121,20 +179,26 @@ Range2D GraphController::optimalRange(bool computeX, bool computeY, Range2D orig
       // Fit the zoom to the range of x(t) and y(t)
       zoom.fitPoint(Coordinate2D<float>(ranges[0].max(), ranges[1].max()));
       zoom.fitPoint(Coordinate2D<float>(ranges[0].min(), ranges[1].min()));
+    } else if (f->properties().isScatterPlot()) {
+      for (Point p : f->iterateScatterPlot(context)) {
+        zoom.fitPoint(p.approximate2D<float>(
+            context, Preferences::sharedPreferences->complexFormat(),
+            Preferences::sharedPreferences->angleUnit()));
+      }
     } else {
       assert(f->properties().isCartesian());
       bool alongY = f->isAlongY();
-      Range1D * bounds = alongY ? &yBounds : &xBounds;
+      Range1D *bounds = alongY ? &yBounds : &xBounds;
       // Use the intersection between the definition domain of f and the bounds
-      zoom.setBounds(
-        std::clamp(f->tMin(), bounds->min(), bounds->max()),
-        std::clamp(f->tMax(), bounds->min(), bounds->max())
-      );
-      zoom.fitPointsOfInterest(evaluator<float>, f.operator->(), alongY, evaluator<double>);
+      zoom.setBounds(std::clamp(f->tMin(), bounds->min(), bounds->max()),
+                     std::clamp(f->tMax(), bounds->min(), bounds->max()));
+      zoom.fitPointsOfInterest(evaluator<float>, f.operator->(), alongY,
+                               evaluator<double>);
       zoom.fitBounds(evaluator<float>, f.operator->(), alongY);
       if (f->numberOfSubCurves() > 1) {
         assert(f->numberOfSubCurves() == 2);
-        zoom.fitPointsOfInterest(evaluatorSecondCurve<float>, f.operator->(), alongY, evaluatorSecondCurve<double>);
+        zoom.fitPointsOfInterest(evaluatorSecondCurve<float>, f.operator->(),
+                                 alongY, evaluatorSecondCurve<double>);
         zoom.fitBounds(evaluatorSecondCurve<float>, f.operator->(), alongY);
       }
 
@@ -144,30 +208,42 @@ Range2D GraphController::optimalRange(bool computeX, bool computeY, Range2D orig
        * have its conditions fitted. It is assumed that expressions containing
        * more than one piecewise will be rare. */
       Expression p;
-      Expression::ExpressionTestAuxiliary yieldPiecewise = [](const Expression e, Context *, void * auxiliary) {
-        if (e.type() == ExpressionNode::Type::PiecewiseOperator) {
-          *static_cast<Expression *>(auxiliary) = e;
-          return true;
-        } else {
-          return false;
-        }
-      };
-      if (f->expressionReduced(context).recursivelyMatches(yieldPiecewise, context, SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition, &p)) {
-        assert(!p.isUninitialized() && p.type() == ExpressionNode::Type::PiecewiseOperator);
-        zoom.fitConditions(static_cast<PiecewiseOperator &>(p), evaluator<float>, f.operator->(), ContinuousFunction::k_unknownName, Preferences::sharedPreferences()->complexFormat(), Preferences::sharedPreferences()->angleUnit(), alongY);
+      Expression::ExpressionTestAuxiliary yieldPiecewise =
+          [](const Expression e, Context *, void *auxiliary) {
+            if (e.type() == ExpressionNode::Type::PiecewiseOperator) {
+              *static_cast<Expression *>(auxiliary) = e;
+              return true;
+            } else {
+              return false;
+            }
+          };
+      if (f->expressionApproximated(context).recursivelyMatches(
+              yieldPiecewise, context,
+              SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition,
+              &p)) {
+        assert(!p.isUninitialized() &&
+               p.type() == ExpressionNode::Type::PiecewiseOperator);
+        zoom.fitConditions(static_cast<PiecewiseOperator &>(p),
+                           evaluator<float>, f.operator->(),
+                           ContinuousFunction::k_unknownName,
+                           Preferences::sharedPreferences->complexFormat(),
+                           Preferences::sharedPreferences->angleUnit(), alongY);
       }
 
-      /* Do not compute intersections if store is full because re-creating a
-       * ContinuousFunction object each time a new function is intersected
-       * is very slow. */
-      if (!store->memoizationIsFull() && f->properties().canComputeIntersectionsWithFunctionsAlongSameVariable()) {
-        ContinuousFunction * mainF = f.operator->();
+      if (f->properties()
+              .canComputeIntersectionsWithFunctionsAlongSameVariable()) {
+        ContinuousFunction *mainF = f.operator->();
         for (int j = i + 1; j < nbFunctions; j++) {
-          ExpiringPointer<ContinuousFunction> g = store->modelForRecord(store->activeRecordAtIndex(j));
-          if (!g->properties().canComputeIntersectionsWithFunctionsAlongSameVariable() || g->isAlongY() != alongY) {
+          ExpiringPointer<ContinuousFunction> g =
+              store->modelForRecord(store->activeRecordAtIndex(j));
+          if (!g->properties()
+                   .canComputeIntersectionsWithFunctionsAlongSameVariable() ||
+              g->isAlongY() != alongY ||
+              g->approximationBasedOnCostlyAlgorithms(context)) {
             continue;
           }
-          zoom.fitIntersections(evaluator<float>, mainF, evaluator<float>, g.operator->());
+          zoom.fitIntersections(evaluator<float>, mainF, evaluator<float>,
+                                g.operator->());
         }
       }
     }
@@ -176,8 +252,10 @@ Range2D GraphController::optimalRange(bool computeX, bool computeY, Range2D orig
   if (computeY) {
     zoom.setBounds(xBounds.min(), xBounds.max());
     for (int i = 0; i < nbFunctions; i++) {
-      ExpiringPointer<ContinuousFunction> f = store->modelForRecord(store->activeRecordAtIndex(i));
-      if (f->basedOnCostlyAlgorithms(context) || !f->properties().isCartesian()) {
+      ExpiringPointer<ContinuousFunction> f =
+          store->modelForRecord(store->activeRecordAtIndex(i));
+      if (f->approximationBasedOnCostlyAlgorithms(context) ||
+          !f->properties().isCartesian()) {
         continue;
       }
       bool alongY = f->isAlongY();
@@ -189,12 +267,15 @@ Range2D GraphController::optimalRange(bool computeX, bool computeY, Range2D orig
   }
 
   Range2D newRange = zoom.range(true, defaultRangeIsNormalized());
-  return Range2D(*(computeX ? newRange : originalRange).x(), *(computeY ? newRange : originalRange).y());
+  return Range2D(*(computeX ? newRange : originalRange).x(),
+                 *(computeY ? newRange : originalRange).y());
 }
 
-PointsOfInterestCache * GraphController::pointsOfInterestForRecord(Ion::Storage::Record record) {
-  ExpiringPointer<ContinuousFunction> f = functionStore()->modelForRecord(record);
-  PointsOfInterestCache * cache = nullptr;
+PointsOfInterestCache *GraphController::pointsOfInterestForRecord(
+    Ion::Storage::Record record) {
+  ExpiringPointer<ContinuousFunction> f =
+      functionStore()->modelForRecord(record);
+  PointsOfInterestCache *cache = nullptr;
   for (int i = 0; i < static_cast<int>(m_pointsOfInterest.length()); i++) {
     if (m_pointsOfInterest.elementAtIndex(i)->record() == record) {
       cache = m_pointsOfInterest.elementAtIndex(i);
@@ -214,31 +295,30 @@ PointsOfInterestCache * GraphController::pointsOfInterestForRecord(Ion::Storage:
   } else {
     float tMin = f->tMin();
     float tMax = f->tMax();
-    cache->setBounds(std::clamp(m_graphRange->xMin(), tMin, tMax), std::clamp(m_graphRange->xMax(), tMin, tMax));
+    cache->setBounds(std::clamp(m_graphRange->xMin(), tMin, tMax),
+                     std::clamp(m_graphRange->xMax(), tMin, tMax));
   }
 
   return cache;
 }
 
-Layout GraphController::FunctionSelectionController::nameLayoutAtIndex(int j) const {
-  GraphController * graphController = static_cast<GraphController *>(m_graphController);
-  ContinuousFunctionStore * store = graphController->functionStore();
-  ExpiringPointer<ContinuousFunction> function = store->modelForRecord(store->activeRecordAtIndex(j));
+Layout GraphController::FunctionSelectionController::nameLayoutAtIndex(
+    int j) const {
+  GraphController *graphController =
+      static_cast<GraphController *>(m_graphController);
+  ContinuousFunctionStore *store = graphController->functionStore();
+  ExpiringPointer<ContinuousFunction> function =
+      store->modelForRecord(store->activeRecordAtIndex(j));
   constexpr size_t bufferSize = ContinuousFunction::k_maxNameWithArgumentSize;
   char buffer[bufferSize];
   int size = function->nameWithArgument(buffer, bufferSize);
   return LayoutHelper::String(buffer, size);
 }
 
-bool GraphController::displayDerivativeInBanner() const {
-  Ion::Storage::Record record = functionStore()->activeRecordAtIndex(indexFunctionSelectedByCursor());
-  return functionStore()->modelForRecord(record)->displayDerivative() &&
-    functionStore()->modelForRecord(record)->canDisplayDerivative();
-}
-
- void GraphController::reloadBannerView() {
-  Ion::Storage::Record record = functionStore()->activeRecordAtIndex(indexFunctionSelectedByCursor());
-  bool displayDerivative = displayDerivativeInBanner();
+void GraphController::reloadBannerView() {
+  Ion::Storage::Record record = recordAtSelectedCurveIndex();
+  bool displayDerivative =
+      functionStore()->modelForRecord(record)->displayDerivative();
   m_bannerView.setDisplayParameters(true, displayDerivative, false);
   FunctionGraphController::reloadBannerView();
   if (!displayDerivative) {
@@ -247,39 +327,63 @@ bool GraphController::displayDerivativeInBanner() const {
   reloadDerivativeInBannerViewForCursorOnFunction(m_cursor, record);
 }
 
-bool GraphController::moveCursorHorizontally(int direction, int scrollSpeed) {
-  Ion::Storage::Record record = functionStore()->activeRecordAtIndex(indexFunctionSelectedByCursor());
-  assert(m_selectedSubCurveIndex < App::app()->functionStore()->modelForRecord(record)->numberOfSubCurves());
-  return privateMoveCursorHorizontally(m_cursor, direction, m_graphRange, k_numberOfCursorStepsInGradUnit, record, m_view.pixelWidth(), scrollSpeed, &m_selectedSubCurveIndex);
+bool GraphController::moveCursorHorizontally(OMG::HorizontalDirection direction,
+                                             int scrollSpeed) {
+  Ion::Storage::Record record = recordAtSelectedCurveIndex();
+  assert(
+      m_selectedSubCurveIndex <
+      App::app()->functionStore()->modelForRecord(record)->numberOfSubCurves());
+  return privateMoveCursorHorizontally(
+      m_cursor, direction, m_graphRange, k_numberOfCursorStepsInGradUnit,
+      record, m_view.pixelWidth(), scrollSpeed, &m_selectedSubCurveIndex);
 }
 
-int GraphController::nextCurveIndexVertically(bool goingUp, int currentSelectedCurve, Poincare::Context * context, int currentSubCurveIndex, int * nextSubCurveIndex) const {
+void GraphController::selectCurveAtIndex(int curveIndex, bool willBeVisible) {
+  m_cursorView.setIsRing(functionStore()
+                             ->modelForRecord(recordAtCurveIndex(curveIndex))
+                             ->properties()
+                             .isScatterPlot());
+  FunctionGraphController::selectCurveAtIndex(curveIndex, willBeVisible);
+}
+
+int GraphController::nextCurveIndexVertically(OMG::VerticalDirection direction,
+                                              int currentSelectedCurve,
+                                              Poincare::Context *context,
+                                              int currentSubCurveIndex,
+                                              int *nextSubCurveIndex) const {
   assert(nextSubCurveIndex != nullptr);
   int nbOfActiveFunctions = 0;
   if (!functionStore()->displaysNonCartesianFunctions(&nbOfActiveFunctions)) {
-    return FunctionGraphController::nextCurveIndexVertically(goingUp, currentSelectedCurve, context, currentSubCurveIndex, nextSubCurveIndex);
+    return FunctionGraphController::nextCurveIndexVertically(
+        direction, currentSelectedCurve, context, currentSubCurveIndex,
+        nextSubCurveIndex);
   }
   // Handle for sub curve in current function
-  if (!goingUp) {
-    ExpiringPointer<ContinuousFunction> currentF = functionStore()->modelForRecord(functionStore()->activeRecordAtIndex(currentSelectedCurve));
+  if (!direction.isUp()) {
+    ExpiringPointer<ContinuousFunction> currentF =
+        functionStore()->modelForRecord(
+            recordAtCurveIndex(currentSelectedCurve));
     if (currentF->numberOfSubCurves() > currentSubCurveIndex + 1) {
       // Switch to next sub curve
       *nextSubCurveIndex = currentSubCurveIndex + 1;
       return currentSelectedCurve;
     }
-  } else if (goingUp && currentSubCurveIndex > 0) {
+  } else if (direction.isUp() && currentSubCurveIndex > 0) {
     // Switch to previous sub curve
     *nextSubCurveIndex = currentSubCurveIndex - 1;
     return currentSelectedCurve;
   }
   // Go to the next function
-  int nextActiveFunctionIndex = currentSelectedCurve + (goingUp ? -1 : 1);
-  if (nextActiveFunctionIndex >= nbOfActiveFunctions || nextActiveFunctionIndex < 0) {
+  int nextActiveFunctionIndex =
+      currentSelectedCurve + (direction.isUp() ? -1 : 1);
+  if (nextActiveFunctionIndex >= nbOfActiveFunctions ||
+      nextActiveFunctionIndex < 0) {
     return -1;
   }
-  if (goingUp) {
+  if (direction.isUp()) {
     // Select last sub curve in next function when going up
-    ExpiringPointer<ContinuousFunction> nextF = functionStore()->modelForRecord(functionStore()->activeRecordAtIndex(nextActiveFunctionIndex));
+    ExpiringPointer<ContinuousFunction> nextF = functionStore()->modelForRecord(
+        recordAtCurveIndex(nextActiveFunctionIndex));
     *nextSubCurveIndex = nextF->numberOfSubCurves() - 1;
   } else {
     // Select first sub curve in next function
@@ -288,14 +392,35 @@ int GraphController::nextCurveIndexVertically(bool goingUp, int currentSelectedC
   return nextActiveFunctionIndex;
 }
 
-double GraphController::defaultCursorT(Ion::Storage::Record record, bool ignoreMargins) {
-  ExpiringPointer<ContinuousFunction> function = functionStore()->modelForRecord(record);
+double GraphController::defaultCursorT(Ion::Storage::Record record,
+                                       bool ignoreMargins) {
+  ExpiringPointer<ContinuousFunction> function =
+      functionStore()->modelForRecord(record);
   if (function->properties().isCartesian()) {
     return FunctionGraphController::defaultCursorT(record, ignoreMargins);
   }
 
-  assert(function->properties().isParametric() || function->properties().isPolar());
-  Poincare::Context * context = textFieldDelegateApp()->localContext();
+  Poincare::Context *context = textFieldDelegateApp()->localContext();
+  if (function->properties().isScatterPlot()) {
+    Preferences::ComplexFormat complexFormat =
+        Preferences::sharedPreferences->complexFormat();
+    Preferences::AngleUnit angleUnit =
+        Preferences::sharedPreferences->angleUnit();
+    float t = 0;
+    for (Point p : function->iterateScatterPlot(context)) {
+      if (isCursorVisibleAtPosition(
+              p.approximate2D<float>(context, complexFormat, angleUnit),
+              ignoreMargins)) {
+        return t;
+      }
+      ++t;
+    }
+    return 0.;
+  }
+
+  assert(function->properties().isParametric() ||
+         function->properties().isPolar() ||
+         function->properties().isInversePolar());
   float tMin = function->tMin(), tMax = function->tMax();
   float tRange = tMax - tMin;
   constexpr int numberOfRangeSubdivisions = 4;
@@ -323,7 +448,57 @@ double GraphController::defaultCursorT(Ion::Storage::Record record, bool ignoreM
   return currentT;
 }
 
-void GraphController::jumpToLeftRightCurve(double t, int direction, int functionsCount, Ion::Storage::Record record) {
+bool GraphController::moveCursorVertically(OMG::VerticalDirection direction) {
+  int currentActiveFunctionIndex = *m_selectedCurveIndex;
+  Context *context = textFieldDelegateApp()->localContext();
+  Preferences::ComplexFormat complexFormat =
+      Preferences::sharedPreferences->complexFormat();
+  Preferences::AngleUnit angleUnit =
+      Preferences::sharedPreferences->angleUnit();
+
+  int nextSubCurve = 0;
+  int nextFunction =
+      nextCurveIndexVertically(direction, currentActiveFunctionIndex, context,
+                               m_selectedSubCurveIndex, &nextSubCurve);
+  if (nextFunction < 0) {
+    return false;
+  }
+
+  ExpiringPointer<ContinuousFunction> currentF =
+      functionStore()->modelForRecord(recordAtSelectedCurveIndex());
+  float nextT =
+      currentF->properties().isScatterPlot() && std::isfinite(m_cursor->x())
+          ? m_cursor->x()
+          : m_cursor->t();
+
+  ExpiringPointer<ContinuousFunction> nextF =
+      functionStore()->modelForRecord(recordAtCurveIndex(nextFunction));
+  if (nextF->properties().isScatterPlot()) {
+    double nextX = nextT;
+    nextT = -1;
+    double previousX = -INFINITY;
+    for (Point p : nextF->iterateScatterPlot(context)) {
+      Coordinate2D<double> xy =
+          p.approximate2D<float>(context, complexFormat, angleUnit);
+      if (xy.x() >= nextX) {
+        if (xy.x() - nextX < nextX - previousX) {
+          ++nextT;
+        }
+        break;
+      }
+      ++nextT;
+      previousX = xy.x();
+    }
+  }
+
+  moveCursorVerticallyToPosition(nextFunction, nextSubCurve, nextT);
+  return true;
+}
+
+void GraphController::jumpToLeftRightCurve(double t,
+                                           OMG::HorizontalDirection direction,
+                                           int functionsCount,
+                                           Ion::Storage::Record record) {
   if (functionsCount == 1) {
     return;
   }
@@ -333,11 +508,12 @@ void GraphController::jumpToLeftRightCurve(double t, int direction, int function
   double nextT = 0.0;
   int nextSubCurve = 0;
   for (int i = 0; i < functionsCount; i++) {
-    Ion::Storage::Record currentRecord = functionStore()->activeRecordAtIndex(i);
+    Ion::Storage::Record currentRecord = recordAtCurveIndex(i);
     if (currentRecord == record) {
       continue;
     }
-    ExpiringPointer<ContinuousFunction> f = functionStore()->modelForRecord(currentRecord);
+    ExpiringPointer<ContinuousFunction> f =
+        functionStore()->modelForRecord(currentRecord);
     assert(f->properties().isCartesian());
     /* Select the closest horizontal curve, then the closest vertically, then
      * the lowest curve index. */
@@ -345,24 +521,27 @@ void GraphController::jumpToLeftRightCurve(double t, int direction, int function
     double currentTMax = f->tMax();
     assert(!std::isnan(currentTMin));
     assert(!std::isnan(currentTMax));
-    if ((direction > 0 && currentTMax > t)
-        ||(direction < 0 && currentTMin < t))
-    {
-      double currentXDelta = direction > 0 ?
-        (t >= currentTMin ? 0.0 : currentTMin - t) :
-        (t <= currentTMax ? 0.0 : t - currentTMax);
+    if ((direction.isRight() && currentTMax > t) ||
+        (direction.isLeft() && currentTMin < t)) {
+      double currentXDelta = direction.isRight()
+                                 ? (t >= currentTMin ? 0.0 : currentTMin - t)
+                                 : (t <= currentTMax ? 0.0 : t - currentTMax);
       assert(currentXDelta >= 0.0);
       if (currentXDelta <= xDelta) {
         double potentialNextTMin = f->tMin();
         double potentialNextTMax = f->tMax();
-        double potentialNextT = std::max(potentialNextTMin, std::min(potentialNextTMax, t));
+        double potentialNextT =
+            std::max(potentialNextTMin, std::min(potentialNextTMax, t));
         // If a function has two curves
-        for (int subCurveIndex = 0; subCurveIndex < f->numberOfSubCurves(); subCurveIndex++) {
-          Coordinate2D<double> xy = f->evaluateXYAtParameter(potentialNextT, App::app()->localContext(), subCurveIndex);
-          if (currentXDelta < xDelta || std::abs(xy.x2() - m_cursor->y()) < std::abs(nextY - m_cursor->y())) {
+        for (int subCurveIndex = 0; subCurveIndex < f->numberOfSubCurves();
+             subCurveIndex++) {
+          Coordinate2D<double> xy = f->evaluateXYAtParameter(
+              potentialNextT, App::app()->localContext(), subCurveIndex);
+          if (currentXDelta < xDelta || std::abs(xy.y() - m_cursor->y()) <
+                                            std::abs(nextY - m_cursor->y())) {
             nextCurveIndex = i;
             xDelta = currentXDelta;
-            nextY = xy.x2();
+            nextY = xy.y();
             nextT = potentialNextT;
             nextSubCurve = subCurveIndex;
           }
@@ -375,45 +554,68 @@ void GraphController::jumpToLeftRightCurve(double t, int direction, int function
   }
   m_cursor->moveTo(nextT, nextT, nextY);
   m_selectedSubCurveIndex = nextSubCurve;
-  selectFunctionWithCursor(nextCurveIndex, true);
+  selectCurveAtIndex(nextCurveIndex, true);
   return;
 }
 
 void GraphController::moveCursorAndCenterIfNeeded(double t) {
   FunctionGraphController::moveCursorAndCenterIfNeeded(t);
-  if (snapToInterestAndUpdateCursor(m_cursor, std::nextafter(m_cursor->t(), -static_cast<double>(INFINITY)), std::nextafter(m_cursor->t(), static_cast<double>(INFINITY)), m_selectedSubCurveIndex)) {
+  if (snapToInterestAndUpdateCursor(
+          m_cursor,
+          std::nextafter(m_cursor->t(), -static_cast<double>(INFINITY)),
+          std::nextafter(m_cursor->t(), static_cast<double>(INFINITY)),
+          m_selectedSubCurveIndex)) {
     reloadBannerView();
   }
 }
 
-void GraphController::reloadBannerViewForCursorOnFunction(CurveViewCursor * cursor, Ion::Storage::Record record, FunctionStore * functionStore, Poincare::Context * context, bool cappedNumberOfSignificantDigits) {
-  ExpiringPointer<ContinuousFunction> function = App::app()->functionStore()->modelForRecord(record);
-  PointsOfInterestCache * pointsOfInterest = pointsOfInterestForRecord(record);
+void GraphController::reloadBannerViewForCursorOnFunction(
+    CurveViewCursor *cursor, Ion::Storage::Record record,
+    FunctionStore *functionStore, Poincare::Context *context,
+    bool cappedNumberOfSignificantDigits) {
+  ExpiringPointer<ContinuousFunction> function =
+      App::app()->functionStore()->modelForRecord(record);
+  PointsOfInterestCache *pointsOfInterest = pointsOfInterestForRecord(record);
   bannerView()->emptyInterestMessages(&m_cursorView);
   /* The interests are sorted from most important to lowest, in case there is
    * not enough space on the banner to display all of them. */
-  if (pointsOfInterest->hasDisplayableInterestAtCoordinates(cursor->x(), cursor->y(), Solver<double>::Interest::LocalMinimum)) {
+  if (pointsOfInterest->hasDisplayableInterestAtCoordinates(
+          cursor->x(), cursor->y(), Solver<double>::Interest::LocalMinimum)) {
     assert(!function->isAlongY());
     bannerView()->addInterestMessage(I18n::Message::Minimum, &m_cursorView);
   }
-  if (pointsOfInterest->hasDisplayableInterestAtCoordinates(cursor->x(), cursor->y(), Solver<double>::Interest::LocalMaximum)) {
+  if (pointsOfInterest->hasDisplayableInterestAtCoordinates(
+          cursor->x(), cursor->y(), Solver<double>::Interest::LocalMaximum)) {
     assert(!function->isAlongY());
     bannerView()->addInterestMessage(I18n::Message::Maximum, &m_cursorView);
   }
-  if (pointsOfInterest->hasDisplayableInterestAtCoordinates(cursor->x(), cursor->y(), Solver<double>::Interest::Intersection)) {
-    bannerView()->addInterestMessage(I18n::Message::Intersection, &m_cursorView);
+  if (pointsOfInterest->hasDisplayableInterestAtCoordinates(
+          cursor->x(), cursor->y(), Solver<double>::Interest::Intersection)) {
+    bannerView()->addInterestMessage(I18n::Message::Intersection,
+                                     &m_cursorView);
   }
-  if (pointsOfInterest->hasDisplayableInterestAtCoordinates(cursor->x(), cursor->y(), Solver<double>::Interest::Root)) {
-    bannerView()->addInterestMessage(function->isAlongY() ? I18n::Message::LineYInterceptDescription : I18n::Message::Zero, &m_cursorView);
+  if (pointsOfInterest->hasDisplayableInterestAtCoordinates(
+          cursor->x(), cursor->y(), Solver<double>::Interest::Root)) {
+    bannerView()->addInterestMessage(
+        function->isAlongY() ? I18n::Message::LineYInterceptDescription
+                             : I18n::Message::Zero,
+        &m_cursorView);
   }
-  if (pointsOfInterest->hasDisplayableInterestAtCoordinates(cursor->x(), cursor->y(), Solver<double>::Interest::YIntercept)) {
-    bannerView()->addInterestMessage(function->isAlongY() ? I18n::Message::Zero : I18n::Message::LineYInterceptDescription, &m_cursorView);
+  if (pointsOfInterest->hasDisplayableInterestAtCoordinates(
+          cursor->x(), cursor->y(), Solver<double>::Interest::YIntercept)) {
+    bannerView()->addInterestMessage(
+        function->isAlongY() ? I18n::Message::Zero
+                             : I18n::Message::LineYInterceptDescription,
+        &m_cursorView);
   }
 
   /* Cap number of significant digits for point of interest to be consistent
    * with CalculationGraphController */
-  cappedNumberOfSignificantDigits = cappedNumberOfSignificantDigits || bannerView()->numberOfInterestMessages() > 0;
-  FunctionGraphController::reloadBannerViewForCursorOnFunction(cursor, record, functionStore, context, cappedNumberOfSignificantDigits);
+  cappedNumberOfSignificantDigits =
+      cappedNumberOfSignificantDigits ||
+      bannerView()->numberOfInterestMessages() > 0;
+  FunctionGraphController::reloadBannerViewForCursorOnFunction(
+      cursor, record, functionStore, context, cappedNumberOfSignificantDigits);
 }
 
-}
+}  // namespace Graph

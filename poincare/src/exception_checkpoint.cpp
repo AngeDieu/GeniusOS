@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <poincare/exception_checkpoint.h>
 
 namespace Poincare {
@@ -6,17 +7,11 @@ namespace Poincare {
 
 bool sInterrupted = false;
 
-bool ExceptionCheckpoint::HasBeenInterrupted() {
-  return sInterrupted;
-}
+bool ExceptionCheckpoint::HasBeenInterrupted() { return sInterrupted; }
 
-void ExceptionCheckpoint::ClearInterruption() {
-  sInterrupted = false;
-}
+void ExceptionCheckpoint::ClearInterruption() { sInterrupted = false; }
 
-void ExceptionCheckpoint::Raise() {
-  sInterrupted = true;
-}
+void ExceptionCheckpoint::Raise() { sInterrupted = true; }
 
 #else
 
@@ -41,4 +36,4 @@ void ExceptionCheckpoint::rollbackException() {
   longjmp(m_jumpBuffer, 1);
 }
 
-}
+}  // namespace Poincare

@@ -3,21 +3,21 @@
 
 namespace Escher {
 
-template <int N>
-KDCoordinate MemoizedTableSize1DManager<N>::computeSizeAtIndex(int i) {
-  if (i < m_memoizedIndexOffset || i >= m_memoizedIndexOffset + k_memoizedLinesCount) {
+KDCoordinate MemoizedTableSize1DManager::computeSizeAtIndex(int i) {
+  assert(i >= 0);
+  if (!sizeAtIndexIsMemoized(i)) {
     // Update memoization index.
     setMemoizationIndex(i);
   }
-  if (i >= m_memoizedIndexOffset && i < m_memoizedIndexOffset + k_memoizedLinesCount) {
+  if (sizeAtIndexIsMemoized(i)) {
     // Value might be memoized
-    KDCoordinate memoizedSize = m_memoizedSizes[getMemoizedIndex(i)];
+    KDCoordinate memoizedSize = memoizedSizes()[getMemoizedIndex(i)];
     if (memoizedSize == k_undefinedSize) {
       // Compute and memoize value
       lockMemoization(true);
       memoizedSize = nonMemoizedSizeAtIndex(i);
       lockMemoization(false);
-      m_memoizedSizes[getMemoizedIndex(i)] = memoizedSize;
+      memoizedSizes()[getMemoizedIndex(i)] = memoizedSize;
     }
     return memoizedSize;
   }
@@ -28,8 +28,8 @@ KDCoordinate MemoizedTableSize1DManager<N>::computeSizeAtIndex(int i) {
   return k_undefinedSize;
 }
 
-template <int N>
-KDCoordinate MemoizedTableSize1DManager<N>::computeCumulatedSizeBeforeIndex(int i, KDCoordinate defaultSize) {
+KDCoordinate MemoizedTableSize1DManager::computeCumulatedSizeBeforeIndex(
+    int i, KDCoordinate defaultSize) {
   int totalNumberOfLines = numberOfLines();
   if (i == totalNumberOfLines && m_memoizedTotalSize != k_undefinedSize) {
     // Total size is memoized to save time and preserve memoization.
@@ -43,7 +43,9 @@ KDCoordinate MemoizedTableSize1DManager<N>::computeCumulatedSizeBeforeIndex(int 
   if (m_memoizedCumulatedSizeOffset == k_undefinedSize) {
     // Memoized cumultaedSize is required and must be recomputed
     lockMemoization(true);
-    m_memoizedCumulatedSizeOffset = nonMemoizedCumulatedSizeBeforeIndex(m_memoizedIndexOffset);
+    m_memoizedCumulatedSizeOffset =
+        nonMemoizedCumulatedSizeBeforeIndex(m_memoizedIndexOffset);
+    assert(m_memoizedCumulatedSizeOffset >= 0);
     lockMemoization(false);
   }
   // Search cumulatedSize around m_memoizedCumulatedSizeOffset
@@ -59,6 +61,7 @@ KDCoordinate MemoizedTableSize1DManager<N>::computeCumulatedSizeBeforeIndex(int 
     if (i == totalNumberOfLines) {
       // Update memoized total size
       m_memoizedTotalSize = cumulatedSize;
+      assert(m_memoizedTotalSize >= 0);
     }
   } else {
     for (int k = m_memoizedIndexOffset - 1; k >= 0; k--) {
@@ -72,22 +75,29 @@ KDCoordinate MemoizedTableSize1DManager<N>::computeCumulatedSizeBeforeIndex(int 
   return cumulatedSize;
 }
 
-template <int N>
-int MemoizedTableSize1DManager<N>::computeIndexAfterCumulatedSize(KDCoordinate offset, KDCoordinate defaultSize) {
+int MemoizedTableSize1DManager::computeIndexAfterCumulatedSize(
+    KDCoordinate offset, KDCoordinate defaultSize) {
   if (offset < m_memoizedCumulatedSizeOffset / 2) {
     return k_undefinedSize;
   }
+  if (offset == m_lastCumulatedSize) {
+    return m_lastIndexAfterCumulatedSize;
+  }
+  m_lastCumulatedSize = offset;
   /* Take advantage of m_memoizedCumulatedSizeOffset as offset is closer to
    * m_memoizedCumulatedSizeOffset than 0. */
   if (m_memoizedCumulatedSizeOffset == k_undefinedSize) {
     // Memoized cumulatedSize is required and must be recomputed
     lockMemoization(true);
-    m_memoizedCumulatedSizeOffset = nonMemoizedCumulatedSizeBeforeIndex(m_memoizedIndexOffset);
+    m_memoizedCumulatedSizeOffset =
+        nonMemoizedCumulatedSizeBeforeIndex(m_memoizedIndexOffset);
+    assert(m_memoizedCumulatedSizeOffset >= 0);
     lockMemoization(false);
   }
   // Search index around m_memoizedIndexOffset
   KDCoordinate cumulatedSize = m_memoizedCumulatedSizeOffset;
   if (offset == cumulatedSize) {
+    m_lastIndexAfterCumulatedSize = m_memoizedIndexOffset;
     return m_memoizedIndexOffset;
   }
   if (offset > m_memoizedCumulatedSizeOffset) {
@@ -96,24 +106,27 @@ int MemoizedTableSize1DManager<N>::computeIndexAfterCumulatedSize(KDCoordinate o
       // From here on, memoization might be updated.
       cumulatedSize += sizeAtIndex(i);
       if (offset < cumulatedSize) {
+        m_lastIndexAfterCumulatedSize = i;
         return i;
       }
     }
+    m_lastIndexAfterCumulatedSize = nLines;
     return nLines;
   }
   for (int i = m_memoizedIndexOffset - 1; i >= 0; i--) {
     // From here on, memoization might be updated.
     cumulatedSize -= sizeAtIndex(i);
     if (offset >= cumulatedSize) {
+      m_lastIndexAfterCumulatedSize = i;
       return i;
     }
   }
   assert(cumulatedSize == 0);
+  m_lastIndexAfterCumulatedSize = 0;
   return 0;
 }
 
-template <int N>
-void MemoizedTableSize1DManager<N>::lockMemoization(bool lockUp) const {
+void MemoizedTableSize1DManager::lockMemoization(bool lockUp) const {
   /* This lock system is used to ensure the memoization state
    * (m_memoizedIndexOffset) is preserved when performing an action that could
    * potentially alter it. */
@@ -121,8 +134,7 @@ void MemoizedTableSize1DManager<N>::lockMemoization(bool lockUp) const {
   assert(m_memoizationLockedLevel >= 0);
 }
 
-template <int N>
-void MemoizedTableSize1DManager<N>::resetMemoization(bool force) {
+void MemoizedTableSize1DManager::resetMemoization(bool force) {
   if (!force && m_memoizationLockedLevel > 0) {
     return;
   }
@@ -134,66 +146,78 @@ void MemoizedTableSize1DManager<N>::resetMemoization(bool force) {
   // Reset memoized index and corresponding cumulated size.
   m_memoizedIndexOffset = 0;
   m_memoizedCumulatedSizeOffset = 0;
+  m_lastCumulatedSize = 0;
+  m_lastIndexAfterCumulatedSize = 0;
   if (force) {
     // Do not preserve total size
     m_memoizedTotalSize = k_undefinedSize;
   }
   // Reset cell sizes
-  for (int i = 0; i < k_memoizedLinesCount; i++) {
-    m_memoizedSizes[i] = k_undefinedSize;
+  for (int i = 0; i < memoizedLinesCount(); i++) {
+    memoizedSizes()[i] = k_undefinedSize;
   }
 }
 
-template <int N>
-void MemoizedTableSize1DManager<N>::updateMemoizationForIndex(int index, KDCoordinate previousSize, KDCoordinate newSize) {
+void MemoizedTableSize1DManager::updateMemoizationForIndex(
+    int index, KDCoordinate previousSize, KDCoordinate newSize) {
   if (newSize == k_undefinedSize) {
     newSize = nonMemoizedSizeAtIndex(index);
   }
   m_memoizedTotalSize = m_memoizedTotalSize - previousSize + newSize;
-  if (index >= m_memoizedIndexOffset + k_memoizedLinesCount) {
-    return;
-  }
+  assert(m_memoizedTotalSize >= 0);
   if (index < m_memoizedIndexOffset) {
-    m_memoizedCumulatedSizeOffset = m_memoizedCumulatedSizeOffset - previousSize + newSize;
+    m_memoizedCumulatedSizeOffset =
+        m_memoizedCumulatedSizeOffset - previousSize + newSize;
+    assert(m_memoizedCumulatedSizeOffset >= 0);
+  }
+  m_lastCumulatedSize = 0;
+  m_lastIndexAfterCumulatedSize = 0;
+  if (!sizeAtIndexIsMemoized(index)) {
     return;
   }
-  m_memoizedSizes[getMemoizedIndex(index)] = newSize;
+  memoizedSizes()[getMemoizedIndex(index)] = newSize;
 }
 
-template <int N>
-void MemoizedTableSize1DManager<N>::deleteIndexFromMemoization(int index, KDCoordinate previousSize) {
+#if 0
+void MemoizedTableSize1DManager::deleteIndexFromMemoization(
+    int index, KDCoordinate previousSize) {
   m_memoizedTotalSize -= previousSize;
-  if (index >= m_memoizedIndexOffset + k_memoizedLinesCount) {
+  if (index >= m_memoizedIndexOffset + memoizedLinesCount()) {
     return;
   }
   if (index <= m_memoizedIndexOffset) {
     m_memoizedCumulatedSizeOffset -= previousSize;
     return;
   }
-  for (int i = index; i < m_memoizedIndexOffset + k_memoizedLinesCount - 1; i++) {
-    m_memoizedSizes[getMemoizedIndex(i)] = m_memoizedSizes[getMemoizedIndex(i + 1)];
+  for (int i = index; i < m_memoizedIndexOffset + memoizedLinesCount() - 1;
+       i++) {
+    memoizedSizes()[getMemoizedIndex(i)] =
+        memoizedSizes()[getMemoizedIndex(i + 1)];
   }
-  m_memoizedSizes[getMemoizedIndex(m_memoizedIndexOffset + k_memoizedLinesCount - 1)] = k_undefinedSize;
+  memoizedSizes()[getMemoizedIndex(m_memoizedIndexOffset +
+                                   memoizedLinesCount() - 1)] = k_undefinedSize;
 }
+#endif
 
-template <int N>
-int MemoizedTableSize1DManager<N>::getMemoizedIndex(int index) const {
+int MemoizedTableSize1DManager::getMemoizedIndex(int index) const {
   /* Values are memoized in a circular way : m_memoizedSize[i] only
    * stores values for index such that index%k_memoizedCellsCount == i
    * Eg : 0 1 2 3 4 5 6 shifts to 7 1 2 3 4 5 6 which shifts to 7 8 2 3 4 5 6
    * Shifting the memoization is then more optimized. */
-  assert(index >= m_memoizedIndexOffset && index < m_memoizedIndexOffset + k_memoizedLinesCount);
-  int circularOffset = m_memoizedIndexOffset % k_memoizedLinesCount;
-  return (circularOffset + index - m_memoizedIndexOffset) % k_memoizedLinesCount;
+  assert(sizeAtIndexIsMemoized(index));
+  int circularOffset = m_memoizedIndexOffset % memoizedLinesCount();
+  return (circularOffset + index - m_memoizedIndexOffset) %
+         memoizedLinesCount();
 }
 
-template <int N>
-void MemoizedTableSize1DManager<N>::setMemoizationIndex(int index) {
+void MemoizedTableSize1DManager::setMemoizationIndex(int index) {
+  assert(index >= 0);
   if (m_memoizationLockedLevel > 0 || index == m_memoizedIndexOffset) {
     return;
   }
 
-  if (index < m_memoizedIndexOffset / 2 && m_memoizedIndexOffset - index > k_memoizedLinesCount) {
+  if (index < m_memoizedIndexOffset / 2 &&
+      m_memoizedIndexOffset - index > memoizedLinesCount()) {
     // New memoization index is too far to be updated by shifting.
     resetMemoization(false);
     m_memoizedIndexOffset = index;
@@ -203,14 +227,15 @@ void MemoizedTableSize1DManager<N>::setMemoizationIndex(int index) {
 
   bool lowerIndex = m_memoizedIndexOffset > index;
   // If cell is above new memoization index profit from k_memoizedCellsCount
-  int indexDelta = lowerIndex ? m_memoizedIndexOffset - index : index - m_memoizedIndexOffset - k_memoizedLinesCount + 1;
+  int indexDelta =
+      lowerIndex ? m_memoizedIndexOffset - index
+                 : index - m_memoizedIndexOffset - memoizedLinesCount() + 1;
   for (int i = 0; i < indexDelta; ++i) {
     shiftMemoization(lowerIndex);
   }
 }
 
-template <int N>
-void MemoizedTableSize1DManager<N>::shiftMemoization(bool lowerIndex) {
+void MemoizedTableSize1DManager::shiftMemoization(bool lowerIndex) {
   // Only a limited number of cells' size are memoized.
   if (m_memoizationLockedLevel > 0) {
     // Memoization is locked, do not shift
@@ -225,78 +250,28 @@ void MemoizedTableSize1DManager<N>::shiftMemoization(bool lowerIndex) {
     KDCoordinate size = nonMemoizedSizeAtIndex(m_memoizedIndexOffset);
     lockMemoization(false);
     // Compute and set memoized index size
-    m_memoizedSizes[getMemoizedIndex(m_memoizedIndexOffset)] = size;
+    memoizedSizes()[getMemoizedIndex(m_memoizedIndexOffset)] = size;
     // Update cumulated size
     if (m_memoizedCumulatedSizeOffset != k_undefinedSize) {
       m_memoizedCumulatedSizeOffset -= size;
-      assert(m_memoizedCumulatedSizeOffset != k_undefinedSize);
+      assert(m_memoizedCumulatedSizeOffset >= 0);
     }
   } else {
-    if (m_memoizedIndexOffset > numberOfLines() - k_memoizedLinesCount) {
+    if (m_memoizedIndexOffset > numberOfLines() - memoizedLinesCount()) {
       // No need to shift further.
       return;
     }
     if (m_memoizedCumulatedSizeOffset != k_undefinedSize) {
       lockMemoization(true);
-      m_memoizedCumulatedSizeOffset += sizeAtIndex(m_memoizedIndexOffset);
+      m_memoizedCumulatedSizeOffset +=
+          nonMemoizedSizeAtIndex(m_memoizedIndexOffset);
+      assert(m_memoizedCumulatedSizeOffset >= 0);
       lockMemoization(false);
-      assert(m_memoizedCumulatedSizeOffset != k_undefinedSize);
     }
     // Unknown value is the previous one
-    m_memoizedSizes[getMemoizedIndex(m_memoizedIndexOffset)] = k_undefinedSize;
+    memoizedSizes()[getMemoizedIndex(m_memoizedIndexOffset)] = k_undefinedSize;
     m_memoizedIndexOffset++;
   }
 }
 
-template <int N>
-int MemoizedColumnWidthManager<N>::numberOfLines() const {
-  return this->m_dataSource->numberOfColumns();
-}
-
-template <int N>
-KDCoordinate MemoizedColumnWidthManager<N>::sizeAtIndex(int i) const {
-  return this->m_dataSource->columnWidth(i);
-}
-
-template <int N>
-KDCoordinate MemoizedColumnWidthManager<N>::nonMemoizedSizeAtIndex(int i) const {
-  return this->m_dataSource->nonMemoizedColumnWidth(i);
-}
-
-template <int N>
-KDCoordinate MemoizedColumnWidthManager<N>::nonMemoizedCumulatedSizeBeforeIndex(int i) const {
-  return this->m_dataSource->nonMemoizedCumulatedWidthBeforeIndex(i);
-}
-
-template <int N>
-int MemoizedRowHeightManager<N>::numberOfLines() const {
-  return this->m_dataSource->numberOfRows();
-}
-
-template <int N>
-KDCoordinate MemoizedRowHeightManager<N>::sizeAtIndex(int i) const {
-  return this->m_dataSource->rowHeight(i);
-}
-
-template <int N>
-KDCoordinate MemoizedRowHeightManager<N>::nonMemoizedSizeAtIndex(int i) const {
-  return this->m_dataSource->nonMemoizedRowHeight(i);
-}
-
-template <int N>
-KDCoordinate MemoizedRowHeightManager<N>::nonMemoizedCumulatedSizeBeforeIndex(int i) const {
-  return this->m_dataSource->nonMemoizedCumulatedHeightBeforeIndex(i);
-}
-
-template class MemoizedTableSize1DManager<1>;
-template class MemoizedTableSize1DManager<7>;
-template class MemoizedTableSize1DManager<10>;
-
-template class MemoizedColumnWidthManager<7>;
-
-template class MemoizedRowHeightManager<1>;
-template class MemoizedRowHeightManager<7>;
-template class MemoizedRowHeightManager<10>;
-
-
-}
+}  // namespace Escher

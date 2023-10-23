@@ -1,10 +1,10 @@
-#include <poincare/store.h>
 #include <assert.h>
 #include <ion/circuit_breaker.h>
 #include <math.h>
 #include <poincare/circuit_breaker_checkpoint.h>
 #include <poincare/complex.h>
 #include <poincare/context.h>
+#include <poincare/store.h>
 #include <poincare/symbol.h>
 #include <poincare/undefined.h>
 #include <stdlib.h>
@@ -15,8 +15,16 @@ Expression StoreNode::shallowReduce(const ReductionContext& reductionContext) {
   return Store(this).shallowReduce(reductionContext);
 }
 
-template<typename T>
-Evaluation<T> StoreNode::templatedApproximate(const ApproximationContext& approximationContext) const {
+Expression StoreNode::deepReplaceReplaceableSymbols(
+    Context* context, TrinaryBoolean* isCircular, int parameteredAncestorsCount,
+    SymbolicComputation symbolicComputation) {
+  return Store(this).deepReplaceReplaceableSymbols(
+      context, isCircular, parameteredAncestorsCount, symbolicComputation);
+}
+
+template <typename T>
+Evaluation<T> StoreNode::templatedApproximate(
+    const ApproximationContext& approximationContext) const {
   /* We return a dummy value if the store is interrupted. Since the app waits
    * for a Store node to do the actual store, there is nothing better to do. */
   return Complex<T>::Undefined();
@@ -36,9 +44,21 @@ Expression Store::shallowReduce(ReductionContext reductionContext) {
   return *this;
 }
 
-bool Store::storeValueForSymbol(Context * context) const {
+bool Store::storeValueForSymbol(Context* context) const {
   assert(!value().isUninitialized());
   return context->setExpressionForSymbolAbstract(value(), symbol());
 }
 
+Expression Store::deepReplaceReplaceableSymbols(
+    Context* context, TrinaryBoolean* isCircular, int parameteredAncestorsCount,
+    SymbolicComputation symbolicComputation) {
+  // Only the value of a symbol should have no free variables
+  if (symbol().type() == ExpressionNode::Type::Symbol) {
+    Expression value = childAtIndex(0).deepReplaceReplaceableSymbols(
+        context, isCircular, parameteredAncestorsCount, symbolicComputation);
+    replaceChildAtIndexInPlace(0, value);
+  }
+  return *this;
 }
+
+}  // namespace Poincare

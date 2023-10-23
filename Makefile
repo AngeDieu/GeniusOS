@@ -54,6 +54,16 @@ help:
 	@echo "  make PLATFORM=simulator TARGET=macos"
 	@echo "  make PLATFORM=simulator TARGET=web"
 	@echo "  make PLATFORM=simulator TARGET=windows"
+	@echo ""
+	@echo "Format modified and untracked .h and .cpp files with clang-format"
+	@echo "  make format"
+	@echo "Format files modified since <ref>"
+	@echo "  make format BASE=<ref>"
+	@echo "Format given files"
+	@echo "  make format FILES='file1 file2'"
+	@echo ""
+	@echo "Visualize the coverage of the unary tests or the screenshot tests"
+	@echo "  make PLATFORM=simulator ARCH=arm64 coverage"
 
 # Since we're building out-of-tree, we need to make sure the output directories
 # are created, otherwise the receipes will fail (e.g. gcc will fail to create
@@ -102,13 +112,13 @@ include build/targets.mak
 # after defaults.mak was applied.
 include build/debug_flags.mak
 
-all_src = $(apps_src) $(escher_src) $(ion_src) $(kandinsky_src) $(liba_src) $(libaxx_src) $(poincare_src) $(python_src) $(runner_src) $(ion_device_flasher_src) $(ion_device_bench_src) $(tests_src) $(omg_src)
+all_src = $(apps_src) $(escher_src) $(ion_src) $(kandinsky_src) $(liba_src) $(libaxx_src) $(poincare_src) $(python_src) $(runner_src) $(ion_device_flasher_src) $(ion_device_bench_src) $(ion_device_bootloader_src) $(ion_device_userland_src) $(tests_src) $(omg_src)
 
 # Ensure kandinsky fonts are generated first
 $(call object_for,$(all_src)): $(kandinsky_deps)
 
 # kernel_obj are added separately since they require variants resolution
-all_objs = $(call object_for,$(all_src)) $(kernel_obj)
+all_objs = $(call object_for,$(all_src) $(kernel_src))
 .SECONDARY: $(all_objs)
 
 # Load source-based dependencies
@@ -122,6 +132,9 @@ default: $(firstword $(HANDY_TARGETS)).$(firstword $(HANDY_TARGETS_EXTENSIONS))
 
 # Load standard build rules
 include build/rules.mk
+
+# Load clang-format targets
+include build/format.mak
 
 .PHONY: clean
 clean:

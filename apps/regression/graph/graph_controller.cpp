@@ -1,15 +1,18 @@
-#include "../app.h"
 #include "graph_controller.h"
+
 #include <apps/apps_container_helper.h>
-#include <apps/exam_mode_configuration.h>
 #include <apps/shared/function_banner_delegate.h>
 #include <apps/shared/poincare_helpers.h>
+#include <poincare/helpers.h>
+#include <poincare/layout_helper.h>
 #include <poincare/preferences.h>
 #include <poincare/print.h>
-#include <poincare/layout_helper.h>
-#include <poincare/helpers.h>
-#include <cmath>
+#include <poincare/serialization_helper.h>
+
 #include <algorithm>
+#include <cmath>
+
+#include "../app.h"
 
 using namespace Poincare;
 using namespace Shared;
@@ -17,23 +20,25 @@ using namespace Escher;
 
 namespace Regression {
 
-GraphController::GraphController(Responder * parentResponder, Escher::InputEventHandlerDelegate * inputEventHandlerDelegate, ButtonRowController * header, Shared::InteractiveCurveViewRange * range, Store * store, CurveViewCursor * cursor, int * selectedDotIndex, int * selectedSeriesIndex) :
-  InteractiveCurveViewController(parentResponder, inputEventHandlerDelegate, header, range, &m_view, cursor),
-  m_bannerView(this, inputEventHandlerDelegate, this),
-  m_view(range, store, m_cursor, &m_bannerView, &m_cursorView),
-  m_store(store),
-  m_graphOptionsController(this, inputEventHandlerDelegate, range, m_store, m_cursor, this),
-  m_seriesSelectionController(this),
-  m_calculusButton(this, I18n::Message::Regression, calculusButtonInvocation(), KDFont::Size::Small),
-  m_selectedDotIndex(selectedDotIndex),
-  m_selectedSeriesIndex(selectedSeriesIndex),
-  m_selectedModelType((Model::Type)-1)
-{
-  range->setDelegate(this);
-}
-
-bool GraphController::isEmpty() const {
-  return !m_store->hasValidSeries();
+GraphController::GraphController(
+    Responder *parentResponder,
+    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
+    ButtonRowController *header,
+    Shared::InteractiveCurveViewRange *interactiveRange,
+    CurveViewCursor *cursor, int *selectedDotIndex, int *selectedCurveIndex,
+    Store *store)
+    : InteractiveCurveViewController(
+          parentResponder, inputEventHandlerDelegate, header, interactiveRange,
+          &m_view, cursor, I18n::Message::Regression, selectedCurveIndex),
+      m_bannerView(this, inputEventHandlerDelegate, this),
+      m_view(interactiveRange, store, m_cursor, &m_bannerView, &m_cursorView),
+      m_store(store),
+      m_graphOptionsController(this, inputEventHandlerDelegate,
+                               interactiveRange, m_store, m_cursor, this),
+      m_curveSelectionController(this),
+      m_selectedDotIndex(selectedDotIndex),
+      m_selectedModelType((Model::Type)-1) {
+  interactiveRange->setDelegate(this);
 }
 
 I18n::Message GraphController::emptyMessage() {
@@ -45,8 +50,8 @@ void GraphController::viewWillAppear() {
   /* At this point, some series might have been removed from the model. We need
    * to reinitialize the selected series index if the current selection is
    * either null (right after construction) or refering a removed series. */
-  if (*m_selectedSeriesIndex < 0 || !m_store->seriesIsActive(*m_selectedSeriesIndex)) {
-    *m_selectedSeriesIndex = m_store->indexOfKthValidSeries(0);
+  if (*m_selectedCurveIndex < 0 || *m_selectedCurveIndex >= numberOfCurves()) {
+    *m_selectedCurveIndex = 0;
     m_selectedModelType = (Model::Type)-1;
   }
 
@@ -55,7 +60,8 @@ void GraphController::viewWillAppear() {
    *  2) when the user selects another Model::Type for a series.
    *  3) selected series has been removed
    * where we decide to place the cursor at a default position. */
-  Model::Type newSelectedModelType = m_store->seriesRegressionType(*m_selectedSeriesIndex);
+  Model::Type newSelectedModelType =
+      regressionTypeOfCurve(*m_selectedCurveIndex);
   if (m_selectedModelType != newSelectedModelType) {
     m_selectedModelType = newSelectedModelType;
     initCursorParameters();
@@ -84,56 +90,76 @@ void GraphController::setAbscissaInputAsFirstResponder() {
   Container::activeApp()->setFirstResponder(m_bannerView.abscissaValue());
 }
 
-Poincare::Context * GraphController::globalContext() const {
+Poincare::Context *GraphController::globalContext() const {
   return AppsContainerHelper::sharedAppsContainerGlobalContext();
 }
 
 // Private
 
-KDCoordinate GraphController::SeriesSelectionController::nonMemoizedRowHeight(int j) {
-  if (j < 0 || j >= numberOfRows()) {
+KDCoordinate GraphController::CurveSelectionController::nonMemoizedRowHeight(
+    int row) {
+  if (row < 0 || row >= numberOfRows()) {
     return 0;
   }
-  return KDFont::GlyphHeight(KDFont::Size::Large) + Metric::CellTopMargin + Metric::CellBottomMargin;
+  return KDFont::GlyphHeight(KDFont::Size::Large) + Metric::CellTopMargin +
+         Metric::CellBottomMargin;
 }
 
-void GraphController::SeriesSelectionController::willDisplayCellForIndex(HighlightCell * cell, int index) {
-  int series = graphController()->m_store->indexOfKthValidSeries(index);
-  const char * name = Store::SeriesTitle(series);
-  static_cast<CurveSelectionCellWithChevron *>(cell)->setColor(DoublePairStore::colorOfSeriesAtIndex(series));
-  static_cast<CurveSelectionCellWithChevron *>(cell)->setLayout(LayoutHelper::String(name));
+void GraphController::CurveSelectionController::fillCellForRow(
+    HighlightCell *cell, int row) {
+  int series = graphController()->seriesIndexFromCurveIndex(row);
+  const char *name = Store::SeriesTitle(series);
+  static_cast<CurveSelectionCellWithChevron *>(cell)->setColor(
+      DoublePairStore::colorOfSeriesAtIndex(series));
+  static_cast<CurveSelectionCellWithChevron *>(cell)->label()->setLayout(
+      LayoutHelper::String(name));
 }
 
-bool GraphController::buildRegressionExpression(char * buffer, size_t bufferSize, Model::Type modelType, int significantDigits, Poincare::Preferences::PrintFloatMode displayMode) const {
-  int length = Poincare::Print::SafeCustomPrintf(buffer, bufferSize, "%s=", GlobalPreferences::sharedGlobalPreferences()->yPredictedSymbol());
-  if (length >= static_cast<int>(bufferSize)) {
+bool GraphController::buildRegressionExpression(
+    char *buffer, size_t bufferSize, Model::Type modelType,
+    int significantDigits,
+    Poincare::Preferences::PrintFloatMode displayMode) const {
+  double *coefficients =
+      m_store->coefficientsForSeries(selectedSeriesIndex(), globalContext());
+  Layout l = m_store->regressionModel(modelType)->equationLayout(
+      coefficients,
+      GlobalPreferences::sharedGlobalPreferences->yPredictedSymbol(),
+      significantDigits, displayMode);
+  int length = l.serializeForParsing(buffer, bufferSize);
+  if (length >= static_cast<int>(bufferSize - 1) || length == 0) {
     return false;
   }
-  buffer += length;
-  bufferSize -= length;
-
-  double * coefficients = m_store->coefficientsForSeries(*m_selectedSeriesIndex, globalContext());
-  length = m_store->regressionModel(modelType)->buildEquationTemplate(buffer, bufferSize, coefficients, significantDigits, displayMode);
-  return length < static_cast<int>(bufferSize);
+  return SerializationHelper::
+             ReplaceSystemParenthesesAndBracesByUserParentheses(
+                 buffer, length) < static_cast<int>(bufferSize - 1);
 }
 
 // SimpleInteractiveCurveViewController
 
 void GraphController::reloadBannerView() {
-  const int significantDigits = Preferences::sharedPreferences()->numberOfSignificantDigits();
-  Poincare::Preferences::PrintFloatMode displayMode = Poincare::Preferences::sharedPreferences()->displayMode();
+  const int selectedSeries = selectedSeriesIndex();
+  const int significantDigits =
+      Preferences::sharedPreferences->numberOfSignificantDigits();
+  Poincare::Preferences::PrintFloatMode displayMode =
+      Poincare::Preferences::sharedPreferences->displayMode();
 
   // If any coefficient is NAN, display that data is not suitable
-  bool coefficientsAreDefined = m_store->coefficientsAreDefined(*m_selectedSeriesIndex, globalContext());
-  if (coefficientsAreDefined && *m_selectedDotIndex < 0 && selectedSeriesIsScatterPlot()) {
+  bool coefficientsAreDefined =
+      m_store->coefficientsAreDefined(selectedSeries, globalContext());
+  if (coefficientsAreDefined && *m_selectedDotIndex < 0 &&
+      curveIsScatterPlot(*m_selectedCurveIndex)) {
     // Regression model has been removed, reinitialize cursor
     initCursorParameters();
   }
-  bool displayMean = (*m_selectedDotIndex == m_store->numberOfPairsOfSeries(*m_selectedSeriesIndex));
+  bool displayMean =
+      (*m_selectedDotIndex == numberOfDotsOfCurve(*m_selectedCurveIndex));
   bool displayEquation = (*m_selectedDotIndex < 0);
-  char buffer[k_bannerViewTextBufferSize];
-  Model::Type modelType = m_store->seriesRegressionType(*m_selectedSeriesIndex);
-  if (displayEquation && coefficientsAreDefined && buildRegressionExpression(buffer, k_bannerViewTextBufferSize, modelType, significantDigits, displayMode)) {
+  char buffer[BannerView::BannerBufferTextView::MaxTextSize()];
+  Model::Type modelType = regressionTypeOfCurve(*m_selectedCurveIndex);
+  if (displayEquation && coefficientsAreDefined &&
+      buildRegressionExpression(buffer,
+                                BannerView::BannerBufferTextView::MaxTextSize(),
+                                modelType, significantDigits, displayMode)) {
     // Regression equation fits in the banner, display it
     m_bannerView.setDisplayParameters(true, false, false);
     m_bannerView.otherView()->setText(buffer);
@@ -141,10 +167,15 @@ void GraphController::reloadBannerView() {
     // Display MeanDot before x= and y=
     m_bannerView.setDisplayParameters(true, true, !coefficientsAreDefined);
     m_bannerView.otherView()->setText(I18n::translate(I18n::Message::MeanDot));
-  } else if (modelType == Model::Type::None && !ExamModeConfiguration::statsDiagnosticsAreForbidden()) {
+  } else if (!(Store::HasCoefficients(modelType) ||
+               Preferences::sharedPreferences->examMode()
+                   .forbidStatsDiagnostics())) {
     // Display correlation coefficient
     m_bannerView.setDisplayParameters(true, false, !coefficientsAreDefined);
-    Poincare::Print::CustomPrintf(buffer, k_bannerViewTextBufferSize, "r=%*.*ed", m_store->correlationCoefficient(*m_selectedSeriesIndex), displayMode, significantDigits);
+    Poincare::Print::CustomPrintf(
+        buffer, BannerView::BannerBufferTextView::MaxTextSize(), "r=%*.*ed",
+        m_store->correlationCoefficient(selectedSeries), displayMode,
+        significantDigits);
     m_bannerView.otherView()->setText(buffer);
   } else {
     // Nothing else to display
@@ -154,65 +185,71 @@ void GraphController::reloadBannerView() {
 
   /* Use "x=..." or "xmean=..." (\xCC\x85 represents the combining overline ' ̅')
    * if the mean dot is selected. Same with y. */
-  double x = displayMean ? m_store->meanOfColumn(*m_selectedSeriesIndex, 0) : m_cursor->x();
-  Poincare::Print::CustomPrintf(buffer, Shared::BannerView::k_maxLengthDisplayed - 2, "%*.*ed", x, displayMode, significantDigits); // -2 for "x="
+  double x =
+      displayMean ? m_store->meanOfColumn(selectedSeries, 0) : m_cursor->x();
+  Poincare::Print::CustomPrintf(
+      buffer, BannerView::BannerBufferTextView::MaxTextSize() - 3, "%*.*ed", x,
+      displayMode, significantDigits);  // -3 for "x\xCC\x85="
   m_bannerView.abscissaValue()->setText(buffer);
   m_bannerView.abscissaSymbol()->setText(displayMean ? "x\xCC\x85=" : "x=");
 
-  double y = displayMean ? m_store->meanOfColumn(*m_selectedSeriesIndex, 1) : m_cursor->y();
+  double y =
+      displayMean ? m_store->meanOfColumn(selectedSeries, 1) : m_cursor->y();
   Poincare::Print::CustomPrintf(
-    buffer, k_bannerViewTextBufferSize, "%s=%*.*ed",
-    (displayMean ? "y\xCC\x85" : (displayEquation ? GlobalPreferences::sharedGlobalPreferences()->yPredictedSymbol() : "y")),
-    y, displayMode, significantDigits);
+      buffer, BannerView::BannerBufferTextView::MaxTextSize(), "%s=%*.*ed",
+      (displayMean
+           ? "y\xCC\x85"
+           : (displayEquation ? GlobalPreferences::sharedGlobalPreferences
+                                    ->yPredictedSymbol()
+                              : "y")),
+      y, displayMode, significantDigits);
   m_bannerView.ordinateView()->setText(buffer);
 
   m_bannerView.reload();
 }
 
-bool GraphController::moveCursorHorizontally(int direction, int scrollSpeed) {
+bool GraphController::moveCursorHorizontally(OMG::HorizontalDirection direction,
+                                             int scrollSpeed) {
   double x;
   double y;
   if (*m_selectedDotIndex >= 0) {
-    int dotSelected = m_store->nextDot(*m_selectedSeriesIndex, direction, *m_selectedDotIndex, !selectedSeriesIsScatterPlot());
-    if (dotSelected >= 0 && dotSelected < m_store->numberOfPairsOfSeries(*m_selectedSeriesIndex)) {
-      x = m_store->get(*m_selectedSeriesIndex, 0, dotSelected);
-      y = m_store->get(*m_selectedSeriesIndex, 1, dotSelected);
-    } else if (dotSelected == m_store->numberOfPairsOfSeries(*m_selectedSeriesIndex)) {
-      assert(!selectedSeriesIsScatterPlot());
-      x = m_store->meanOfColumn(*m_selectedSeriesIndex, 0);
-      y = m_store->meanOfColumn(*m_selectedSeriesIndex, 1);
+    int dotSelected =
+        m_store->nextDot(selectedSeriesIndex(), direction, *m_selectedDotIndex,
+                         !curveIsScatterPlot(*m_selectedCurveIndex));
+    if (dotSelected >= 0) {
+      x = dotAbscissa(*m_selectedCurveIndex, dotSelected);
+      y = dotOrdinate(*m_selectedCurveIndex, dotSelected);
     } else {
       return false;
     }
     *m_selectedDotIndex = dotSelected;
   } else {
-    double step = direction * scrollSpeed * static_cast<double>(interactiveCurveViewRange()->xGridUnit())/static_cast<double>(k_numberOfCursorStepsInGradUnit);
+    double step =
+        (direction.isRight() ? 1 : -1) * scrollSpeed *
+        static_cast<double>(interactiveCurveViewRange()->xGridUnit()) /
+        static_cast<double>(k_numberOfCursorStepsInGradUnit);
     x = m_cursor->x() + step;
-    y = yValue(*m_selectedSeriesIndex, x, globalContext());
+    y = yValue(*m_selectedCurveIndex, x, globalContext());
   }
   m_cursor->moveTo(x, x, y);
   return true;
 }
 
-InteractiveCurveViewRange * GraphController::interactiveCurveViewRange() const {
-  return App::app()->range();
+InteractiveCurveViewRange *GraphController::interactiveCurveViewRange() const {
+  return App::app()->graphRange();
 }
 
-AbstractPlotView * GraphController::curveView() {
-  return &m_view;
-}
-
-bool GraphController::openMenuForCurveAtIndex(int index) {
-  int activeIndex = m_store->indexOfKthValidSeries(index);
-  if (*m_selectedSeriesIndex != activeIndex) {
-    *m_selectedSeriesIndex = activeIndex;
-    Coordinate2D<double> xy = xyValues(activeIndex, m_cursor->t(), textFieldDelegateApp()->localContext());
-    m_cursor->moveTo(m_cursor->t(), xy.x1(), xy.x2());
+void GraphController::openMenuForCurveAtIndex(int curveIndex) {
+  if (*m_selectedCurveIndex != curveIndex) {
+    *m_selectedCurveIndex = curveIndex;
+    Coordinate2D<double> xy = xyValues(curveIndex, m_cursor->t(),
+                                       textFieldDelegateApp()->localContext());
+    m_cursor->moveTo(m_cursor->t(), xy.x(), xy.y());
   }
-  if (selectedSeriesIsScatterPlot()) {
+  if (curveIsScatterPlot(*m_selectedCurveIndex)) {
     // Push regression controller directly
-    RegressionController * controller = App::app()->regressionController();
-    controller->setSeries(*m_selectedSeriesIndex);
+    RegressionController *controller = App::app()->regressionController();
+    controller->setSeries(selectedSeriesIndex());
     controller->setDisplayedFromDataTab(false);
     stackController()->push(controller);
   } else {
@@ -220,77 +257,76 @@ bool GraphController::openMenuForCurveAtIndex(int index) {
     m_graphOptionsController.selectRow(0);
     stackController()->push(&m_graphOptionsController);
   }
-  return true;
 }
 
 // InteractiveCurveViewController
 void GraphController::initCursorParameters(bool ignoreMargins) {
-  double x, y;
-  if (selectedSeriesIsScatterPlot()) {
-    x = m_store->get(*m_selectedSeriesIndex, 0, 0);
-    y = m_store->get(*m_selectedSeriesIndex, 1, 0);
+  if (curveIsScatterPlot(*m_selectedCurveIndex)) {
     *m_selectedDotIndex = 0;
   } else {
-    x = m_store->meanOfColumn(*m_selectedSeriesIndex, 0);
-    y = m_store->meanOfColumn(*m_selectedSeriesIndex, 1);
-    *m_selectedDotIndex = m_store->numberOfPairsOfSeries(*m_selectedSeriesIndex);
+    *m_selectedDotIndex = numberOfDotsOfCurve(*m_selectedCurveIndex);
   }
+  double x = dotAbscissa(*m_selectedCurveIndex, *m_selectedDotIndex);
+  double y = dotOrdinate(*m_selectedCurveIndex, *m_selectedDotIndex);
   m_cursor->moveTo(x, x, y);
 }
 
 bool GraphController::selectedModelIsValid() const {
-  if (!m_store->seriesIsActive(*m_selectedSeriesIndex)) {
-    return false;
-  }
-  uint8_t numberOfPairs = m_store->numberOfPairsOfSeries(*m_selectedSeriesIndex);
-  return *m_selectedDotIndex < numberOfPairs || (*m_selectedDotIndex == numberOfPairs && !selectedSeriesIsScatterPlot());
+  const uint8_t numberOfDots = numberOfDotsOfCurve(*m_selectedCurveIndex);
+  return *m_selectedDotIndex < numberOfDots ||
+         (*m_selectedDotIndex == numberOfDots &&
+          !curveIsScatterPlot(*m_selectedCurveIndex));
 }
 
-Poincare::Coordinate2D<double> GraphController::selectedModelXyValues(double t) const {
+Poincare::Coordinate2D<double> GraphController::selectedModelXyValues(
+    double t) const {
   assert(selectedModelIsValid());
   if (*m_selectedDotIndex == -1) {
-    return xyValues(*m_selectedSeriesIndex, t, globalContext());
-  } else if (*m_selectedDotIndex == m_store->numberOfPairsOfSeries(*m_selectedSeriesIndex) && !selectedSeriesIsScatterPlot()) {
-    return Coordinate2D<double>(m_store->meanOfColumn(*m_selectedSeriesIndex, 0), m_store->meanOfColumn(*m_selectedSeriesIndex, 1));
+    return xyValues(*m_selectedCurveIndex, t, globalContext());
   }
-  return Coordinate2D<double>(m_store->get(*m_selectedSeriesIndex, 0, *m_selectedDotIndex), m_store->get(*m_selectedSeriesIndex, 1, *m_selectedDotIndex));
+  return Coordinate2D<double>(
+      dotAbscissa(*m_selectedCurveIndex, *m_selectedDotIndex),
+      dotOrdinate(*m_selectedCurveIndex, *m_selectedDotIndex));
 }
 
-bool GraphController::moveCursorVertically(int direction) {
-  Poincare::Context * context = globalContext();
+bool GraphController::moveCursorVertically(OMG::VerticalDirection direction) {
+  Poincare::Context *context = globalContext();
   double x = m_cursor->x();
   double y = m_cursor->y();
 
   // Find the closest regression
-  int selectedRegressionIndex = *m_selectedDotIndex == -1 ? *m_selectedSeriesIndex : -1;
-  int closestRegressionSeries = closestCurveIndexVertically(direction > 0, selectedRegressionIndex, context);
+  int selectedRegressionCurve =
+      *m_selectedDotIndex == -1 ? *m_selectedCurveIndex : -1;
+  int closestRegressionCurve =
+      closestCurveIndexVertically(direction, selectedRegressionCurve, context);
 
   // Find the closest dot
-  int closestDotSeries = -1;
-  int dotSelected = m_store->closestVerticalDot(direction, x, y, *m_selectedSeriesIndex, *m_selectedDotIndex, &closestDotSeries, context);
+  int closesDotSeries = -1;
+  int dotSelected = m_store->closestVerticalDot(
+      direction, x, y, selectedSeriesIndex(), *m_selectedDotIndex,
+      &closesDotSeries, context);
+  int closesDotCurve =
+      closesDotSeries == -1 ? -1 : curveIndexFromSeriesIndex(closesDotSeries);
 
   // Choose between selecting the regression or the dot
-  bool validRegression = closestRegressionSeries > -1;
-  bool validDot = dotSelected >= 0 && dotSelected <= m_store->numberOfPairsOfSeries(closestDotSeries);
+  bool validRegression = closestRegressionCurve >= 0;
+  bool validDot =
+      0 <= dotSelected && dotSelected <= numberOfDotsOfCurve(closesDotCurve);
   if (validRegression && validDot) {
     /* Compare the abscissa distances to select either the dot or the
      * regression. If they are equal, compare the ordinate distances. */
-    double dotDistanceX = -1;
-    if (dotSelected == m_store->numberOfPairsOfSeries(closestDotSeries)) {
-      dotDistanceX = std::fabs(m_store->meanOfColumn(closestDotSeries, 0) - x);
-    } else {
-      dotDistanceX = std::fabs(m_store->get(closestDotSeries, 0, dotSelected) - x);
-    }
+    double dotDistanceX =
+        std::fabs(dotAbscissa(closesDotCurve, dotSelected) - x);
     if (dotDistanceX != 0) {
       /* The regression X distance to the point is 0, so it is closer than the
        * dot. */
       validDot = false;
     } else {
       // Compare the y distances
-      double regressionDistanceY = std::fabs(yValue(closestRegressionSeries, x, context) - y);
-      double dotDistanceY = (dotSelected == m_store->numberOfPairsOfSeries(closestDotSeries)) ?
-        std::fabs(m_store->meanOfColumn(closestDotSeries, 1) - y) :
-        std::fabs(m_store->get(closestDotSeries, 1, dotSelected) - y);
+      double regressionDistanceY =
+          std::fabs(yValue(closestRegressionCurve, x, context) - y);
+      double dotDistanceY =
+          std::fabs(dotOrdinate(closesDotCurve, dotSelected) - y);
       if (regressionDistanceY <= dotDistanceY) {
         validDot = false;
       } else {
@@ -305,40 +341,33 @@ bool GraphController::moveCursorVertically(int direction) {
 
   if (validRegression) {
     // Select the regression
-    if (*m_selectedSeriesIndex != closestRegressionSeries) {
-      *m_selectedSeriesIndex = closestRegressionSeries;
+    if (*m_selectedCurveIndex != closestRegressionCurve) {
+      *m_selectedCurveIndex = closestRegressionCurve;
       // Reload so that the selected series is on top
       m_view.reload(false, true);
     }
     *m_selectedDotIndex = -1;
     setRoundCrossCursorView();
-    m_cursor->moveTo(x, x, yValue(*m_selectedSeriesIndex, x, context));
+    double newY = yValue(*m_selectedCurveIndex, x, context);
+    m_cursor->moveTo(x, x, newY);
     setAbscissaInputAsFirstResponder();
     return true;
   }
 
   if (validDot) {
     // Select the dot
-    if (*m_selectedSeriesIndex != closestDotSeries) {
-      *m_selectedSeriesIndex = closestDotSeries;
-      // Reload so that the selected series is on top
+    if (*m_selectedCurveIndex != closesDotCurve) {
+      *m_selectedCurveIndex = closesDotCurve;
+      // Reload so that the selected curve is on top
       m_view.reload(false, true);
     }
     *m_selectedDotIndex = dotSelected;
     setRoundCrossCursorView();
-    if (dotSelected == m_store->numberOfPairsOfSeries(*m_selectedSeriesIndex)) {
-      assert(!selectedSeriesIsScatterPlot());
-      // Select the mean dot
-      double x = m_store->meanOfColumn(*m_selectedSeriesIndex, 0);
-      double y = m_store->meanOfColumn(*m_selectedSeriesIndex, 1);
-      m_cursor->moveTo(x, x, y);
-    } else {
-      // Select a data point dot
-      double x = m_store->get(*m_selectedSeriesIndex, 0, *m_selectedDotIndex);
-      double y = m_store->get(*m_selectedSeriesIndex, 1, *m_selectedDotIndex);
-      m_cursor->moveTo(x, x, y);
-    }
-    Container::activeApp()->setFirstResponder(this); // abscissa input must resolve first responder
+    double newX = dotAbscissa(*m_selectedCurveIndex, dotSelected);
+    double newY = dotOrdinate(*m_selectedCurveIndex, dotSelected);
+    m_cursor->moveTo(newX, newX, newY);
+    // abscissa input must resolve first responder
+    Container::activeApp()->setFirstResponder(this);
     return true;
   }
 
@@ -346,40 +375,15 @@ bool GraphController::moveCursorVertically(int direction) {
   return false;
 }
 
-int GraphController::selectedCurveIndex(bool relativeIndex) const {
-  int res = *m_selectedSeriesIndex;
-  if (res < 0) {
-    return -1;
-  }
-  if (!relativeIndex) {
-    return res;
-  }
-  for (int i = 0; i < *m_selectedSeriesIndex; i++) {
-    if (!m_store->seriesIsActive(i)) {
-      res--;
-    }
-  }
-  return res;
-}
-
-bool GraphController::closestCurveIndexIsSuitable(int newIndex, int currentIndex, int newSubIndex, int currentSubIndex) const {
-  return InteractiveCurveViewController::closestCurveIndexIsSuitable(newIndex, currentIndex, newSubIndex, currentSubIndex) && m_store->seriesIsActive(newIndex);
-}
-
-Coordinate2D<double> GraphController::xyValues(int curveIndex, double x, Poincare::Context * context, int subCurveIndex) const {
-  return Coordinate2D<double>(x, yValue(curveIndex, x, context));
-}
-
-double GraphController::yValue(int curveIndex, double x, Poincare::Context * context) const {
-  return m_store->yValueForXValue(curveIndex, x, context);
+Coordinate2D<double> GraphController::xyValues(int curveIndex, double t,
+                                               Poincare::Context *context,
+                                               int subCurveIndex) const {
+  return Coordinate2D<double>(t, yValue(curveIndex, t, context));
 }
 
 bool GraphController::suitableYValue(double y) const {
-  return interactiveCurveViewRange()->yMin() <= y && y <= interactiveCurveViewRange()->yMax();
-}
-
-int GraphController::numberOfCurves() const {
-  return Store::k_numberOfSeries;
+  return interactiveCurveViewRange()->yMin() <= y &&
+         y <= interactiveCurveViewRange()->yMax();
 }
 
 void GraphController::setRoundCrossCursorView() {
@@ -387,30 +391,42 @@ void GraphController::setRoundCrossCursorView() {
    * to date. */
   bool round = *m_selectedDotIndex < 0;
   m_cursorView.setIsRing(!round);
-  assert(*m_selectedSeriesIndex < static_cast<int>(Palette::numberOfDataColors()));
-  m_cursorView.setColor(Palette::DataColor[*m_selectedSeriesIndex]);
+  assert(selectedSeriesIndex() <
+         static_cast<int>(Palette::numberOfDataColors()));
+  m_cursorView.setColor(Palette::DataColor[selectedSeriesIndex()], &m_view);
 }
 
-Range2D GraphController::optimalRange(bool computeX, bool computeY, Range2D originalRange) const {
+Range2D GraphController::optimalRange(bool computeX, bool computeY,
+                                      Range2D originalRange) const {
   Range1D xRange, yRange;
-  for (int series = 0; series < Store::k_numberOfSeries; series++) {
-    if (!m_store->seriesIsActive(series)) {
-      continue;
-    }
-
-    int numberOfPairs = m_store->numberOfPairsOfSeries(series);
-    for (int pair = 0; pair < numberOfPairs; pair++) {
-      float x = m_store->get(series, 0, pair);
+  const int nbOfCurves = numberOfCurves();
+  for (int curve = 0; curve < nbOfCurves; curve++) {
+    const int numberOfDots = numberOfDotsOfCurve(curve);
+    for (int dot = 0; dot < numberOfDots; dot++) {
+      float x = dotAbscissa(curve, dot);
       xRange.extend(x, k_maxFloat);
-      if (computeX || (originalRange.xMin() <= x && x <= originalRange.xMax())) {
-        float y = m_store->get(series, 1, pair);
+      if (computeX ||
+          (originalRange.xMin() <= x && x <= originalRange.xMax())) {
+        float y = dotOrdinate(curve, dot);
         yRange.extend(y, k_maxFloat);
       }
     }
   }
-
-  Range2D result(computeX ? xRange : *originalRange.x(), computeY ? yRange : *originalRange.y());
-  return Zoom::Sanitize(result, InteractiveCurveViewRange::NormalYXRatio(), k_maxFloat);
+  Range2D result(computeX ? xRange : *originalRange.x(),
+                 computeY ? yRange : *originalRange.y());
+  return Zoom::Sanitize(result, InteractiveCurveViewRange::NormalYXRatio(),
+                        k_maxFloat);
 }
 
+double GraphController::dotCoordinate(int curveIndex, int dotIndex,
+                                      int coordinate) const {
+  assert(dotIndex != numberOfDotsOfCurve(curveIndex) ||
+         !curveIsScatterPlot(curveIndex));
+  assert(0 <= dotIndex && dotIndex <= numberOfDotsOfCurve(curveIndex));
+  const int seriesIndex = seriesIndexFromCurveIndex(curveIndex);
+  return dotIndex < m_store->numberOfPairsOfSeries(seriesIndex)
+             ? m_store->get(seriesIndex, coordinate, dotIndex)
+             : m_store->meanOfColumn(seriesIndex, coordinate);
 }
+
+}  // namespace Regression

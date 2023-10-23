@@ -1,15 +1,15 @@
 #include "complex_model.h"
+
+#include <omg/round.h>
 #include <poincare/range.h>
 
 using namespace Poincare;
 
 namespace Calculation {
 
-ComplexModel::ComplexModel(std::complex<float> c) :
-  Shared::CurveViewRange(),
-  std::complex<float>(c)
-{
-}
+ComplexModel::ComplexModel(std::complex<float> c)
+    : Shared::CurveViewRange(),
+      std::complex<float>(OMG::LaxToZero(c.real()), OMG::LaxToZero(c.imag())) {}
 
 float ComplexModel::rangeBound(float direction, bool horizontal) const {
   float minFactor = k_minVerticalMarginFactor;
@@ -27,20 +27,12 @@ float ComplexModel::rangeBound(float direction, bool horizontal) const {
   return direction >= 0.0f ? range1D.max() : range1D.min();
 }
 
-float ComplexModel::xMin() const {
-  return rangeBound(-1.0f, true);
-}
+float ComplexModel::xMin() const { return rangeBound(-1.0f, true); }
 
-float ComplexModel::xMax() const {
-  return rangeBound(1.0f, true);
-}
+float ComplexModel::xMax() const { return rangeBound(1.0f, true); }
 
-float ComplexModel::yMin() const {
-  return rangeBound(-1.0f, false);
-}
+float ComplexModel::yMin() const { return rangeBound(-1.0f, false); }
 
-float ComplexModel::yMax() const {
-  return rangeBound(1.0f, false);
-}
+float ComplexModel::yMax() const { return rangeBound(1.0f, false); }
 
-}
+}  // namespace Calculation

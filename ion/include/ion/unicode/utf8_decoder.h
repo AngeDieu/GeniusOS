@@ -1,10 +1,33 @@
 #ifndef ION_UNICODE_UTF8_DECODER_H
 #define ION_UNICODE_UTF8_DECODER_H
 
-#include "code_point.h"
+#include <assert.h>
 #include <stddef.h>
 #include <string.h>
-#include <assert.h>
+
+#include "code_point.h"
+
+class UnicodeDecoder {
+ public:
+  UnicodeDecoder(size_t initialPosition, size_t end)
+      : m_position(initialPosition), m_end(end) {}
+  virtual CodePoint nextCodePoint() = 0;
+  virtual CodePoint previousCodePoint() = 0;
+  size_t nextGlyphPosition();
+  size_t previousGlyphPosition();
+  size_t position() const { return m_position; }
+  size_t start() const { return 0; }
+  size_t end() const { return m_end; }
+  void unsafeSetPosition(size_t position) { m_position = position; }
+  size_t printInBuffer(char* buffer, size_t bufferSize,
+                       size_t printLength = k_noSize);
+
+ protected:
+  constexpr static size_t k_noSize = static_cast<size_t>(-1);
+
+  size_t m_position;
+  size_t m_end;
+};
 
 /* UTF-8 encodes all valid code points using at most 4 bytes (= 28 bits), the
  * lowest codes being equal to ASCII codes. There are less than 2^21 different
@@ -29,32 +52,44 @@
  *     glyphs such as accentuated letters.
  */
 
-class UTF8Decoder {
-public:
-  UTF8Decoder(const char * string, const char * initialPosition = nullptr, const char * stringEnd = nullptr) :
-    m_string(string),
-    m_stringEnd(stringEnd),
-    m_stringPosition(initialPosition == nullptr ? string : initialPosition)
-  {
-    assert(m_string != nullptr);
+class UTF8Decoder : public UnicodeDecoder {
+ public:
+  UTF8Decoder(const char* string, const char* initialPosition = nullptr,
+              const char* stringEnd = nullptr)
+      : UnicodeDecoder(initialPosition ? initialPosition - string : 0,
+                       stringEnd ? stringEnd - string : k_noSize),
+        m_string(string) {
+    assert(string != nullptr);
   }
-  CodePoint nextCodePoint();
-  CodePoint previousCodePoint();
-  const char * nextGlyphPosition();
-  const char * previousGlyphPosition();
-  const char * stringPosition() const { return m_stringPosition; }
-  const char * stringEnd() const { return m_stringEnd ? m_stringEnd : m_string + strlen(m_string); }
-  void setPosition(const char * position);
+
+  CodePoint nextCodePoint() override;
+  CodePoint previousCodePoint() override;
+  const char* nextGlyphPosition() {
+    return m_string + UnicodeDecoder::nextGlyphPosition();
+  }
+  const char* previousGlyphPosition() {
+    return m_string + UnicodeDecoder::previousGlyphPosition();
+  }
+  const char* string() const { return m_string; }
+  const char* stringPosition() { return m_string + m_position; }
+  const char* stringEnd() const {
+    return m_end == k_noSize ? nullptr : m_string + m_end;
+  }
+  void setPosition(const char* position);
   constexpr static size_t CharSizeOfCodePoint(CodePoint c) {
     return c <= 0x7F ? 1 : (c <= 0x7FF ? 2 : (c <= 0xFFFF ? 3 : 4));
   }
-  static size_t CodePointToChars(CodePoint c, char * buffer, size_t bufferLength); // No null-terminating char
-  static size_t CodePointToCharsWithNullTermination(CodePoint c, char * buffer, size_t bufferSize);
+  // No null-terminating char
+  static size_t CodePointToChars(CodePoint c, char* buffer,
+                                 size_t bufferLength);
+  static size_t CodePointToCharsWithNullTermination(CodePoint c, char* buffer,
+                                                    size_t bufferSize);
   static bool IsInTheMiddleOfACodePoint(uint8_t value);
-private:
-  const char * const m_string;
-  const char * const m_stringEnd;
-  const char * m_stringPosition;
+
+ private:
+  char nextByte() { return m_string[m_position++]; }
+  char previousByte() { return m_string[--m_position]; }
+  const char* m_string;
 };
 
 #endif

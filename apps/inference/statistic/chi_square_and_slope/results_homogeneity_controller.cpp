@@ -4,50 +4,50 @@ using namespace Escher;
 
 namespace Inference {
 
-// ResultsHomogeneityController
+// ResultsHomogeneityTabController
 
-ResultsHomogeneityController::ResultsHomogeneityController(Escher::StackViewController * parent, Escher::ViewController * nextController, HomogeneityTest * statistic) :
-  TabViewController(parent, this, &m_expectedValuesController, &m_contributionsController, nullptr),
-  m_tableController(nextController, statistic),
-  m_expectedValuesController(this, &m_tableController),
-  m_contributionsController(this, &m_tableController)
-{
+ResultsHomogeneityTabController::ResultsHomogeneityTabController(
+    Escher::StackViewController* parent, Escher::ViewController* nextController,
+    HomogeneityTest* statistic)
+    : TabViewController(parent, this, &m_expectedValuesController,
+                        &m_contributionsController, nullptr),
+      m_tableController(nextController, statistic),
+      m_expectedValuesController(this, &m_tableController),
+      m_contributionsController(this, &m_tableController) {
   TabViewController::initView();
 }
 
-// ResultsTableController
+// ResultsHomogeneityController
 
-ResultsHomogeneityController::ResultsTableController::ResultsTableController(Escher::ViewController * resultsController, HomogeneityTest * statistic) :
-  CategoricalController(nullptr, resultsController, Invocation::Builder<CategoricalController>(&CategoricalController::ButtonAction, this)),
-  m_resultHomogeneityTable(&m_selectableTableView, this, statistic)
-{}
+ResultsHomogeneityController::ResultsHomogeneityController(
+    Escher::ViewController* resultsController, HomogeneityTest* statistic)
+    : CategoricalController(nullptr, resultsController,
+                            Invocation::Builder<CategoricalController>(
+                                &CategoricalController::ButtonAction, this)),
+      m_resultsHomogeneityTable(&m_selectableListView, statistic, this) {}
 
-void ResultsHomogeneityController::ResultsTableController::viewWillAppear() {
-  m_selectableTableView.reloadData(false, false);
+void ResultsHomogeneityController::viewWillAppear() {
+  m_resultsHomogeneityTable.selectableTableView()->selectRow(-1);
+  m_selectableListView.selectRow(-1);
+  m_selectableListView.reloadData(false);
   CategoricalController::viewWillAppear();
 }
 
-bool ResultsHomogeneityController::ResultsTableController::handleEvent(Ion::Events::Event event) {
+bool ResultsHomogeneityController::handleEvent(Ion::Events::Event event) {
   if (event == Ion::Events::Up) {
-    m_resultHomogeneityTable.tableView()->deselectTable();
+    m_resultsHomogeneityTable.selectableTableView()->deselectTable();
     tabController()->selectTab();
     return true;
   }
   return false;
 }
 
-void ResultsHomogeneityController::ResultsTableController::tableViewDidChangeSelection(SelectableTableView * t, int previousSelectedCellX, int previousSelectedCellY, bool withinTemporarySelection) {
-  if (m_resultHomogeneityTable.unselectTopLeftCell(t, previousSelectedCellX, previousSelectedCellY) && t->selectedColumn() == 0) {
-    m_resultHomogeneityTable.tableView()->deselectTable();
-    tabController()->selectTab();
-  }
-}
-
 // SingleModeController
 
-void ResultsHomogeneityController::SingleModeController::switchToTableWithMode(ResultHomogeneityTableCell::Mode mode) {
+void ResultsHomogeneityTabController::SingleModeController::
+    switchToTableWithMode(ResultsHomogeneityTableCell::Mode mode) {
   m_tableController->setMode(mode);
   m_tableController->setParentResponder(this);
 }
 
-}
+}  // namespace Inference

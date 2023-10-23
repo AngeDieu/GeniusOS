@@ -2,91 +2,63 @@
 
 namespace Escher {
 
-void ListViewDataSource::initCellSize(TableView * view) {
-  int nRows = numberOfRows();
-  for (int row = 0; row < nRows; row++) {
-    int type = typeAtIndex(row);
-    int numberOfReusableCells = reusableCellCount(type);
-    for (int i = 0; i < numberOfReusableCells; i++) {
-      /* Some cells need a width to compute their height, so we need to set
-       * width. We also provide a default height because if we set the frame of
-       * a cell to a empty-area rectangle, the subviews aren't layouted. */
-      reusableCell(i, type)->setSize(KDSize(view->bounds().width() - view->rightMargin() - view->leftMargin(), view->bounds().height() - view->topMargin() - view->bottomMargin()));
-    }
-  }
+void ListViewDataSource::initCellsAvailableWidth(TableView* view) {
+  m_availableWidth =
+      view->bounds().width() - view->rightMargin() - view->leftMargin();
 }
 
-bool ListViewDataSource::canReusableIndexBeAssumed(int index, int type, int reusableCellCount) const {
-  /* Ensure the reusable cell index "j" can be assumed from the cell index
-   * "index" */
-  if (reusableCellCount <= 0) {
-    // Cells of this type must be stored as reusable cells.
-    return false;
+int ListViewDataSource::typeIndexFromIndex(int index) {
+  /* Warning: this implementation only works when cells are not reusable and
+   * when we do no need to account for offset in the index. */
+  int type = typeAtRow(index);
+  assert(reusableCellCount(type) > 0);
+  if (reusableCellCount(type) == 1) {
+    return 0;
   }
-  if (reusableCellCount == 1) {
-    // There is only one cell of this type, j = 0
-    return true;
-  }
-  /* TODO : It should be ensured here that the cell at index is visible.
-   * For example, we could have 7 rows and 7 reusable cells of a unique type
-   * but the first row is not visible because of a scroll. The accurate index
-   * would then have to be j = index - 1.
-   * It is assumed here that ListViewDataSource::nonMemoizedRowHeight is only
-   * used with lists and types for which the reusableCellCount is exactly the
-   * minimal number of displayable cells. */
-  if (numberOfRows() == reusableCellCount) {
-    // All rows are reusable cells of the same type, j = index
-    return true;
-  }
+  int typeIndex = 0;
   for (int i = 0; i < index; i++) {
-    if (typeAtIndex(i) != type) {
-      return false;
+    if (typeAtRow(i) == type) {
+      typeIndex++;
     }
   }
-  /* All previous cells are of the same type, j = index */
-  return true;
+  assert(typeIndex < reusableCellCount(type));
+  return typeIndex;
 }
 
-KDCoordinate ListViewDataSource::nonMemoizedRowHeight(int index) {
-  /* Overridden cellHeight implementations boils down to instantiating
-   * a temporary cell on which returning heightForCellAtIndex. As temporary cell
-   * must be instantiated in the type expected in willDisplayCellAtIndex(),
-   * which is unknown here, we cannot factorize this logic.
-   * Generally, row index (in nonMemoizedRowHeight() and typeAtIndex()) is
-   * different from cell index (named j here, in reusableCell()).
-   * However, there are simple situations where we can assume the reusable cell
-   * index. We only assert that the list is simple enough for that trick.
-   * Selecting the wrong reusable cell here can lead to cells being corrupted or
-   * visually duplicated. */
-  assert(index < numberOfRows());
-  int type = typeAtIndex(index);
-  int thisReusableCellCount = reusableCellCount(type);
-  assert(canReusableIndexBeAssumed(index, type, thisReusableCellCount));
-  // We can assume the reusable index
-  int j = (thisReusableCellCount == 1) ? 0 : index;
-  assert(j < thisReusableCellCount);
-  return heightForCellAtIndex(reusableCell(j, type), index);
+KDCoordinate ListViewDataSource::nonMemoizedRowHeight(int row) {
+  /* We should always use a temporary cell here because we call
+   * fillCellForRow on it and this may alter the visual layouting. In
+   * overriden implementations of this method, we know the type of the cell
+   * expected in fillCellForRow so we can instanciate a temporary cell
+   * with the right type. Here, we don't know the type, so we assume that the
+   * list is simple enough to use the method typeIndexFromIndex defined above.*/
+  assert(0 <= row && row < numberOfRows());
+  int type = typeAtRow(row);
+  int typeIndex = typeIndexFromIndex(row);
+  return protectedNonMemoizedRowHeight(reusableCell(typeIndex, type), row);
 }
 
-KDCoordinate ListViewDataSource::heightForCellAtIndexWithWidthInit(HighlightCell * cell, int index) {
-  // Warning: this copy the size of a random cell of the table
+KDCoordinate ListViewDataSource::protectedNonMemoizedRowHeight(
+    HighlightCell* cell, int row) {
+  assert(0 <= row && row < numberOfRows());
   if (!cell->isVisible()) {
     return 0;
   }
-  cell->setSize(reusableCell(0, typeAtIndex(index))->bounds().size());
-  return heightForCellAtIndex(cell, index);
-}
-
-KDCoordinate ListViewDataSource::heightForCellAtIndex(HighlightCell * cell, int index) {
-  if (!cell->isVisible()) {
-    return 0;
-  }
-  // Some cells have to know their width to be able to compute their required height
-  assert(cell->bounds().width() != 0);
+  initCellSize(cell);
   // Setup cell as if it was to be displayed
-  willDisplayCellForIndex(cell, index);
+  fillCellForRow(cell, row);
   // Return cell's height
   return cell->minimalSizeForOptimalDisplay().height();
 }
 
+void ListViewDataSource::initCellSize(HighlightCell* cell) const {
+  /* Some cells have to know their width to be able to compute their required
+   * height */
+  // TODO: setSize only if the cell really needs it
+  if (cell->bounds().width() == 0) {
+    assert(m_availableWidth > 0);
+    cell->setSize(KDSize(m_availableWidth, Ion::Display::Height));
+  }
 }
+
+}  // namespace Escher

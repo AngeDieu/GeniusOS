@@ -1,13 +1,17 @@
 #include "interactive_curve_view_range_delegate.h"
-#include "interactive_curve_view_range.h"
-#include "function_store.h"
+
 #include <poincare/zoom.h>
+
+#include "function_store.h"
+#include "interactive_curve_view_range.h"
 
 using namespace Poincare;
 
 namespace Shared {
 
-float InteractiveCurveViewRangeDelegate::DefaultAddMargin(float x, float range, bool isVertical, bool isMin, float top, float bottom, float left, float right) {
+float InteractiveCurveViewRangeDelegate::DefaultAddMargin(
+    float x, float range, bool isVertical, bool isMin, float top, float bottom,
+    float left, float right) {
   /* The provided min or max range limit y is altered by adding a margin.
    * In pixels, the view's height occupied by the vertical range is equal to
    *   viewHeight - topMargin - bottomMargin.
@@ -25,7 +29,8 @@ float InteractiveCurveViewRangeDelegate::DefaultAddMargin(float x, float range, 
    */
   float topMarginRatio = isVertical ? top : right;
   float bottomMarginRatio = isVertical ? bottom : left;
-  assert(topMarginRatio + bottomMarginRatio < 1); // Assertion so that the formula is correct
+  // Assertion so that the formula is correct
+  assert(topMarginRatio + bottomMarginRatio < 1);
   float ratioDenominator = 1 - bottomMarginRatio - topMarginRatio;
   float ratio = isMin ? -bottomMarginRatio : topMarginRatio;
   /* We want to add slightly more than the required margin, so that
@@ -46,4 +51,4 @@ Range2D InteractiveCurveViewRangeDelegate::addMargins(Range2D range) const {
   return Range2D(xMin, xMax, yMin, yMax);
 }
 
-}
+}  // namespace Shared

@@ -2,34 +2,19 @@
 
 namespace Escher {
 
-TextCursorView * BlinkTimer::s_cursor = nullptr;
-
-void BlinkTimer::RegisterCursor(TextCursorView * cursor) {
-  if (s_cursor == cursor) {
-    return;
-  }
-  if (s_cursor) {
-    s_cursor->setVisible(false);
-  }
-  s_cursor = cursor;
-  if (s_cursor) {
-    s_cursor->setVisible(true);
-  }
-}
-
 void BlinkTimer::forceCursorVisible() {
-  if (s_cursor) {
-    s_cursor->setVisible(true);
+  if (SharedCursor()->shouldBlink()) {
+    SharedCursor()->setVisible(true);
     reset();
   }
 }
 
 bool BlinkTimer::fire() {
-  if (s_cursor) {
-    s_cursor->switchVisible();
+  if (SharedCursor()->shouldBlink()) {
+    SharedCursor()->switchVisible();
     return true;
   }
   return false;
 }
 
-}
+}  // namespace Escher

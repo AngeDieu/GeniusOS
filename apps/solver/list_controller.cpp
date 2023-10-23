@@ -1,55 +1,74 @@
 #include "list_controller.h"
-#include "app.h"
+
+#include <assert.h>
 #include <poincare/circuit_breaker_checkpoint.h>
 #include <poincare/code_point_layout.h>
 #include <poincare/variable_context.h>
-#include <assert.h>
+
+#include "app.h"
 
 using namespace Shared;
 using namespace Escher;
 
 namespace Solver {
 
-ListController::ListController(Responder * parentResponder, EquationStore * equationStore, ButtonRowController * footer) :
-  ExpressionModelListController(parentResponder, I18n::Message::AddEquation),
-  ButtonRowDelegate(nullptr, footer),
-  m_equationListView(this),
-  m_resolveButton(this, equationStore->numberOfDefinedModels() > 1 ? I18n::Message::ResolveSystem : I18n::Message::ResolveEquation, Invocation::Builder<ListController>([](ListController * list, void * sender) {
-    list->resolveEquations();
-    return true;
-  }, this), KDFont::Size::Large, Palette::PurpleBright),
-  m_modelsParameterController(this, equationStore, this),
-  m_modelsStackController(nullptr, &m_modelsParameterController, StackViewController::Style::PurpleWhite)
-{
-  m_addNewModel.setAlignment(0.3f, KDContext::k_alignCenter); // (EquationListView::k_braceTotalWidth+k_expressionMargin) / (Ion::Display::Width-m_addNewModel.text().size()) = (30+5)/(320-200)
+ListController::ListController(
+    Responder *parentResponder,
+    InputEventHandlerDelegate *inputEventHandlerDelegate,
+    EquationStore *equationStore, ButtonRowController *footer)
+    : ExpressionModelListController(parentResponder,
+                                    I18n::Message::AddEquation),
+      ButtonRowDelegate(nullptr, footer),
+      m_equationListView(this),
+      m_editableCell(this, inputEventHandlerDelegate, this),
+      m_resolveButton(this,
+                      equationStore->numberOfDefinedModels() > 1
+                          ? I18n::Message::ResolveSystem
+                          : I18n::Message::ResolveEquation,
+                      Invocation::Builder<ListController>(
+                          [](ListController *list, void *sender) {
+                            list->resolveEquations();
+                            return true;
+                          },
+                          this),
+                      KDFont::Size::Large, Palette::PurpleBright),
+      m_modelsParameterController(this, equationStore, this),
+      m_modelsStackController(nullptr, &m_modelsParameterController,
+                              StackViewController::Style::PurpleWhite) {
+  m_addNewModelCell.setLeftMargin(k_newModelMargin);
   for (int i = 0; i < k_maxNumberOfRows; i++) {
-    m_expressionCells[i].setLeftMargin(EquationListView::k_braceTotalWidth+k_expressionMargin);
+    m_expressionCells[i].setLeftMargin(EquationListView::k_braceTotalWidth +
+                                       Metric::BigCellMargin);
     m_expressionCells[i].setEven(true);
   }
 }
 
-int ListController::numberOfButtons(ButtonRowController::Position position) const {
+int ListController::numberOfButtons(
+    ButtonRowController::Position position) const {
   if (position == ButtonRowController::Position::Bottom) {
     return 1;
   }
   return 0;
 }
 
-AbstractButtonCell * ListController::buttonAtIndex(int index, ButtonRowController::Position position) const {
+AbstractButtonCell *ListController::buttonAtIndex(
+    int index, ButtonRowController::Position position) const {
   if (position == ButtonRowController::Position::Top) {
     return nullptr;
   }
   return const_cast<AbstractButtonCell *>(&m_resolveButton);
 }
 
-HighlightCell * ListController::reusableCell(int index, int type) {
+HighlightCell *ListController::reusableCell(int index, int type) {
   assert(index >= 0);
   assert(index < k_maxNumberOfRows);
   switch (type) {
-    case 0:
+    case k_expressionCellType:
       return &m_expressionCells[index];
-    case 1:
-      return &m_addNewModel;
+    case k_addNewModelCellType:
+      return &m_addNewModelCell;
+    case k_editableCellType:
+      return &m_editableCell;
     default:
       assert(false);
       return nullptr;
@@ -57,31 +76,40 @@ HighlightCell * ListController::reusableCell(int index, int type) {
 }
 
 int ListController::reusableCellCount(int type) {
-  if (type == 1) {
-    return 1;
+  if (type == k_expressionCellType) {
+    return k_maxNumberOfRows;
   }
-  return k_maxNumberOfRows;
+  return 1;
 }
 
-void ListController::willDisplayCellForIndex(HighlightCell * cell, int index) {
-  if (!isAddEmptyRow(index)) {
-    willDisplayExpressionCellAtIndex(cell, index);
+void ListController::fillCellForRow(HighlightCell *cell, int row) {
+  if (!isAddEmptyRow(row) && row != m_editedCellIndex) {
+    willDisplayExpressionCellAtIndex(cell, row);
   }
-  cell->setHighlighted(index == selectedRow());
+}
+
+KDCoordinate ListController::nonMemoizedRowHeight(int row) {
+  if (row == m_editedCellIndex) {
+    return std::min<KDCoordinate>(
+        ExpressionRowHeightFromLayoutHeight(
+            m_editableCell.minimalSizeForOptimalDisplay().height()),
+        selectableListView()->bounds().height());
+  }
+  return expressionRowHeight(row);
 }
 
 bool ListController::handleEvent(Ion::Events::Event event) {
   if (event == Ion::Events::Up && selectedRow() == -1) {
     footer()->setSelectedButton(-1);
-    selectableTableView()->selectCellAtLocation(0, numberOfRows()-1);
-    Container::activeApp()->setFirstResponder(selectableTableView());
+    selectableListView()->selectCell(numberOfRows() - 1);
+    Container::activeApp()->setFirstResponder(selectableListView());
     return true;
   }
   if (event == Ion::Events::Down) {
     if (selectedRow() == -1) {
       return false;
     }
-    selectableTableView()->deselectTable();
+    selectableListView()->deselectTable();
     footer()->setSelectedButton(0);
     return true;
   }
@@ -90,64 +118,69 @@ bool ListController::handleEvent(Ion::Events::Event event) {
 
 void ListController::didBecomeFirstResponder() {
   if (selectedRow() == -1) {
-    selectCellAtLocation(0, 0);
+    selectCell(0);
   } else {
-    selectCellAtLocation(selectedColumn(), selectedRow());
+    selectCell(selectedRow());
   }
   if (selectedRow() >= numberOfRows()) {
-    selectCellAtLocation(selectedColumn(), numberOfRows()-1);
+    selectCell(numberOfRows() - 1);
   }
   footer()->setSelectedButton(-1);
-  Container::activeApp()->setFirstResponder(selectableTableView());
+  Container::activeApp()->setFirstResponder(selectableListView());
 }
 
-void ListController::didEnterResponderChain(Responder * previousFirstResponder) {
-  selectableTableView()->reloadData(false);
+void ListController::didEnterResponderChain(Responder *previousFirstResponder) {
+  selectableListView()->reloadData(false);
   // Reload brace if the model store has evolved
   reloadBrace();
 }
 
 // TODO factorize with Graph?
-bool ListController::textFieldDidReceiveEvent(AbstractTextField * textField, Ion::Events::Event event) {
-  if (textField->isEditing() && textField->shouldFinishEditing(event)) {
-    const char * text = textField->text();
-    Poincare::Expression e = Poincare::Expression::Parse(text, App::app()->localContext());
-    if (!e.isUninitialized() && e.type() != Poincare::ExpressionNode::Type::Comparison) {
-      textField->setCursorLocation(text + strlen(text));
-      if (!textField->handleEventWithText("=0")) {
-        Container::activeApp()->displayWarning(I18n::Message::RequireEquation);
-        return true;
-      }
-    }
-  }
-  return TextFieldDelegate::textFieldDidReceiveEvent(textField, event);
-}
-
-// TODO factorize with Graph?
-bool ListController::layoutFieldDidReceiveEvent(LayoutField * layoutField, Ion::Events::Event event) {
+bool ListController::layoutFieldDidReceiveEvent(LayoutField *layoutField,
+                                                Ion::Events::Event event) {
   if (layoutField->isEditing() && layoutField->shouldFinishEditing(event)) {
-    if (!layoutField->layout().hasTopLevelComparisonSymbol()) { // TODO: do like for textField: parse and and check is type is comparison
-      layoutField->putCursorOnOneSide(Poincare::LayoutCursor::Position::Right);
+    // TODO: do like for textField: parse and and check is type is comparison
+    if (!layoutField->layout().hasTopLevelComparisonSymbol()) {
+      layoutField->putCursorOnOneSide(OMG::Direction::Right());
       if (!layoutField->handleEventWithText("=0")) {
         Container::activeApp()->displayWarning(I18n::Message::RequireEquation);
         return true;
       }
     }
   }
-  if (Shared::LayoutFieldDelegate::layoutFieldDidReceiveEvent(layoutField, event)) {
+  if (Shared::LayoutFieldDelegate::layoutFieldDidReceiveEvent(layoutField,
+                                                              event)) {
     return true;
   }
   return false;
 }
 
-bool ListController::textFieldDidFinishEditing(AbstractTextField * textField, const char * text, Ion::Events::Event event) {
+void ListController::layoutFieldDidChangeSize(LayoutField *layoutField) {
+  ExpressionModelListController::layoutFieldDidChangeSize(layoutField);
+  reloadBrace();
+}
+
+bool ListController::layoutFieldDidFinishEditing(LayoutField *layoutField,
+                                                 Poincare::Layout layout,
+                                                 Ion::Events::Event event) {
+  ExpressionModelListController::layoutFieldDidFinishEditing(layoutField,
+                                                             layout, event);
+  reloadBrace();
   reloadButtonMessage();
   return true;
 }
 
-bool ListController::layoutFieldDidFinishEditing(LayoutField * layoutField, Poincare::Layout layout, Ion::Events::Event event) {
+void ListController::layoutFieldDidAbortEditing(
+    Escher::LayoutField *layoutField) {
+  ExpressionModelListController::layoutFieldDidAbortEditing(layoutField);
+  reloadBrace();
   reloadButtonMessage();
-  return true;
+}
+
+void ListController::editExpression(Ion::Events::Event event) {
+  ExpressionModelListController::editExpression(event);
+  // We set the highlighted state for the background color
+  m_editableCell.setHighlighted(true);
 }
 
 void ListController::resolveEquations() {
@@ -157,48 +190,53 @@ void ListController::resolveEquations() {
   }
   // Tidy model before checkpoint, during which older TreeNodes can't be altered
   modelStore()->tidyDownstreamPoolFrom();
-  Poincare::CircuitBreakerCheckpoint checkpoint(Ion::CircuitBreaker::CheckpointType::Back);
+  App::app()->system()->tidy();
+  Poincare::CircuitBreakerCheckpoint checkpoint(
+      Ion::CircuitBreaker::CheckpointType::Back);
   if (CircuitBreakerRun(checkpoint)) {
-    bool resultWithoutUserDefinedSymbols = false;
-    EquationStore::Error e = modelStore()->exactSolve(textFieldDelegateApp()->localContext(), &resultWithoutUserDefinedSymbols);
+    SystemOfEquations::Error e =
+        App::app()->system()->exactSolve(App::app()->localContext());
     switch (e) {
-      case EquationStore::Error::EquationUndefined:
-        Container::activeApp()->displayWarning(I18n::Message::UndefinedEquation);
+      case SystemOfEquations::Error::EquationUndefined:
+        Container::activeApp()->displayWarning(
+            I18n::Message::UndefinedEquation);
         return;
-      case EquationStore::Error::EquationNonreal:
+      case SystemOfEquations::Error::EquationNonreal:
         Container::activeApp()->displayWarning(I18n::Message::NonrealEquation);
         return;
-      case EquationStore::Error::TooManyVariables:
+      case SystemOfEquations::Error::TooManyVariables:
         Container::activeApp()->displayWarning(I18n::Message::TooManyVariables);
         return;
-      case EquationStore::Error::NonLinearSystem:
+      case SystemOfEquations::Error::NonLinearSystem:
         Container::activeApp()->displayWarning(I18n::Message::NonLinearSystem);
         return;
-      case EquationStore::Error::RequireApproximateSolution:
-      {
-        reinterpret_cast<IntervalController *>(App::app()->intervalController())->setShouldReplaceFuncionsButNotSymbols(resultWithoutUserDefinedSymbols);
-        stackController()->push(App::app()->intervalController());
-        return;
-      }
-      default:
-      {
-        assert(e == EquationStore::Error::NoError);
-        StackViewController * stack = stackController();
-        reinterpret_cast<IntervalController *>(App::app()->intervalController())->setShouldReplaceFuncionsButNotSymbols(resultWithoutUserDefinedSymbols);
-        stack->push(App::app()->solutionsControllerStack());
+      default: {
+        assert(e == SystemOfEquations::Error::NoError ||
+               e == SystemOfEquations::Error::RequireApproximateSolution);
+        stackController()->push(
+            e == SystemOfEquations::Error::RequireApproximateSolution
+                ? App::app()->intervalController()
+                : App::app()->solutionsControllerStack());
       }
     }
   } else {
-    modelStore()->tidyDownstreamPoolFrom();
+    modelStore()->tidyDownstreamPoolFrom(
+        checkpoint.endOfPoolBeforeCheckpoint());
+    App::app()->system()->tidy();
   }
 }
 
 void ListController::reloadButtonMessage() {
-  footer()->setMessageOfButtonAtIndex(modelStore()->numberOfDefinedModels() > 1 ? I18n::Message::ResolveSystem : I18n::Message::ResolveEquation, 0);
+  footer()->setMessageOfButtonAtIndex(modelStore()->numberOfDefinedModels() > 1
+                                          ? I18n::Message::ResolveSystem
+                                          : I18n::Message::ResolveEquation,
+                                      0);
 }
 
 void ListController::addModel() {
-  Container::activeApp()->displayModalViewController(&m_modelsStackController, 0.f, 0.f, Metric::PopUpTopMargin, Metric::PopUpRightMargin, 0, Metric::PopUpLeftMargin);
+  Container::activeApp()->displayModalViewController(
+      &m_modelsStackController, 0.f, 0.f, Metric::PopUpTopMargin,
+      Metric::PopUpRightMargin, 0, Metric::PopUpLeftMargin);
 }
 
 bool ListController::removeModelRow(Ion::Storage::Record record) {
@@ -209,24 +247,39 @@ bool ListController::removeModelRow(Ion::Storage::Record record) {
 }
 
 void ListController::reloadBrace() {
-  EquationListView::BraceStyle braceStyle = modelStore()->numberOfModels() <= 1 ? EquationListView::BraceStyle::None : (modelStore()->numberOfModels() == modelStore()->maxNumberOfModels() ? EquationListView::BraceStyle::Full : EquationListView::BraceStyle::OneRowShort);
-  m_equationListView.setBraceStyle(braceStyle);
+  if (modelStore()->numberOfModels() <= 1) {
+    m_equationListView.setBraceStyle(EquationListView::BraceStyle::None);
+    m_expressionCells[0].setLeftMargin(k_newModelMargin);
+    // Set editable cell margins to keep the text at the same place when editing
+    m_editableCell.layoutField()->setLeftMargin(k_newModelMargin -
+                                                k_expressionMargin);
+    m_editableCell.setMargins(k_expressionMargin, k_expressionMargin);
+  } else {
+    m_equationListView.setBraceStyle(
+        modelStore()->numberOfModels() == modelStore()->maxNumberOfModels()
+            ? EquationListView::BraceStyle::Full
+            : EquationListView::BraceStyle::OneRowShort);
+    m_expressionCells[0].setLeftMargin(EquationListView::k_braceTotalWidth +
+                                       Metric::BigCellMargin);
+    m_editableCell.layoutField()->setLeftMargin(Metric::BigCellMargin -
+                                                k_expressionMargin);
+    m_editableCell.setMargins(
+        EquationListView::k_braceTotalWidth + k_expressionMargin,
+        k_expressionMargin);
+  }
 }
 
-EquationStore * ListController::modelStore() const {
+EquationStore *ListController::modelStore() const {
   return App::app()->equationStore();
 }
 
-SelectableTableView * ListController::selectableTableView() {
-  return m_equationListView.selectableTableView();
+SelectableListView *ListController::selectableListView() {
+  return m_equationListView.selectableListView();
 }
 
-StackViewController * ListController::stackController() const {
-  return static_cast<StackViewController *>(parentResponder()->parentResponder());
+StackViewController *ListController::stackController() const {
+  return static_cast<StackViewController *>(
+      parentResponder()->parentResponder());
 }
 
-InputViewController * ListController::inputController() {
-  return App::app()->inputViewController();
-}
-
-}
+}  // namespace Solver

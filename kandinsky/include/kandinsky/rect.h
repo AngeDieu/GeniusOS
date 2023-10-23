@@ -25,23 +25,15 @@
  * */
 
 class KDRect {
-public:
-  constexpr KDRect(KDCoordinate x, KDCoordinate y, KDCoordinate width, KDCoordinate height) :
-    m_origin(x, y), 
-    m_size(width, height) 
-  {}
-  KDRect(KDPoint p, KDSize s) :
-    m_origin(p),
-    m_size(s)
-  {}
-  KDRect(KDCoordinate x, KDCoordinate y, KDSize s) :
-    m_origin(x, y),
-    m_size(s)
-  {}
-  KDRect(KDPoint p, KDCoordinate width, KDCoordinate height) :
-    m_origin(p),
-    m_size(width, height)
-  {}
+ public:
+  constexpr KDRect(KDCoordinate x, KDCoordinate y, KDCoordinate width,
+                   KDCoordinate height)
+      : m_origin(x, y), m_size(width, height) {}
+  KDRect(KDPoint p, KDSize s) : m_origin(p), m_size(s) {}
+  KDRect(KDCoordinate x, KDCoordinate y, KDSize s)
+      : m_origin(x, y), m_size(s) {}
+  KDRect(KDPoint p, KDCoordinate width, KDCoordinate height)
+      : m_origin(p), m_size(width, height) {}
 
   KDCoordinate x() const { return m_origin.x(); }
   KDCoordinate y() const { return m_origin.y(); }
@@ -59,30 +51,39 @@ public:
   KDPoint bottomLeft() const { return KDPoint(left(), bottom()); }
   KDPoint bottomRight() const { return KDPoint(right(), bottom()); }
 
-  bool operator ==(const KDRect &other) const { return (m_origin == other.origin() && m_size == other.size()); }
+  bool operator==(const KDRect &other) const {
+    return (m_origin == other.origin() && m_size == other.size());
+  }
+  bool operator!=(const KDRect &other) const { return !(other == *this); }
 
   void setOrigin(KDPoint origin) { m_origin = origin; }
   void setSize(KDSize size) { m_size = size; }
 
+  KDRect transposed() const;
   KDRect translatedBy(KDPoint p) const;
+  KDRect relativeTo(KDPoint p) const { return translatedBy(p.opposite()); }
   KDRect paddedWith(KDCoordinate value) const;
+  KDRect trimmedBy(KDCoordinate value) const { return paddedWith(-value); }
   KDRect movedTo(KDPoint p) const;
-  bool intersects(const KDRect & other) const;
-  KDRect intersectedWith(const KDRect & other) const;
-  KDRect unionedWith(const KDRect & other) const; // Returns the smallest rectangle containing r1 and r2
-  KDRect differencedWith(const KDRect & other) const; // Returns the smallest rectangle containing r1\r2
+  bool intersects(const KDRect &other) const;
+  KDRect intersectedWith(const KDRect &other) const;
+  // Returns the smallest rectangle containing r1 and r2
+  KDRect unionedWith(const KDRect &other) const;
+  // Returns the smallest rectangle containing r1\r2
+  KDRect differencedWith(const KDRect &other) const;
   bool contains(KDPoint p) const;
-  bool containsRect(const KDRect & other) const;
+  bool containsRect(const KDRect &other) const;
   bool isAbove(KDPoint p) const;
   bool isUnder(KDPoint p) const;
   bool isEmpty() const;
 
-private:
+ private:
   KDPoint m_origin;
   KDSize m_size;
 };
 
 constexpr KDRect KDRectZero = KDRect(0, 0, 0, 0);
-constexpr KDRect KDRectScreen = KDRect(0, 0, Ion::Display::Width, Ion::Display::Height);
+constexpr KDRect KDRectScreen =
+    KDRect(0, 0, Ion::Display::Width, Ion::Display::Height);
 
 #endif

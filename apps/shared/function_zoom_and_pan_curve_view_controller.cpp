@@ -1,30 +1,30 @@
 #include "function_zoom_and_pan_curve_view_controller.h"
+
 #include <assert.h>
+
 #include <cmath>
 
 using namespace Escher;
 
 namespace Shared {
 
-FunctionZoomAndPanCurveViewController::FunctionZoomAndPanCurveViewController(Responder * parentResponder, InteractiveCurveViewRange * interactiveRange, AbstractPlotView * curveView) :
-  ZoomAndPanCurveViewController(parentResponder),
-  m_contentView(curveView),
-  m_interactiveRange(interactiveRange)
-{
-}
+FunctionZoomAndPanCurveViewController::FunctionZoomAndPanCurveViewController(
+    Responder* parentResponder, InteractiveCurveViewRange* interactiveRange,
+    AbstractPlotView* curveView)
+    : ZoomAndPanCurveViewController(parentResponder),
+      m_contentView(curveView),
+      m_interactiveRange(interactiveRange) {}
 
-const char * FunctionZoomAndPanCurveViewController::title() {
+const char* FunctionZoomAndPanCurveViewController::title() {
   return I18n::translate(I18n::Message::Navigate);
 }
 
 void FunctionZoomAndPanCurveViewController::viewWillAppear() {
-  ViewController::viewWillAppear();
   /* We need to change the curve range to keep the same visual aspect of the
    * view. */
   adaptRangeForHeaders(true);
   setLegendVisible(true);
-  /* Force a reload in case some curves were interrupted. */
-  m_contentView.curveView()->reload(true);
+  ZoomAndPanCurveViewController::viewWillAppear();
 }
 
 void FunctionZoomAndPanCurveViewController::viewDidDisappear() {
@@ -35,11 +35,13 @@ void FunctionZoomAndPanCurveViewController::didBecomeFirstResponder() {
   m_contentView.layoutSubviews();
 }
 
-bool FunctionZoomAndPanCurveViewController::handleEvent(Ion::Events::Event event) {
+bool FunctionZoomAndPanCurveViewController::handleEvent(
+    Ion::Events::Event event) {
   if (!event.isKeyPress()) {
     return false;
   }
-  if (event == Ion::Events::Back || event == Ion::Events::Home || event == Ion::Events::OK || event == Ion::Events::EXE) {
+  if (event == Ion::Events::Back || event == Ion::Events::Home ||
+      event == Ion::Events::OK || event == Ion::Events::EXE) {
     setLegendVisible(false);
     adaptRangeForHeaders(false);
     return ZoomAndPanCurveViewController::handleEvent(event);
@@ -56,7 +58,8 @@ bool FunctionZoomAndPanCurveViewController::handleEvent(Ion::Events::Event event
   return (didHandleEvent || didChangeLegend) && (event != Ion::Events::OnOff);
 }
 
-void FunctionZoomAndPanCurveViewController::adaptRangeForHeaders(bool viewWillAppear) {
+void FunctionZoomAndPanCurveViewController::adaptRangeForHeaders(
+    bool viewWillAppear) {
   assert(!m_contentView.displayLegend());
   float yMin = m_interactiveRange->yMin(), yMax = m_interactiveRange->yMax();
   if (viewWillAppear) {
@@ -64,7 +67,8 @@ void FunctionZoomAndPanCurveViewController::adaptRangeForHeaders(bool viewWillAp
     /* We want the new graph to have the exact same pixel height as the old
      * one, to avoid seeing some grid lines move when entering navigation. */
     float oldPixelHeight = (yMax - yMin) / (k_standardViewHeight - 1);
-    float newYMax = yMin + oldPixelHeight * (m_contentView.bounds().height() - 1);
+    float newYMax =
+        yMin + oldPixelHeight * (m_contentView.bounds().height() - 1);
     float dY = newYMax - yMax;
     m_interactiveRange->setOffscreenYAxis(-dY);
     /* As we are adding space and the Y range that should not be taken into
@@ -74,7 +78,8 @@ void FunctionZoomAndPanCurveViewController::adaptRangeForHeaders(bool viewWillAp
   }
 }
 
-bool FunctionZoomAndPanCurveViewController::setLegendVisible(bool legendWillAppear) {
+bool FunctionZoomAndPanCurveViewController::setLegendVisible(
+    bool legendWillAppear) {
   if (legendWillAppear == m_contentView.displayLegend()) {
     return false;
   }
@@ -85,17 +90,17 @@ bool FunctionZoomAndPanCurveViewController::setLegendVisible(bool legendWillAppe
 
 /* Content View */
 
-FunctionZoomAndPanCurveViewController::ContentView::ContentView(AbstractPlotView * curveView) :
-  m_curveView(curveView),
-  m_displayLegend(false)
-{
-}
+FunctionZoomAndPanCurveViewController::ContentView::ContentView(
+    AbstractPlotView* curveView)
+    : m_curveView(curveView), m_displayLegend(false) {}
 
-int FunctionZoomAndPanCurveViewController::ContentView::numberOfSubviews() const {
+int FunctionZoomAndPanCurveViewController::ContentView::numberOfSubviews()
+    const {
   return 2;
 }
 
-View * FunctionZoomAndPanCurveViewController::ContentView::subviewAtIndex(int index) {
+View* FunctionZoomAndPanCurveViewController::ContentView::subviewAtIndex(
+    int index) {
   assert(index >= 0 && index < 2);
   if (index == 0) {
     return m_curveView;
@@ -103,49 +108,60 @@ View * FunctionZoomAndPanCurveViewController::ContentView::subviewAtIndex(int in
   return &m_legendView;
 }
 
-void FunctionZoomAndPanCurveViewController::ContentView::layoutSubviews(bool force) {
-  m_curveView->setFrame(bounds(), force);
-  m_legendView.setFrame(m_displayLegend ? KDRect(0, bounds().height() - k_legendHeight, bounds().width(), k_legendHeight) : KDRectZero, force);
+void FunctionZoomAndPanCurveViewController::ContentView::layoutSubviews(
+    bool force) {
+  setChildFrame(m_curveView, bounds(), force);
+  setChildFrame(&m_legendView,
+                m_displayLegend ? KDRect(0, bounds().height() - k_legendHeight,
+                                         bounds().width(), k_legendHeight)
+                                : KDRectZero,
+                force);
 }
 
-AbstractPlotView * FunctionZoomAndPanCurveViewController::ContentView::curveView() {
+AbstractPlotView*
+FunctionZoomAndPanCurveViewController::ContentView::curveView() {
   return m_curveView;
 }
 
 /* Legend View */
 
 FunctionZoomAndPanCurveViewController::ContentView::LegendView::LegendView()
-{
-  I18n::Message messages[k_numberOfLegends] = {I18n::Message::Move, I18n::Message::ToZoom, I18n::Message::Or};
+    : m_legendPictograms{KeyView::Type::Up,   KeyView::Type::Down,
+                         KeyView::Type::Left, KeyView::Type::Right,
+                         KeyView::Type::Plus, KeyView::Type::Minus} {
+  I18n::Message messages[k_numberOfLegends] = {
+      I18n::Message::Move, I18n::Message::ToZoom, I18n::Message::Or};
   for (int i = 0; i < k_numberOfLegends; i++) {
     m_legends[i].setFont(ContentView::k_legendFont);
     m_legends[i].setMessage(messages[i]);
-    m_legends[i].setBackgroundColor(BackgroundColor());
-    m_legends[i].setAlignment(KDContext::k_alignCenter, KDContext::k_alignCenter);
-  }
-  KeyView::Type tokenTypes[k_numberOfTokens] = {KeyView::Type::Up, KeyView::Type::Down, KeyView::Type::Left, KeyView::Type::Right, KeyView::Type::Plus, KeyView::Type::Minus};
-  for (int i = 0; i < k_numberOfTokens ; i++) {
-    m_legendPictograms[i].setType(tokenTypes[i]);
+    m_legends[i].setBackgroundColor(k_backgroundColor);
+    m_legends[i].setAlignment(KDGlyph::k_alignCenter, KDGlyph::k_alignCenter);
   }
 }
 
-void FunctionZoomAndPanCurveViewController::ContentView::LegendView::drawRect(KDContext * ctx, KDRect rect) const {
-  ctx->fillRect(KDRect(0, bounds().height() - k_legendHeight, bounds().width(), k_legendHeight), BackgroundColor());
+void FunctionZoomAndPanCurveViewController::ContentView::LegendView::drawRect(
+    KDContext* ctx, KDRect rect) const {
+  ctx->fillRect(KDRect(0, bounds().height() - k_legendHeight, bounds().width(),
+                       k_legendHeight),
+                k_backgroundColor);
 }
 
-int FunctionZoomAndPanCurveViewController::ContentView::LegendView::numberOfSubviews() const {
-  return k_numberOfLegends+k_numberOfTokens;
+int FunctionZoomAndPanCurveViewController::ContentView::LegendView::
+    numberOfSubviews() const {
+  return k_numberOfLegends + k_numberOfTokens;
 }
 
-View * FunctionZoomAndPanCurveViewController::ContentView::LegendView::subviewAtIndex(int index) {
-  assert(index >= 0 && index < k_numberOfTokens+k_numberOfLegends);
+View* FunctionZoomAndPanCurveViewController::ContentView::LegendView::
+    subviewAtIndex(int index) {
+  assert(index >= 0 && index < k_numberOfTokens + k_numberOfLegends);
   if (index < k_numberOfLegends) {
     return &m_legends[index];
   }
-  return &m_legendPictograms[index-k_numberOfLegends];
+  return &m_legendPictograms[index - k_numberOfLegends];
 }
 
-void FunctionZoomAndPanCurveViewController::ContentView::LegendView::layoutSubviews(bool force) {
+void FunctionZoomAndPanCurveViewController::ContentView::LegendView::
+    layoutSubviews(bool force) {
   /* We want to imitate a banner with two elements, the first one being
    * "Pan: ^v<>" and the other being "Zoom: + or -". */
   KDCoordinate legendWidth[k_numberOfLegends];
@@ -154,23 +170,27 @@ void FunctionZoomAndPanCurveViewController::ContentView::LegendView::layoutSubvi
     legendWidth[i] = m_legends[i].minimalSizeForOptimalDisplay().width();
     totalLegendWidth += legendWidth[i];
   }
-  KDCoordinate halfSpacing = (bounds().width() - totalLegendWidth - k_tokenWidth * k_numberOfTokens) / 4;
+  KDCoordinate halfSpacing =
+      (bounds().width() - totalLegendWidth - k_tokenWidth * k_numberOfTokens) /
+      4;
   KDCoordinate height = bounds().height();
 
   KDCoordinate x = halfSpacing;
-  m_legends[0].setFrame(KDRect(x, 0, legendWidth[0], height), force);
+  setChildFrame(&m_legends[0], KDRect(x, 0, legendWidth[0], height), force);
   x += legendWidth[0];
   for (int i = 0; i < k_numberOfTokens - 2; i++) {
-    m_legendPictograms[i].setFrame(KDRect(x, 0, k_tokenWidth, height), force);
+    setChildFrame(&m_legendPictograms[i], KDRect(x, 0, k_tokenWidth, height),
+                  force);
     x += k_tokenWidth;
   }
   x += 2 * halfSpacing;
   for (int i = 1; i < k_numberOfLegends; i++) {
-    m_legends[i].setFrame(KDRect(x, 0, legendWidth[i], height), force);
+    setChildFrame(&m_legends[i], KDRect(x, 0, legendWidth[i], height), force);
     x += legendWidth[i];
-    m_legendPictograms[k_numberOfTokens - 3 + i].setFrame(KDRect(x, 0, k_tokenWidth, height), force);
+    setChildFrame(&m_legendPictograms[k_numberOfTokens - 3 + i],
+                  KDRect(x, 0, k_tokenWidth, height), force);
     x += k_tokenWidth;
   }
 }
 
-}
+}  // namespace Shared

@@ -8,21 +8,26 @@
 namespace Escher {
 
 class StackHeaderView : public View, public Bordered {
-public:
-  StackHeaderView(ViewController * controller = nullptr, KDColor textColor = KDColorBlack, KDColor backgroundColor = KDColorBlack, KDColor separatorColor = KDColorBlack);
-  void drawRect(KDContext * ctx, KDRect rect) const override;
+ public:
+  StackHeaderView(ViewController *controller = nullptr,
+                  KDColor textColor = KDColorBlack,
+                  KDColor backgroundColor = KDColorBlack,
+                  KDColor separatorColor = KDColorBlack);
+  void drawRect(KDContext *ctx, KDRect rect) const override;
 
-protected:
+ protected:
 #if ESCHER_VIEW_LOGGING
-  const char * className() const override;
+  const char *className() const override;
   void logAttributes(std::ostream &os) const override;
 #endif
-private:
+ private:
+  constexpr static KDFont::Size k_font = KDFont::Size::Small;
+
   KDColor m_textColor;
   KDColor m_backgroundColor;
   KDColor m_separatorColor;
-  ViewController * m_controller;
+  ViewController *m_controller;
 };
 
-}
+}  // namespace Escher
 #endif

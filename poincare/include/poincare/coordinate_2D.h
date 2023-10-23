@@ -2,39 +2,52 @@
 #define POINCARE_COORDINATE_2D_H
 
 #include <math.h>
+#include <poincare/helpers.h>
 
 namespace Poincare {
 
 template <typename T>
 class Coordinate2D final {
-public:
-  Coordinate2D(T x1, T x2) : m_x1(x1), m_x2(x2) {}
+ public:
+  Coordinate2D(T x, T y) : m_x(x), m_y(y) {}
   Coordinate2D() : Coordinate2D(NAN, NAN) {}
 
-  template<class C>
-  operator Coordinate2D<C>() { return Coordinate2D<C>(static_cast<C>(m_x1), static_cast<C>(m_x2)); }
+  template <class C>
+  operator Coordinate2D<C>() {
+    return Coordinate2D<C>(static_cast<C>(m_x), static_cast<C>(m_y));
+  }
 
-  T x1() const { return m_x1; }
-  T x2() const { return m_x2; }
-  void setX1(T x1) { m_x1 = x1; }
-  void setX2(T x2) { m_x2 = x2; }
+  T x() const { return m_x; }
+  T y() const { return m_y; }
+  void setX(T x) { m_x = x; }
+  void setY(T y) { m_y = y; }
 
-  bool x1IsIn(T start, T end, bool includeStart = false, bool includeEnd = false) {
+  bool xIsIn(T start, T end, bool includeStart = false,
+             bool includeEnd = false) {
     return coordinateIsIn(true, start, end, includeStart, includeEnd);
   }
-  bool x2IsIn(T start, T end, bool includeStart = false, bool includeEnd = false) {
+  bool yIsIn(T start, T end, bool includeStart = false,
+             bool includeEnd = false) {
     return coordinateIsIn(false, start, end, includeStart, includeEnd);
   }
 
-private:
-  bool coordinateIsIn(bool x1, T start, T end, bool includeStart, bool includeEnd) {
-    T var = x1 ? m_x1 : m_x2;
-    return (var > start || (includeStart && var == start)) && (var < end || (includeEnd && var == end));
+  bool isGreaterThan(const Coordinate2D& other, bool nanIsGreatest) {
+    return (m_x == other.m_x &&
+            Helpers::FloatIsGreater(m_y, other.m_y, nanIsGreatest)) ||
+           (Helpers::FloatIsGreater(m_x, other.m_x, nanIsGreatest));
   }
-  T m_x1;
-  T m_x2;
+
+ private:
+  bool coordinateIsIn(bool x, T start, T end, bool includeStart,
+                      bool includeEnd) {
+    T var = x ? m_x : m_y;
+    return (var > start || (includeStart && var == start)) &&
+           (var < end || (includeEnd && var == end));
+  }
+  T m_x;
+  T m_y;
 };
 
-}
+}  // namespace Poincare
 
 #endif

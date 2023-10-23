@@ -1,4 +1,5 @@
 #include "lcd_timing_test_controller.h"
+
 #include <ion/backlight.h>
 #include <ion/display.h>
 #include <ion/post_and_hardware_tests.h>
@@ -33,18 +34,20 @@ void LCDTimingTestController::viewWillAppear() {
   Ion::Backlight::setBrightness(Ion::Backlight::MaxBrightness);
 }
 
-LCDTimingTestController::ContentView::ContentView() :
-  SolidColorView(KDColorWhite),
-  m_lcdTimingStateView(KDFont::Size::Large, KDContext::k_alignCenter, KDContext::k_alignCenter),
-  m_lcdNumberGlyphFailuresView(KDFont::Size::Small, KDContext::k_alignCenter, KDContext::k_alignCenter)
-{
-}
+LCDTimingTestController::ContentView::ContentView()
+    : SolidColorView(KDColorWhite),
+      m_lcdTimingStateView({.horizontalAlignment = KDGlyph::k_alignCenter}),
+      m_lcdNumberGlyphFailuresView(
+          {.style = {.font = KDFont::Size::Small},
+           .horizontalAlignment = KDGlyph::k_alignCenter}) {}
 
-void LCDTimingTestController::ContentView::setStatus(bool success, int numberOfErrors) {
+void LCDTimingTestController::ContentView::setStatus(bool success,
+                                                     int numberOfErrors) {
   KDColor backgroundColor = (success ? KDColorGreen : KDColorRed);
   m_lcdTimingStateView.setBackgroundColor(backgroundColor);
   m_lcdNumberGlyphFailuresView.setBackgroundColor(backgroundColor);
-  m_lcdTimingStateView.setText(success ? k_lcdTimingPassTest : k_lcdTimingFailTest);
+  m_lcdTimingStateView.setText(success ? k_lcdTimingPassTest
+                                       : k_lcdTimingFailTest);
   constexpr int bufferSize = 20;
   char buffer[bufferSize] = {0};
   Poincare::PrintInt::Left(numberOfErrors, buffer, bufferSize);
@@ -52,8 +55,9 @@ void LCDTimingTestController::ContentView::setStatus(bool success, int numberOfE
 }
 
 void LCDTimingTestController::ContentView::layoutSubviews(bool force) {
-  m_lcdTimingStateView.setFrame(KDRectScreen, force);
-  m_lcdNumberGlyphFailuresView.setFrame(KDRect(10, 10, Ion::Display::Width, 20), force);
+  setChildFrame(&m_lcdTimingStateView, KDRectScreen, force);
+  setChildFrame(&m_lcdNumberGlyphFailuresView,
+                KDRect(10, 10, Ion::Display::Width, 20), force);
 }
 
-}
+}  // namespace HardwareTest

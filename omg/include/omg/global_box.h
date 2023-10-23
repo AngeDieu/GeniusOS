@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include <new>
+
 /* This template wraps another type and manually control when its constructor
  * is called. It is useful to declare global variables and yet avoid the static
  * initialization order fiasco (by manually controlling when the variable is
@@ -10,21 +12,74 @@
 
 namespace OMG {
 
-template <typename T> class GlobalBox {
-public:
-  void init() {
-    new (m_buffer) T();
+template <typename T>
+class alignas(T) GlobalBox {
+ public:
+#if ASSERTIONS
+  GlobalBox() : m_isInitialized(false) {}
+#endif
+  template <typename... Args>
+  void init(Args... args) {
+#if ASSERTIONS
+    assert(!m_isInitialized);
+#endif
+    new (m_buffer) T(args...);
+#if ASSERTIONS
+    m_isInitialized = true;
+#endif
   }
-  void shutdown() {
-    // TODO: Placement delete
+  void deinit() {
+#if ASSERTIONS
+    assert(m_isInitialized);
+#endif
+    get()->~T();
+#if ASSERTIONS
+    m_isInitialized = false;
+#endif
   }
-  T* operator->() {
-    return reinterpret_cast<T *>(m_buffer);
+
+  T* get() {
+#if ASSERTIONS
+    assert(m_isInitialized);
+#endif
+    return reinterpret_cast<T*>(m_buffer);
   }
-private:
+  T* operator->() { return get(); }
+  operator T*() { return get(); }
+  // Box initialization is not required to use its raw address
+  operator void*() { return m_buffer; }
+
+ private:
   uint8_t m_buffer[sizeof(T)];
+#if ASSERTIONS
+  bool m_isInitialized;
+#endif
 };
 
-}
+template <typename T>
+class TrackedGlobalBox : public GlobalBox<T> {
+ public:
+  TrackedGlobalBox() : GlobalBox<T>(), m_isInitialized(false) {}
+  template <typename... Args>
+  void init(Args... args) {
+    if (!m_isInitialized) {
+      GlobalBox<T>::init(args...);
+      m_isInitialized = true;
+    }
+  }
+  void deinit() {
+    if (m_isInitialized) {
+      GlobalBox<T>::deinit();
+      m_isInitialized = false;
+    }
+  }
+
+  bool isInitialized() const { return m_isInitialized; }
+
+ private:
+  bool m_isInitialized;
+};
+
+}  // namespace OMG
 
 #endif

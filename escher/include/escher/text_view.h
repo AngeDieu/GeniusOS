@@ -1,47 +1,25 @@
 #ifndef ESCHER_TEXT_VIEW_H
 #define ESCHER_TEXT_VIEW_H
 
-#include <escher/view.h>
-#include <kandinsky/color.h>
-
-/* alignment = 0 -> align left or top
- * alignment = 0.5 -> align center
- * alignment = 1.0 -> align right or bottom */
+#include <escher/glyphs_view.h>
 
 namespace Escher {
 
-class TextView : public View {
-public:
-  TextView(KDFont::Size font = KDFont::Size::Large,
-           float horizontalAlignment = KDContext::k_alignLeft,
-           float verticalAlignment = KDContext::k_alignTop,
-           KDColor textColor = KDColorBlack,
-           KDColor backgroundColor = KDColorWhite) :
-      View(),
-      m_font(font),
-      m_horizontalAlignment(horizontalAlignment),
-      m_verticalAlignment(verticalAlignment),
-      m_textColor(textColor),
-      m_backgroundColor(backgroundColor) {}
-  void drawRect(KDContext * ctx, KDRect rect) const override;
-  void setBackgroundColor(KDColor backgroundColor);
-  void setTextColor(KDColor textColor);
-  void setAlignment(float horizontalAlignment, float verticalAlignment);
+class TextView : public GlyphsView {
+ public:
+  using GlyphsView::GlyphsView;
+  // View
+  void drawRect(KDContext* ctx, KDRect rect) const override;
   KDSize minimalSizeForOptimalDisplay() const override;
-  virtual const char * text() const = 0;
-  virtual void setText(const char * text) = 0;
-  KDFont::Size font() const { return m_font; }
-  void setFont(KDFont::Size font);
-protected:
+
+  const char* text() const override = 0;  // Must implement
+  virtual void setText(const char* text) = 0;
+
 #if ESCHER_VIEW_LOGGING
-  const char * className() const override { return "TextView"; }
+ protected:
+  const char* className() const override { return "TextView"; }
 #endif
-  KDFont::Size m_font;
-  float m_horizontalAlignment;
-  float m_verticalAlignment;
-  KDColor m_textColor;
-  KDColor m_backgroundColor;
 };
 
-}
+}  // namespace Escher
 #endif

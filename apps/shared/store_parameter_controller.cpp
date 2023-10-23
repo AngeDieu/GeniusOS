@@ -1,83 +1,81 @@
 #include "store_parameter_controller.h"
+
 #include <assert.h>
-#include <escher/message_table_cell_with_editable_text.h>
-#include <escher/stack_view_controller.h>
 #include <escher/container.h>
+#include <escher/stack_view_controller.h>
+
 #include "store_controller.h"
 
 using namespace Escher;
 
 namespace Shared {
 
-StoreParameterController::StoreParameterController(Responder * parentResponder, StoreColumnHelper * storeColumnHelper) :
-  ColumnParameterController(parentResponder),
-  m_storeColumnHelper(storeColumnHelper),
-  m_fillFormula(I18n::Message::FillWithFormula),
-  m_sortCell(I18n::Message::SortCellLabel),
-  m_hideCell(I18n::Message::ActivateDeactivateStoreParamTitle, I18n::Message::ActivateDeactivateStoreParamDescription, false)
-{
-  m_clearColumn.setMessageWithPlaceholders(I18n::Message::ClearColumn);
+StoreParameterController::StoreParameterController(
+    Responder* parentResponder, StoreColumnHelper* storeColumnHelper)
+    : ColumnParameterController(parentResponder),
+      m_storeColumnHelper(storeColumnHelper) {
+  m_clearColumn.label()->setMessageWithPlaceholders(I18n::Message::ClearColumn);
+  m_hideCell.label()->setMessage(
+      I18n::Message::ActivateDeactivateStoreParamTitle);
+  m_hideCell.subLabel()->setMessage(
+      I18n::Message::ActivateDeactivateStoreParamDescription);
+  m_sortCell.label()->setMessage(I18n::Message::SortCellLabel);
+  m_fillFormula.label()->setMessage(I18n::Message::FillWithFormula);
 }
 
 void StoreParameterController::initializeColumnParameters() {
   ColumnParameterController::initializeColumnParameters();
-  m_sortCell.setSubLabelMessage(sortMessage());
+  m_sortCell.subLabel()->setMessage(sortMessage());
 }
 
 bool StoreParameterController::handleEvent(Ion::Events::Event event) {
-  if (event != Ion::Events::OK && event != Ion::Events::EXE) {
+  AbstractMenuCell* cell = static_cast<AbstractMenuCell*>(selectedCell());
+  if (!cell->canBeActivatedByEvent(event)) {
     return false;
   }
-  int index = selectedRow();
-  int type = typeAtIndex(index);
-  switch (type) {
-    case k_sortCellType:
-    {
-      m_storeColumnHelper->sortSelectedColumn();
-      stackView()->pop();
-      break;
+  if (cell == &m_sortCell) {
+    m_storeColumnHelper->sortSelectedColumn();
+    stackView()->pop();
+  } else if (cell == &m_fillFormula) {
+    stackView()->pop();
+    m_storeColumnHelper->displayFormulaInput();
+    return true;
+  } else if (cell == &m_hideCell) {
+    bool canSwitchHideStatus =
+        m_storeColumnHelper->switchSelectedColumnHideStatus();
+    if (!canSwitchHideStatus) {
+      Container::activeApp()->displayWarning(I18n::Message::DataNotSuitable);
+    } else {
+      m_selectableListView.reloadSelectedCell();
     }
-    case k_fillFormulaCellType:
-    {
-      stackView()->pop();
-      m_storeColumnHelper->displayFormulaInput();
-      break;
-    }
-    case k_hideCellType:
-    {
-      bool canSwitchHideStatus = m_storeColumnHelper->switchSelectedColumnHideStatus();
-      if (!canSwitchHideStatus) {
-        Container::activeApp()->displayWarning(I18n::Message::DataNotSuitable);
-      } else {
-        m_selectableTableView.reloadCellAtLocation(0, index);
-      }
-      break;
-    }
-    default:
-    {
-      assert(type == k_clearCellType);
-      stackView()->pop();
-      m_storeColumnHelper->clearColumnHelper()->presentClearSelectedColumnPopupIfClearable();
-      break;
-    }
+  } else {
+    assert(cell == &m_clearColumn);
+    stackView()->pop();
+    m_storeColumnHelper->clearColumnHelper()
+        ->presentClearSelectedColumnPopupIfClearable();
   }
   return true;
 }
 
-HighlightCell * StoreParameterController::reusableCell(int index, int type) {
-  assert(type >= 0 && type < k_numberOfCells);
-  HighlightCell * reusableCells[k_numberOfCells] = {&m_sortCell, &m_fillFormula, &m_hideCell, &m_clearColumn};
-  return reusableCells[type];
+AbstractMenuCell* StoreParameterController::cell(int index) {
+  assert(index >= 0 && index < k_numberOfCells);
+  AbstractMenuCell* cells[] = {&m_sortCell, &m_fillFormula, &m_hideCell,
+                               &m_clearColumn};
+  static_assert(std::size(cells) == k_numberOfCells,
+                "StoreParameterController::k_numberOfCells is deprecated");
+  return cells[index];
 }
 
-void StoreParameterController::willDisplayCellForIndex(Escher::HighlightCell * cell, int index) {
-  if (typeAtIndex(index) == k_hideCellType) {
-    m_hideCell.setState(m_storeColumnHelper->selectedSeriesIsActive());
+void StoreParameterController::fillCellForRow(Escher::HighlightCell* cell,
+                                              int row) {
+  if (cell == &m_hideCell) {
+    m_hideCell.accessory()->setState(
+        m_storeColumnHelper->selectedSeriesIsActive());
   }
 }
 
-ClearColumnHelper * StoreParameterController::clearColumnHelper() {
+ColumnNameHelper* StoreParameterController::columnNameHelper() {
   return m_storeColumnHelper->clearColumnHelper();
 }
 
-}
+}  // namespace Shared

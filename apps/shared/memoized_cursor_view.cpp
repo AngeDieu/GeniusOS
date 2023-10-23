@@ -1,11 +1,12 @@
 #include "memoized_cursor_view.h"
 
 #include <kandinsky/ion_context.h>
+
 #include "dots.h"
 
 namespace Shared {
 
-void MemoizedCursorView::drawRect(KDContext * ctx, KDRect rect) const {
+void MemoizedCursorView::drawRect(KDContext* ctx, KDRect rect) const {
   KDRect r = bounds();
   /* Beware that only the pixels of the intersection of rect with KDContext's
    * clipping rect are pulled. All other pixels are left unaltered. Indeed
@@ -21,61 +22,55 @@ KDSize MemoizedCursorView::minimalSizeForOptimalDisplay() const {
   return KDSize(size(), size());
 }
 
-void MemoizedCursorView::setColor(KDColor color) {
+void MemoizedCursorView::setColor(KDColor color, const Escher::View* parent) {
   m_color = color;
-  eraseCursorIfPossible();
-  markRectAsDirty(bounds());
+  eraseCursorIfPossible(parent);
+  markWholeFrameAsDirty();
 }
 
-void MemoizedCursorView::setCursorFrame(KDRect f, bool force) {
+void MemoizedCursorView::setCursorFrame(View* parent, KDRect f, bool force) {
   /* TODO This is quite dirty (we are out of the dirty tracking and we assume
    * the cursor is the upmost view) but it works well. */
-  if (m_frame == f && !force) {
+  if (parent->relativeChildFrame(this) == f && !force) {
     return;
   }
   /* We want to avoid drawing the curve just because the cursor has been
    * repositioned, as it is very slow for non cartesian curves.*/
-  if (eraseCursorIfPossible()) {
+  if (eraseCursorIfPossible(parent)) {
     // Set the frame
-    m_frame = f;
-    markRectAsDirty(bounds());
+    m_frame = f.translatedBy(parent->absoluteOrigin());
+    markWholeFrameAsDirty();
     return;
   }
-  CursorView::setCursorFrame(f, force);
+  CursorView::setCursorFrame(parent, f, force);
 }
 
-void MemoizedCursorView::markRectAsDirty(KDRect rect) {
-  /* The CursorView class inherits from TransparentView, so does
-   * MemoizedCursorView. The method markRectAsDirty is thus overriden to avoid
-   * marking as dirty the backgmemoized of the MemoizedCursorView in its superview.
-   */
-  View::markRectAsDirty(rect);
-}
-
-bool MemoizedCursorView::eraseCursorIfPossible() {
+bool MemoizedCursorView::eraseCursorIfPossible(const Escher::View* parent) {
   if (!m_underneathPixelBufferLoaded) {
     return false;
   }
-  const KDRect currentFrame = absoluteVisibleFrame();
+  const KDRect currentFrame = absoluteFrame();
   if (currentFrame.isEmpty()) {
     return false;
   }
   // Erase the cursor
+  assert(parent);
   KDColor cursorWorkingBuffer[size() * size()];
-  KDContext * ctx = KDIonContext::SharedContext();
+  KDContext* ctx = KDIonContext::SharedContext;
   KDPoint previousOrigin = ctx->origin();
   KDRect previousClippingRect = ctx->clippingRect();
-  ctx->setOrigin(absoluteOrigin());
-  ctx->setClippingRect(currentFrame);
-  KDSize cursorSize = KDSize(size(), size());
-  ctx->fillRectWithPixels(KDRect(0, 0, cursorSize), underneathPixelBuffer(), cursorWorkingBuffer);
+  ctx->setOrigin(currentFrame.origin());
+  ctx->setClippingRect(currentFrame.intersectedWith(parent->absoluteFrame()));
+  ctx->fillRectWithPixels(KDRect(0, 0, currentFrame.size()),
+                          underneathPixelBuffer(), cursorWorkingBuffer);
   ctx->setOrigin(previousOrigin);
   ctx->setClippingRect(previousClippingRect);
+  resetMemoization();
   return true;
 }
 
 void MemoizedCursorView::redrawCursor(KDRect rect) {
-  KDContext * ctx = KDIonContext::SharedContext();
+  KDContext* ctx = KDIonContext::SharedContext;
   KDPoint previousOrigin = ctx->origin();
   KDRect previousClippingRect = ctx->clippingRect();
   redraw(rect);
@@ -83,4 +78,4 @@ void MemoizedCursorView::redrawCursor(KDRect rect) {
   ctx->setClippingRect(previousClippingRect);
 }
 
-}
+}  // namespace Shared

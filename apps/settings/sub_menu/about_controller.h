@@ -2,37 +2,41 @@
 #define SETTINGS_ABOUT_CONTROLLER_H
 
 #include <apps/shared/pop_up_controller.h>
-#include <escher/message_table_cell_with_buffer.h>
+#include <escher/buffer_text_view.h>
+#include <escher/menu_cell.h>
+#include <escher/message_text_view.h>
+
 #include "generic_sub_controller.h"
 
 namespace Settings {
 
 class AboutController : public GenericSubController {
-public:
-  #if TERMS_OF_USE
+ public:
+#if TERMS_OF_USE
   constexpr static int k_totalNumberOfCell = 4;
-  #else
+#else
   constexpr static int k_totalNumberOfCell = 3;
-  #endif
+#endif
 
-  AboutController(Escher::Responder * parentResponder);
+  AboutController(Escher::Responder* parentResponder);
   TELEMETRY_ID("About");
   bool handleEvent(Ion::Events::Event event) override;
-  Escher::HighlightCell * reusableCell(int index, int type) override;
-  void willDisplayCellForIndex(Escher::HighlightCell * cell, int index) override;
-  KDCoordinate nonMemoizedRowHeight(int j) override;
+  Escher::HighlightCell* reusableCell(int index, int type) override;
+  KDCoordinate nonMemoizedRowHeight(int row) override;
+  void viewWillAppear() override;
 
-private:
+ private:
   constexpr static int k_versionCellIndex = 0;
   constexpr static int k_hardwareTestCellIndex = 2;
-  #if TERMS_OF_USE
+#if TERMS_OF_USE
   constexpr static int k_termsOfUseCellIndex = 3;
-  #endif
+#endif
 
-  Escher::MessageTableCellWithBuffer m_cells[k_totalNumberOfCell];
+  Escher::MenuCell<Escher::MessageTextView, Escher::OneLineBufferTextView<>>
+      m_cells[k_totalNumberOfCell];
   Shared::MessagePopUpController m_hardwareTestPopUpController;
 };
 
-}
+}  // namespace Settings
 
 #endif

@@ -1,11 +1,14 @@
 #include "store_controller.h"
-#include "../app.h"
+
 #include <apps/constant.h>
 #include <apps/shared/poincare_helpers.h>
 #include <assert.h>
 #include <float.h>
-#include <cmath>
 #include <poincare/print.h>
+
+#include <cmath>
+
+#include "../app.h"
 
 using namespace Poincare;
 using namespace Shared;
@@ -13,25 +16,30 @@ using namespace Escher;
 
 namespace Statistics {
 
-StoreController::StoreController(Responder * parentResponder, Escher::InputEventHandlerDelegate * inputEventHandlerDelegate, Store * store, ButtonRowController * header, Context * parentContext) :
-  Shared::StoreController(parentResponder, inputEventHandlerDelegate, store, header, parentContext),
-  m_store(store),
-  m_storeParameterController(this, this, store)
-{}
+StoreController::StoreController(
+    Responder *parentResponder,
+    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate, Store *store,
+    ButtonRowController *header, Context *parentContext)
+    : Shared::StoreController(parentResponder, inputEventHandlerDelegate, store,
+                              header, parentContext),
+      m_store(store),
+      m_storeParameterController(this, this, store) {}
 
 void StoreController::sortSelectedColumn() {
-  int relativeIndex = m_store->relativeColumnIndex(selectedColumn());
+  int relativeIndex = m_store->relativeColumn(selectedColumn());
   // Also sort the values if the cumulated frequency is selected
-  m_store->sortColumn(selectedSeries(), relativeIndex != k_cumulatedFrequencyRelativeColumnIndex ? relativeIndex : 0);
+  m_store->sortColumn(
+      selectedSeries(),
+      relativeIndex != k_cumulatedFrequencyRelativeColumn ? relativeIndex : 0);
 }
 
-int StoreController::fillColumnName(int columnIndex, char * buffer) {
-  if (isCumulatedFrequencyColumn(columnIndex)) {
+int StoreController::fillColumnName(int column, char *buffer) {
+  if (isCumulatedFrequencyColumn(column)) {
     // FC column options doesn't specify the column name.
     buffer[0] = 0;
     return 0;
   }
-  return Shared::StoreController::fillColumnName(columnIndex, buffer);
+  return Shared::StoreController::fillColumnName(column, buffer);
 }
 
 int StoreController::numberOfColumns() const {
@@ -42,114 +50,138 @@ int StoreController::numberOfColumns() const {
   return result;
 }
 
-void StoreController::willDisplayCellAtLocation(HighlightCell * cell, int i, int j) {
-  if (!isCumulatedFrequencyCell(i, j)) {
-    return Shared::StoreController::willDisplayCellAtLocation(cell, i, j);
+void StoreController::fillCellForLocation(HighlightCell *cell, int column,
+                                          int row) {
+  if (!isCumulatedFrequencyCell(column, row)) {
+    return Shared::StoreController::fillCellForLocation(cell, column, row);
   }
   // Handle hidden cells
-  const int numberOfElementsInCol = numberOfElementsInColumn(i);
-  EvenOddBufferTextCell * myCell = static_cast<EvenOddBufferTextCell *>(cell);
-  if (j > numberOfElementsInCol + 1) {
+  const int numberOfElementsInCol = numberOfElementsInColumn(column);
+  AbstractEvenOddBufferTextCell *myCell =
+      static_cast<AbstractEvenOddBufferTextCell *>(cell);
+  if (row > numberOfElementsInCol + 1) {
     myCell->setText("");
     myCell->hide();
     return;
   }
   myCell->show();
-  myCell->setEven(j%2 == 0);
+  myCell->setEven(row % 2 == 0);
 
-  double value = (j == numberOfElementsInCol + 1) ? NAN : dataAtLocation(i, j);
+  double value =
+      (row == numberOfElementsInCol + 1) ? NAN : dataAtLocation(column, row);
   if (std::isnan(value)) {
     // Special case : last row and NaN
     myCell->setText("");
   } else {
-    const int bufferSize = PrintFloat::charSizeForFloatsWithPrecision(Preferences::VeryLargeNumberOfSignificantDigits);
+    constexpr int bufferSize = PrintFloat::charSizeForFloatsWithPrecision(
+        AbstractEvenOddBufferTextCell::k_defaultPrecision);
     char buffer[bufferSize];
-    Shared::PoincareHelpers::ConvertFloatToTextWithDisplayMode<double>(value, buffer, bufferSize, Preferences::VeryLargeNumberOfSignificantDigits, Preferences::sharedPreferences()->displayMode());
+    Shared::PoincareHelpers::ConvertFloatToTextWithDisplayMode<double>(
+        value, buffer, bufferSize,
+        AbstractEvenOddBufferTextCell::k_defaultPrecision,
+        Preferences::sharedPreferences->displayMode());
     myCell->setText(buffer);
-    KDColor textColor = m_store->seriesIsActive(m_store->seriesAtColumn(i)) ? KDColorBlack : Palette::GrayDark;
+    KDColor textColor = m_store->seriesIsActive(m_store->seriesAtColumn(column))
+                            ? KDColorBlack
+                            : Palette::GrayDark;
     myCell->setTextColor(textColor);
   }
 }
 
-bool StoreController::setDataAtLocation(double floatBody, int columnIndex, int rowIndex) {
-  if (!Shared::StoreController::setDataAtLocation(floatBody, columnIndex, rowIndex)) {
+bool StoreController::setDataAtLocation(double floatBody, int column, int row) {
+  if (!Shared::StoreController::setDataAtLocation(floatBody, column, row)) {
     return false;
   }
-  int series = m_store->seriesAtColumn(columnIndex);
+  int series = m_store->seriesAtColumn(column);
   if (m_store->displayCumulatedFrequenciesForSeries(series)) {
     // Cumulated frequencies must be re-computed
-    reloadSeriesVisibleCells(series, k_cumulatedFrequencyRelativeColumnIndex);
+    reloadSeriesVisibleCells(series, k_cumulatedFrequencyRelativeColumn);
   }
   return true;
 }
 
-double StoreController::dataAtLocation(int columnIndex, int rowIndex) {
-  if (isCumulatedFrequencyColumn(columnIndex)) {
-    int series = m_store->seriesAtColumn(columnIndex);
-    double value = m_store->get(series, 0, rowIndex - 1);
+double StoreController::dataAtLocation(int column, int row) {
+  if (isCumulatedFrequencyColumn(column)) {
+    int series = m_store->seriesAtColumn(column);
+    double value = m_store->get(series, 0, row - 1);
     return m_store->sumOfValuesBetween(series, -DBL_MAX, value, false);
   }
-  return Shared::StoreController::dataAtLocation(columnIndex, rowIndex);
+  return Shared::StoreController::dataAtLocation(column, row);
 }
 
-void StoreController::setTitleCellText(HighlightCell * cell, int columnIndex) {
-  assert(typeAtLocation(columnIndex, 0) == k_titleCellType);
-  StoreTitleCell * myTitleCell = static_cast<StoreTitleCell *>(cell);
-  if (isCumulatedFrequencyColumn(columnIndex)) {
-    myTitleCell->setText(I18n::translate(I18n::Message::CumulatedFrequencyColumnName));
+void StoreController::setTitleCellText(HighlightCell *cell, int column) {
+  assert(typeAtLocation(column, 0) == k_titleCellType);
+  BufferFunctionTitleCell *myTitleCell =
+      static_cast<BufferFunctionTitleCell *>(cell);
+  if (isCumulatedFrequencyColumn(column)) {
+    myTitleCell->setText(
+        I18n::translate(I18n::Message::CumulatedFrequencyColumnName));
   } else {
     char columnName[Shared::ClearColumnHelper::k_maxSizeOfColumnName];
-    fillColumnName(columnIndex, columnName);
-    char columnTitle[k_columnTitleSize]; // 50 is an ad-hoc value. A title cell can contain max 15 glyphs but the glyph can take more space than 1 byte in memory.
-    I18n::Message titleType = m_store->relativeColumnIndex(columnIndex) % 2 == 1 ? I18n::Message::Frequencies : I18n::Message::Values;
-    Poincare::Print::CustomPrintf(columnTitle, k_columnTitleSize, I18n::translate(titleType), columnName);
+    fillColumnName(column, columnName);
+    /* 50 is an ad-hoc value. A title cell can contain max 15 glyphs but the
+     * glyph can take more space than 1 byte in memory. */
+    char columnTitle[k_columnTitleSize];
+    I18n::Message titleType = m_store->relativeColumn(column) % 2 == 1
+                                  ? I18n::Message::Frequencies
+                                  : I18n::Message::Values;
+    Poincare::Print::CustomPrintf(columnTitle, k_columnTitleSize,
+                                  I18n::translate(titleType), columnName);
     myTitleCell->setText(columnTitle);
   }
 }
 
 void StoreController::clearSelectedColumn() {
   int series = m_store->seriesAtColumn(selectedColumn());
-  int column = m_store->relativeColumnIndex(selectedColumn());
+  int column = m_store->relativeColumn(selectedColumn());
   if (column == 0) {
     m_store->deleteAllPairsOfSeries(series);
     selectCellAtLocation(selectedColumn(), 1);
+    resetMemoizedFormulasOfEmptyColumns(series);
   } else {
     m_store->resetColumn(series, column);
   }
 }
 
 void StoreController::setClearPopUpContent() {
-  int column = m_store->relativeColumnIndex(selectedColumn());
+  int column = m_store->relativeColumn(selectedColumn());
   assert(column == 0 || column == 1);
   int series = m_store->seriesAtColumn(selectedColumn());
   if (column == 0) {
     char tableName[k_tableNameSize];
     FillSeriesName(series, tableName, true);
-    m_confirmPopUpController.setMessageWithPlaceholders(I18n::Message::ClearTableConfirmation, tableName);
+    m_confirmPopUpController.setMessageWithPlaceholders(
+        I18n::Message::ClearTableConfirmation, tableName);
   } else {
     char columnNameBuffer[Shared::ColumnParameterController::k_titleBufferSize];
     fillColumnName(selectedColumn(), columnNameBuffer);
-    m_confirmPopUpController.setMessageWithPlaceholders(I18n::Message::ResetFreqConfirmation, columnNameBuffer);
+    m_confirmPopUpController.setMessageWithPlaceholders(
+        I18n::Message::ResetFreqConfirmation, columnNameBuffer);
   }
 }
 
-void StoreController::FillSeriesName(int series, char * buffer, bool withFinalSpace) {
-   /* We have to add a space in some cases because we use this table name in the message for
-    * deleting the table in Graph and Sequence, but the table name is empty in Sequence.
-    */
+void StoreController::FillSeriesName(int series, char *buffer,
+                                     bool withFinalSpace) {
+  /* We have to add a space in some cases because we use this table name in the
+   * message for deleting the table in Graph and Sequence, but the table name is
+   * empty in Sequence.
+   */
   char tableIndex = static_cast<char>('1' + series);
-  Poincare::Print::CustomPrintf(buffer, k_tableNameSize, k_tableName, tableIndex, tableIndex);
+  Poincare::Print::CustomPrintf(buffer, k_tableNameSize, k_tableName,
+                                tableIndex, tableIndex);
   if (!withFinalSpace) {
     buffer[5] = 0;
   }
 }
 
-bool StoreController::deleteCellValue(int series, int i, int j, bool authorizeNonEmptyRowDeletion) {
-  Escher::HighlightCell * selectedCell = nullptr;
+bool StoreController::deleteCellValue(int series, int i, int j,
+                                      bool authorizeNonEmptyRowDeletion) {
+  Escher::HighlightCell *selectedCell = nullptr;
   if (isCumulatedFrequencyColumn(i)) {
     selectedCell = selectableTableView()->selectedCell();
   }
-  bool result = Shared::StoreController::deleteCellValue(series, i, j, authorizeNonEmptyRowDeletion);
+  bool result = Shared::StoreController::deleteCellValue(
+      series, i, j, authorizeNonEmptyRowDeletion);
   if (selectedCell && result && m_store->numberOfPairsOfSeries(series) == 0) {
     assert(j == 1);
     /* Deleting the last cumulated frequency value will remove its column.
@@ -162,8 +194,8 @@ bool StoreController::deleteCellValue(int series, int i, int j, bool authorizeNo
   return result;
 }
 
-InputViewController * StoreController::inputViewController() {
+InputViewController *StoreController::inputViewController() {
   return Statistics::App::app()->inputViewController();
 }
 
-}
+}  // namespace Statistics

@@ -1,4 +1,5 @@
 #include "main_controller.h"
+
 #include "app.h"
 #include "table_layout.h"
 
@@ -6,7 +7,7 @@ namespace Elements {
 
 // MainController::ContentView
 
-Escher::View * MainController::ContentView::subviewAtIndex(int index) {
+Escher::View* MainController::ContentView::subviewAtIndex(int index) {
   if (index == 0) {
     return &m_elementsView;
   }
@@ -16,18 +17,23 @@ Escher::View * MainController::ContentView::subviewAtIndex(int index) {
 
 void MainController::ContentView::layoutSubviews(bool force) {
   KDSize bannerSize = m_bannerView.minimalSizeForOptimalDisplay();
-  m_bannerView.setFrame(KDRect(0, bounds().height() - bannerSize.height(), bounds().width(), bannerSize.height()), force);
-  m_elementsView.setFrame(KDRect(0, 0, bounds().width(), bounds().height() - bannerSize.height()), force);
+  setChildFrame(&m_bannerView,
+                KDRect(0, bounds().height() - bannerSize.height(),
+                       bounds().width(), bannerSize.height()),
+                force);
+  setChildFrame(
+      &m_elementsView,
+      KDRect(0, 0, bounds().width(), bounds().height() - bannerSize.height()),
+      force);
 }
 
 // MainController
 
-MainController::MainController(Escher::StackViewController * parentResponder) :
-  ViewController(parentResponder),
-  m_detailsController(parentResponder),
-  m_displayTypeController(parentResponder),
-  m_view(this)
-{}
+MainController::MainController(Escher::StackViewController* parentResponder)
+    : ViewController(parentResponder),
+      m_detailsController(parentResponder),
+      m_displayTypeController(parentResponder),
+      m_view(this) {}
 
 void MainController::selectedElementHasChanged() {
   m_view.bannerView()->reload();
@@ -48,7 +54,7 @@ bool MainController::handleEvent(Ion::Events::Event e) {
     return false;
   }
 
-  ElementsViewDataSource * dataSource = App::app()->elementsViewDataSource();
+  ElementsViewDataSource* dataSource = App::app()->elementsViewDataSource();
   AtomicNumber z = dataSource->selectedElement();
 
   if (!ElementsDataBase::IsElement(z)) {
@@ -64,7 +70,6 @@ bool MainController::handleEvent(Ion::Events::Event e) {
   }
 
   if (e == Ion::Events::OK || e == Ion::Events::EXE) {
-    m_detailsController.selectCellAtLocation(0, 0);
     stackOpenPage(&m_detailsController);
     return true;
   }
@@ -83,8 +88,9 @@ bool MainController::handleEvent(Ion::Events::Event e) {
   return newZ != z;
 }
 
-void MainController::textFieldDidStartEditing(Escher::AbstractTextField * textField) {
-  ElementsViewDataSource * dataSource = App::app()->elementsViewDataSource();
+void MainController::textFieldDidStartEditing(
+    Escher::AbstractTextField* textField) {
+  ElementsViewDataSource* dataSource = App::app()->elementsViewDataSource();
   dataSource->setTextFilter(m_view.bannerView()->textField()->text());
   if (ElementsDataBase::IsElement(dataSource->selectedElement())) {
     /* Changing the selected element will reload the banner. */
@@ -94,11 +100,13 @@ void MainController::textFieldDidStartEditing(Escher::AbstractTextField * textFi
   }
 }
 
-bool MainController::textFieldShouldFinishEditing(Escher::AbstractTextField * textField, Ion::Events::Event event) {
+bool MainController::textFieldShouldFinishEditing(
+    Escher::AbstractTextField* textField, Ion::Events::Event event) {
   return event == Ion::Events::OK || event == Ion::Events::EXE;
 }
 
-bool MainController::textFieldDidReceiveEvent(Escher::AbstractTextField * textField, Ion::Events::Event event) {
+bool MainController::textFieldDidReceiveEvent(
+    Escher::AbstractTextField* textField, Ion::Events::Event event) {
   // Sto event needs to be handled here before AbstractTextField handles it.
   if (event == Ion::Events::Sto || event == Ion::Events::Var) {
     /* ElementsView only redraws its background when appearing to avoid blinking
@@ -108,8 +116,10 @@ bool MainController::textFieldDidReceiveEvent(Escher::AbstractTextField * textFi
   if (textField->isEditing()) {
     if (textField->cursorAtEndOfText()) {
       if (event == Ion::Events::Up || event == Ion::Events::Down) {
-        ElementsViewDataSource * dataSource = App::app()->elementsViewDataSource();
-        m_view.bannerView()->textField()->setSuggestion(dataSource->cycleSuggestion(event == Ion::Events::Down));
+        ElementsViewDataSource* dataSource =
+            App::app()->elementsViewDataSource();
+        m_view.bannerView()->textField()->setSuggestion(
+            dataSource->cycleSuggestion(event == Ion::Events::Down));
         return true;
       }
       if (event == Ion::Events::Right) {
@@ -126,9 +136,12 @@ bool MainController::textFieldDidReceiveEvent(Escher::AbstractTextField * textFi
   return false;
 }
 
-bool MainController::textFieldDidFinishEditing(Escher::AbstractTextField * textField, const char * text, Ion::Events::Event event) {
+bool MainController::textFieldDidFinishEditing(
+    Escher::AbstractTextField* textField, const char* text,
+    Ion::Events::Event event) {
   m_view.bannerView()->textField()->commitSuggestion();
-  AtomicNumber match = App::app()->elementsViewDataSource()->elementSearchResult();
+  AtomicNumber match =
+      App::app()->elementsViewDataSource()->elementSearchResult();
   if (!ElementsDataBase::IsElement(match)) {
     match = 1;
   }
@@ -136,21 +149,27 @@ bool MainController::textFieldDidFinishEditing(Escher::AbstractTextField * textF
   return true;
 }
 
-bool MainController::textFieldDidAbortEditing(Escher::AbstractTextField * textField) {
+bool MainController::textFieldDidAbortEditing(
+    Escher::AbstractTextField* textField) {
   endElementSearch(App::app()->elementsViewDataSource()->previousElement());
   return false;
 }
 
-bool MainController::textFieldDidHandleEvent(Escher::AbstractTextField * textField, bool returnValue, bool textDidChange) {
+bool MainController::textFieldDidHandleEvent(
+    Escher::AbstractTextField* textField, bool returnValue,
+    bool textDidChange) {
   if (textDidChange) {
     if (textField->isEditing()) {
       if (textField->draftTextLength() == 0) {
         textField->setEditing(false);
-        endElementSearch(App::app()->elementsViewDataSource()->previousElement());
+        endElementSearch(
+            App::app()->elementsViewDataSource()->previousElement());
       } else if (textField->cursorAtEndOfText()) {
         /* Update suggestion text */
-        ElementsViewDataSource * dataSource = App::app()->elementsViewDataSource();
-        m_view.bannerView()->textField()->setSuggestion(dataSource->suggestedElementName());
+        ElementsViewDataSource* dataSource =
+            App::app()->elementsViewDataSource();
+        m_view.bannerView()->textField()->setSuggestion(
+            dataSource->suggestedElementName());
       } else {
         m_view.bannerView()->textField()->setSuggestion(nullptr);
       }
@@ -161,10 +180,10 @@ bool MainController::textFieldDidHandleEvent(Escher::AbstractTextField * textFie
 }
 
 void MainController::endElementSearch(AtomicNumber z) {
-  ElementsViewDataSource * dataSource = App::app()->elementsViewDataSource();
+  ElementsViewDataSource* dataSource = App::app()->elementsViewDataSource();
   dataSource->setSelectedElement(z);
   dataSource->setTextFilter(nullptr);
   m_view.bannerView()->textField()->setSuggestion(nullptr);
 }
 
-}
+}  // namespace Elements

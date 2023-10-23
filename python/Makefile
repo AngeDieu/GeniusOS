@@ -1,6 +1,8 @@
 SFLAGS += -Ipython/src
 SFLAGS += -Ipython/port
 SFLAGS += -I$(BUILD_DIR)/python/port
+# Add NumWorks Ulab config
+SFLAGS += -DULAB_CONFIG_FILE="\"numworks_ulab_config.h\""
 
 # How to maintain this Makefile
 # - Copy PY_CORE_O_BASENAME from py.mk into py_src
@@ -147,6 +149,24 @@ port_src += $(addprefix python/port/,\
   mod/matplotlib/pyplot/plot_controller.cpp \
   mod/matplotlib/pyplot/plot_store.cpp \
   mod/matplotlib/pyplot/pyplot_view.cpp \
+  mod/ndarray_operators.c \
+  mod/ulab_tools.c \
+  mod/ndarray.c \
+  mod/numpy/ndarray/ndarray_iter.c \
+  mod/ndarray_properties.c \
+  mod/numpy/approx.c \
+  mod/numpy/compare.c \
+  mod/numpy/carray/carray_tools.c \
+  mod/numpy/create.c \
+  mod/numpy/filter.c \
+  mod/numpy/linalg/linalg_tools.c \
+  mod/numpy/numerical.c \
+  mod/numpy/poly.c \
+  mod/numpy/stats.c \
+  mod/numpy/transform.c \
+  mod/numpy/vector.c \
+  mod/numpy/numpy.c \
+  mod/ulab.c \
   mod/time/modtime.c \
   mod/time/modtime_table.c \
   mod/turtle/modturtle.cpp \
@@ -163,6 +183,12 @@ port_src += $(addprefix python/port/,\
 # by DMP_QSTR_random.
 $(call object_for,python/src/py/objmodule.c): SFLAGS += -DMP_QSTR_urandom="MP_QSTR_random"
 $(call object_for,python/src/extmod/modurandom.c): SFLAGS += -DMP_QSTR_urandom="MP_QSTR_random"
+
+# Dummy headers to satisfy Ulab module unused files includes like
+# "numpy/carray/carray.h"
+$(call object_for,python/port/mod/%.c): SFLAGS += -Ipython/port/mod/include
+# Useful for both "../scipy/signal/signal.h" and "carray/carray.h"
+$(call object_for,python/port/mod/%.c): SFLAGS += -Ipython/port/mod/include/numpy
 
 # Handle upward-growing stack
 # Some platforms such as emscripten have a stack that grows up. We've rewritten
@@ -201,6 +227,7 @@ tests_src += $(addprefix python/test/,\
   ion.cpp \
   kandinsky.cpp \
   math.cpp \
+  numpy.cpp \
   random.cpp \
   time.cpp \
   turtle.cpp \

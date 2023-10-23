@@ -14,56 +14,40 @@ escher_src += $(addprefix escher/src/,\
   button_cell.cpp \
   button_state.cpp \
   button_row_controller.cpp \
-  buffer_table_cell.cpp \
-  buffer_table_cell_with_message.cpp \
-  buffer_table_cell_with_editable_text.cpp \
-  cell_with_margins.cpp \
   chained_text_field_delegate.cpp \
   chevron_view.cpp \
   clipboard.cpp \
   container.cpp \
   dropdown_view.cpp \
   editable_expression_cell.cpp \
+  editable_expression_model_cell.cpp \
   editable_text_cell.cpp \
   ellipsis_view.cpp \
-  expression_field.cpp \
   even_odd_cell.cpp \
   even_odd_cell_with_ellipsis.cpp \
   even_odd_buffer_text_cell.cpp \
   even_odd_editable_text_cell.cpp \
   even_odd_expression_cell.cpp \
   even_odd_message_text_cell.cpp \
-  explicit_selectable_list_view_controller.cpp \
-  expression_cell_with_editable_text_with_message.cpp \
-  expression_table_cell.cpp \
-  expression_table_cell_with_buffer.cpp \
-  expression_table_cell_with_expression.cpp \
-  expression_table_cell_with_message.cpp \
-  expression_view.cpp \
+  explicit_list_view_data_source.h \
+  expression_input_bar.cpp \
+  layout_view.cpp \
+  gauge_view.cpp \
+  glyphs_view.cpp \
   highlight_cell.cpp \
   highlight_image_cell.cpp \
   horizontal_or_vertical_layout.cpp \
-  gauge_view.cpp \
   image_view.cpp \
+  init.cpp \
   input_event_handler.cpp \
   invocation.cpp \
   input_view_controller.cpp \
   key_view.cpp \
   layout_field.cpp \
   list_view_data_source.cpp \
-  message_table_cell.cpp \
-  message_table_cell_with_buffer.cpp \
-  message_table_cell_with_chevron_and_buffer.cpp \
-  message_table_cell_with_chevron_and_message.cpp \
-  message_table_cell_with_chevron_and_expression.cpp \
-  message_table_cell_with_editable_text.cpp \
-  message_table_cell_with_editable_text_with_message.cpp \
-  message_table_cell_with_expression.cpp \
-  message_table_cell_with_gauge.cpp \
-  message_table_cell_with_message.cpp \
-  message_table_cell_with_message_with_buffer.cpp \
+  menu_cell.cpp \
+  menu_cell_with_editable_text.cpp \
   message_text_view.cpp \
-  metric.cpp \
   modal_view_controller.cpp \
   modal_view_empty_controller.cpp \
   nested_menu_controller.cpp \
@@ -75,9 +59,12 @@ escher_src += $(addprefix escher/src/,\
   scroll_view.cpp \
   scroll_view_data_source.cpp \
   scroll_view_indicator.cpp \
-  scrollable_expression_view.cpp \
+  scrollable_layout_view.cpp \
   scrollable_view.cpp \
+  selectable_list_view.cpp \
   selectable_list_view_controller.cpp \
+  selectable_list_view_delegate.cpp \
+  list_with_top_and_bottom_controller.cpp \
   selectable_table_view.cpp \
   solid_color_view.cpp \
   stack_view.cpp \
@@ -85,13 +72,12 @@ escher_src += $(addprefix escher/src/,\
   stack_header_view.cpp \
   subapp_cell.cpp \
   switch_view.cpp \
+  tab_union_view_controller.cpp \
   tab_view.cpp \
   tab_view_cell.cpp \
   tab_view_controller.cpp \
   tab_view_data_source.cpp \
   table_view_with_frozen_header.cpp \
-  table_view_with_top_and_bottom_views.cpp \
-  table_cell.cpp \
   table_size_1D_manager.cpp \
   table_view.cpp \
   table_view_data_source.cpp \
@@ -105,8 +91,6 @@ escher_src += $(addprefix escher/src/,\
   toggleable_view.cpp \
   toolbox.cpp \
   transparent_image_view.cpp \
-  transparent_image_cell_with_message.cpp \
-  transparent_view.cpp \
   unequal_view.cpp \
   view.cpp \
   view_controller.cpp \

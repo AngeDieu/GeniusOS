@@ -1,15 +1,21 @@
 #include "right_integral_calculation.h"
-#include "../distribution/distribution.h"
-#include <poincare/preferences.h>
-#include <cmath>
+
 #include <assert.h>
+#include <poincare/preferences.h>
+
+#include <cmath>
+
+#include "../distribution/distribution.h"
 
 namespace Distributions {
 
-RightIntegralCalculation::RightIntegralCalculation(Distribution * distribution) :
-  Calculation(distribution),
-  m_lowerBound(distribution->defaultComputedValue())
-{}
+RightIntegralCalculation::RightIntegralCalculation(Distribution* distribution)
+    : Calculation(distribution),
+      m_lowerBound(distribution->defaultComputedValue()) {
+  if (!distribution->allParametersAreInitialized()) {
+    m_result = k_medianProbability;
+  }
+}
 
 I18n::Message RightIntegralCalculation::legendForParameterAtIndex(int index) {
   assert(index >= 0 && index < 2);
@@ -26,6 +32,10 @@ void RightIntegralCalculation::setParameterAtIndex(double f, int index) {
   }
   if (index == 1) {
     m_result = f;
+  }
+  if (!m_distribution->allParametersAreInitialized()) {
+    computeUnknownDistributionParameter();
+    return;
   }
   compute(index);
 }
@@ -46,8 +56,12 @@ void RightIntegralCalculation::compute(int indexKnownElement) {
     m_result = m_distribution->rightIntegralFromAbscissa(m_lowerBound);
   } else {
     if (m_distribution->authorizedParameterAtIndex(m_lowerBound, 0)) {
-      double currentResult = m_distribution->rightIntegralFromAbscissa(m_lowerBound);
-      if (std::fabs(currentResult - m_result) < std::pow(10.0, - Poincare::Preferences::VeryLargeNumberOfSignificantDigits)) {
+      double currentResult =
+          m_distribution->rightIntegralFromAbscissa(m_lowerBound);
+      if (std::fabs(currentResult - m_result) <
+          std::pow(
+              10.0,
+              -Poincare::Preferences::VeryLargeNumberOfSignificantDigits)) {
         m_result = currentResult;
         return;
       }
@@ -60,4 +74,10 @@ void RightIntegralCalculation::compute(int indexKnownElement) {
   }
 }
 
+void RightIntegralCalculation::computeUnknownDistributionParameter() {
+  assert(m_distribution->canHaveUninitializedParameter());
+  m_distribution->computeUnknownParameterForProbabilityAndBound(
+      m_result, m_lowerBound, false);
 }
+
+}  // namespace Distributions

@@ -1,17 +1,23 @@
 #include "shift_alpha_lock_view.h"
+
 #include <escher/palette.h>
+
+#include "title_bar_view.h"
 
 using namespace Escher;
 
-ShiftAlphaLockView::ShiftAlphaLockView() :
-  View(),
-  m_shiftAlphaView(KDFont::Size::Small, I18n::Message::Default, KDContext::k_alignRight, KDContext::k_alignCenter, KDColorWhite, Palette::YellowDark),
-  m_status(Ion::Events::ShiftAlphaStatus::Default)
-{
-}
+ShiftAlphaLockView::ShiftAlphaLockView()
+    : View(),
+      m_shiftAlphaView(
+          I18n::Message::Default,
+          {.style = {.glyphColor = KDColorWhite,
+                     .backgroundColor = TitleBarView::k_backgroundColor,
+                     .font = KDFont::Size::Small},
+           .horizontalAlignment = KDGlyph::k_alignRight}),
+      m_status(Ion::Events::ShiftAlphaStatus::Default) {}
 
-void ShiftAlphaLockView::drawRect(KDContext * ctx, KDRect rect) const {
-  ctx->fillRect(bounds(), Palette::YellowDark);
+void ShiftAlphaLockView::drawRect(KDContext* ctx, KDRect rect) const {
+  ctx->fillRect(bounds(), TitleBarView::k_backgroundColor);
 }
 
 bool ShiftAlphaLockView::setStatus(Ion::Events::ShiftAlphaStatus status) {
@@ -35,17 +41,22 @@ bool ShiftAlphaLockView::setStatus(Ion::Events::ShiftAlphaStatus status) {
       default:
         assert(false);
     }
-    markRectAsDirty(bounds());
+    layoutSubviews();
+    markWholeFrameAsDirty();
     return true;
   }
   return false;
 }
 
 KDSize ShiftAlphaLockView::minimalSizeForOptimalDisplay() const {
-  KDSize modifierSize = KDFont::Font(KDFont::Size::Small)->stringSize(I18n::translate(I18n::Message::Alpha));
+  KDSize modifierSize = KDFont::Font(KDFont::Size::Small)
+                            ->stringSize(I18n::translate(I18n::Message::Alpha));
   KDSize lockSize = m_lockView.minimalSizeForOptimalDisplay();
-  KDCoordinate height = lockSize.height() > modifierSize.height() ? lockSize.height() : modifierSize.height();
-  return KDSize(modifierSize.width() + lockSize.width() + k_lockRightMargin, height);
+  KDCoordinate height = lockSize.height() > modifierSize.height()
+                            ? lockSize.height()
+                            : modifierSize.height();
+  return KDSize(modifierSize.width() + lockSize.width() + k_lockRightMargin,
+                height);
 }
 
 int ShiftAlphaLockView::numberOfSubviews() const {
@@ -65,7 +76,7 @@ int ShiftAlphaLockView::numberOfSubviews() const {
   }
 }
 
-View * ShiftAlphaLockView::subviewAtIndex(int index) {
+View* ShiftAlphaLockView::subviewAtIndex(int index) {
   if (index == 0) {
     return &m_shiftAlphaView;
   }
@@ -73,9 +84,18 @@ View * ShiftAlphaLockView::subviewAtIndex(int index) {
 }
 
 void ShiftAlphaLockView::layoutSubviews(bool force) {
-  KDSize modifierSize = KDFont::Font(KDFont::Size::Small)->stringSize(I18n::translate(I18n::Message::Alpha));
-  m_shiftAlphaView.setFrame(KDRect(bounds().width() - modifierSize.width(), (bounds().height()- modifierSize.height())/2, modifierSize), force);
+  KDSize modifierSize = KDFont::Font(KDFont::Size::Small)
+                            ->stringSize(I18n::translate(I18n::Message::Alpha));
+  setChildFrame(
+      &m_shiftAlphaView,
+      KDRect(bounds().width() - modifierSize.width(),
+             (bounds().height() - modifierSize.height()) / 2, modifierSize),
+      force);
 
   KDSize lockSize = m_lockView.minimalSizeForOptimalDisplay();
-  m_lockView.setFrame(KDRect(bounds().width() - modifierSize.width() - lockSize.width() - k_lockRightMargin, (bounds().height()- lockSize.height())/2, lockSize), force);
+  setChildFrame(&m_lockView,
+                KDRect(bounds().width() - modifierSize.width() -
+                           lockSize.width() - k_lockRightMargin,
+                       (bounds().height() - lockSize.height()) / 2, lockSize),
+                force);
 }

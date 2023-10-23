@@ -5,30 +5,36 @@
 #include "box_axis_view.h"
 #include "box_banner_view.h"
 #include "box_view.h"
+#include "data_view_controller.h"
 #include "multiple_data_view.h"
 
 namespace Statistics {
 
 class MultipleBoxesView : public MultipleDataView {
-public:
-  MultipleBoxesView(Store * store, int * selectedBoxCalculation);
+ public:
+  MultipleBoxesView(Store* store, DataViewController* dataViewController);
   // MultipleDataView
-  BoxBannerView * bannerView() override { return &m_bannerView; }
-  BoxView * plotViewForSeries(int series) override;
+  BoxBannerView* bannerView() override { return &m_bannerView; }
+  BoxView* plotViewForSeries(int series) override;
   void layoutDataSubviews(bool force) override;
   void reload() override;
-  bool moveSelectionHorizontally(int series, int deltaIndex);
+  bool moveSelectionHorizontally(int series,
+                                 OMG::HorizontalDirection direction);
 
   // View
   int numberOfSubviews() const override;
-  Escher::View * subviewAtIndex(int index) override;
+  Escher::View* subviewAtIndex(int index) override;
 
-private:
-  constexpr static KDCoordinate TopToFirstBoxMargin(int numberOfSeries) { return numberOfSeries == 1 ? 48 : 14; }
-  constexpr static KDCoordinate BoxToBoxMargin(int numberOfSeries) { return numberOfSeries == 3 ? 12 : 24; }
+ private:
+  constexpr static KDCoordinate TopToFirstBoxMargin(int numberOfSeries) {
+    return numberOfSeries == 1 ? 48 : 14;
+  }
+  constexpr static KDCoordinate BoxToBoxMargin(int numberOfSeries) {
+    return numberOfSeries == 3 ? 12 : 24;
+  }
   constexpr static KDCoordinate k_axisViewHeight = 21;
 
-  void drawRect(KDContext * ctx, KDRect rect) const override;
+  void drawRect(KDContext* ctx, KDRect rect) const override;
   void changeDataViewSeriesSelection(int series, bool select) override;
   BoxView m_boxView1;
   BoxView m_boxView2;
@@ -37,6 +43,6 @@ private:
   BoxBannerView m_bannerView;
 };
 
-}
+}  // namespace Statistics
 
 #endif

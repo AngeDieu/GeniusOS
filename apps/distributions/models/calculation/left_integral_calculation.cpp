@@ -1,15 +1,21 @@
 #include "left_integral_calculation.h"
-#include "../distribution/distribution.h"
-#include <poincare/preferences.h>
-#include <cmath>
+
 #include <assert.h>
+#include <math.h>
+#include <poincare/preferences.h>
+
+#include <cmath>
+
+#include "../distribution/distribution.h"
 
 namespace Distributions {
 
-LeftIntegralCalculation::LeftIntegralCalculation(Distribution * distribution) :
-  Calculation(distribution),
-  m_upperBound(distribution->defaultComputedValue())
-{}
+LeftIntegralCalculation::LeftIntegralCalculation(Distribution* distribution)
+    : Calculation(distribution),
+      m_upperBound(distribution->defaultComputedValue()),
+      m_result(!distribution->allParametersAreInitialized()
+                   ? k_medianProbability
+                   : NAN) {}
 
 I18n::Message LeftIntegralCalculation::legendForParameterAtIndex(int index) {
   assert(index >= 0 && index < 2);
@@ -27,6 +33,10 @@ void LeftIntegralCalculation::setParameterAtIndex(double f, int index) {
   if (index == 1) {
     m_result = f;
   }
+  if (!m_distribution->allParametersAreInitialized()) {
+    computeUnknownDistributionParameter();
+    return;
+  }
   compute(index);
 }
 
@@ -43,21 +53,35 @@ void LeftIntegralCalculation::compute(int indexKnownElement) {
     return;
   }
   if (indexKnownElement == 0) {
-    m_result = m_distribution->cumulativeDistributiveFunctionAtAbscissa(m_upperBound);
+    m_result =
+        m_distribution->cumulativeDistributiveFunctionAtAbscissa(m_upperBound);
   } else {
     if (!std::isnan(m_upperBound)) {
-      double currentResult = m_distribution->cumulativeDistributiveFunctionAtAbscissa(m_upperBound);
-      if (std::fabs(currentResult - m_result) < std::pow(10.0, - Poincare::Preferences::VeryLargeNumberOfSignificantDigits)) {
+      double currentResult =
+          m_distribution->cumulativeDistributiveFunctionAtAbscissa(
+              m_upperBound);
+      if (std::fabs(currentResult - m_result) <
+          std::pow(
+              10.0,
+              -Poincare::Preferences::VeryLargeNumberOfSignificantDigits)) {
         m_result = currentResult;
         return;
       }
     }
-    m_upperBound = m_distribution->cumulativeDistributiveInverseForProbability(m_result);
-    m_result = m_distribution->cumulativeDistributiveFunctionAtAbscissa(m_upperBound);
+    m_upperBound =
+        m_distribution->cumulativeDistributiveInverseForProbability(m_result);
+    m_result =
+        m_distribution->cumulativeDistributiveFunctionAtAbscissa(m_upperBound);
     if (std::isnan(m_upperBound)) {
       m_result = NAN;
     }
   }
 }
 
+void LeftIntegralCalculation::computeUnknownDistributionParameter() {
+  assert(m_distribution->canHaveUninitializedParameter());
+  m_distribution->computeUnknownParameterForProbabilityAndBound(
+      m_result, m_upperBound, true);
 }
+
+}  // namespace Distributions

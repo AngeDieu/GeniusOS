@@ -1,25 +1,28 @@
 #include "test_mode_controller.h"
-#include "../main_controller.h"
-#include "../../exam_mode_configuration.h"
+
 #include <assert.h>
+
+#include "../main_controller.h"
 
 using namespace Escher;
 
 namespace Settings {
 
-KDCoordinate TestModeController::nonMemoizedRowHeight(int j) {
-  Escher::MessageTableCellWithChevron tempCell;
-  return heightForCellAtIndexWithWidthInit(&tempCell, j);
+KDCoordinate TestModeController::nonMemoizedRowHeight(int row) {
+  MenuCell<MessageTextView, EmptyCellWidget, ChevronView> tempCell;
+  return protectedNonMemoizedRowHeight(&tempCell, row);
 }
 
-HighlightCell * TestModeController::reusableCell(int index, int type) {
+HighlightCell* TestModeController::reusableCell(int index, int type) {
   assert(index >= 0 && index < k_numberOfCells && type == 0);
   return m_cells + index;
 }
 
 bool TestModeController::handleEvent(Ion::Events::Event event) {
-  if (event == Ion::Events::OK || event == Ion::Events::EXE || event == Ion::Events::Right) {
-    m_mainController->pushModel(m_messageTreeModel->childAtIndex(selectedRow()));
+  if (event == Ion::Events::OK || event == Ion::Events::EXE ||
+      event == Ion::Events::Right) {
+    m_mainController->pushModel(
+        m_messageTreeModel->childAtIndex(selectedRow()));
     return true;
   }
   return GenericSubController::handleEvent(event);
@@ -35,4 +38,4 @@ void TestModeController::didBecomeFirstResponder() {
   }
 }
 
-}
+}  // namespace Settings

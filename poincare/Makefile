@@ -10,10 +10,11 @@ poincare_src += $(addprefix poincare/src/,\
   conjugate_layout.cpp \
   curly_brace_layout.cpp \
   derivative_layout.cpp \
-  empty_layout.cpp \
+  empty_rectangle.cpp \
   fraction_layout.cpp \
   grid_layout.cpp \
   horizontal_layout.cpp \
+  input_beautification.cpp \
   integral_layout.cpp \
   layout.cpp \
   layout_cursor.cpp \
@@ -21,6 +22,7 @@ poincare_src += $(addprefix poincare/src/,\
   letter_a_with_sub_and_superscript_layout.cpp \
   letter_c_with_sub_and_superscript_layout.cpp \
   letter_with_sub_and_superscript_layout.cpp \
+  linear_layout_decoder.cpp \
   list_sequence_layout.cpp \
   matrix_layout.cpp \
   nth_root_layout.cpp \
@@ -55,7 +57,6 @@ poincare_src += $(addprefix poincare/src/,\
   helpers.cpp \
   hypergeometric_distribution.cpp \
   init.cpp \
-  input_beautification.cpp \
   inv_method.cpp \
   normal_distribution.cpp \
   pdf_method.cpp \
@@ -66,6 +67,7 @@ poincare_src += $(addprefix poincare/src/,\
   statistics_dataset.cpp\
   student_distribution.cpp \
   uniform_distribution.cpp \
+  xnt_helpers.cpp \
 )
 
 poincare_src += $(addprefix poincare/src/,\
@@ -169,6 +171,8 @@ poincare_src += $(addprefix poincare/src/,\
   percent.cpp \
   permute_coefficient.cpp \
   piecewise_operator.cpp \
+  point.cpp \
+  point_evaluation.cpp \
   point_of_interest.cpp \
   polynomial.cpp \
   power.cpp \
@@ -241,7 +245,7 @@ tests_src += $(addprefix poincare/test/,\
   function_solver.cpp\
   helper.cpp\
   helpers.cpp\
-  input_beautification.cpp\
+  input_beautification.cpp \
   integer.cpp\
   layout.cpp\
   layout_cursor.cpp\
@@ -265,6 +269,7 @@ poincare_bench_src = $(addprefix poincare/src/,\
   helpers.cpp \
   init.cpp \
   integer.cpp \
+  preferences.cpp \
   print_float.cpp \
   print_int.cpp \
   serialization_helper.cpp \

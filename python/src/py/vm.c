@@ -287,9 +287,23 @@ outer_dispatch_loop:
                 RAISE(exc);
             }
 
+#if ASSERTIONS
+            // Can go up to mandelbrot(361)
+            int k_maxPythonIterations = 100000000;
+            int counter = 0;
+#endif
+
             // loop to execute byte code
             for (;;) {
 dispatch_loop:
+#if ASSERTIONS
+                // This avoids trapping the fuzzer in an infinite while loop
+                counter++;
+                if (counter > k_maxPythonIterations) {
+                    mp_obj_t obj = mp_obj_new_exception_msg(&mp_type_OverflowError, MP_ERROR_TEXT("Increase of k_maxPythonIterations needed."));
+                    RAISE(obj);
+                }
+#endif
 #if MICROPY_OPT_COMPUTED_GOTO
                 DISPATCH();
 #else
@@ -809,8 +823,8 @@ unwind_jump:;
                     obj = mp_getiter(obj, iter_buf);
                     if (obj != MP_OBJ_FROM_PTR(iter_buf)) {
                         // Iterator didn't use the stack so indicate that with MP_OBJ_NULL.
-                        sp[-MP_OBJ_ITER_BUF_NSLOTS + 1] = MP_OBJ_NULL;
-                        sp[-MP_OBJ_ITER_BUF_NSLOTS + 2] = obj;
+                        *(sp - MP_OBJ_ITER_BUF_NSLOTS + 1) = MP_OBJ_NULL;
+                        *(sp - MP_OBJ_ITER_BUF_NSLOTS + 2) = obj;
                     }
                     DISPATCH();
                 }
@@ -821,8 +835,8 @@ unwind_jump:;
                     DECODE_ULABEL; // the jump offset if iteration finishes; for labels are always forward
                     code_state->sp = sp;
                     mp_obj_t obj;
-                    if (sp[-MP_OBJ_ITER_BUF_NSLOTS + 1] == MP_OBJ_NULL) {
-                        obj = sp[-MP_OBJ_ITER_BUF_NSLOTS + 2];
+                    if (*(sp - MP_OBJ_ITER_BUF_NSLOTS + 1) == MP_OBJ_NULL) {
+                        obj = *(sp - MP_OBJ_ITER_BUF_NSLOTS + 2);
                     } else {
                         obj = MP_OBJ_FROM_PTR(&sp[-MP_OBJ_ITER_BUF_NSLOTS + 1]);
                     }

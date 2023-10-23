@@ -1,11 +1,15 @@
-#include <poincare/inv_method.h>
 #include <poincare/infinity.h>
 #include <poincare/integer.h>
+#include <poincare/inv_method.h>
 #include <poincare/rational.h>
 
 namespace Poincare {
 
-Expression InverseMethod::shallowReduce(Expression * x, const Distribution * distribution, Expression * parameters, ReductionContext reductionContext, Expression * expression) const {
+Expression InverseMethod::shallowReduce(Expression *x,
+                                        const Distribution *distribution,
+                                        Expression *parameters,
+                                        ReductionContext reductionContext,
+                                        Expression *expression) const {
   Expression a = x[0];
   // Check a
   if (a.type() != ExpressionNode::Type::Rational) {
@@ -43,8 +47,7 @@ Expression InverseMethod::shallowReduce(Expression * x, const Distribution * dis
         }
         return expression->replaceWithUndefinedInPlace();
       }
-      // n if a == 1
-      // TODO: false if p == 0 ?
+      // n if a == 1 (TODO: false if p == 0 ?)
       Expression n = parameters[0];
       expression->replaceWithInPlace(n);
       return n;
@@ -70,7 +73,8 @@ Expression InverseMethod::shallowReduce(Expression * x, const Distribution * dis
       return result;
     }
 
-    if (distribution->hasType(Distribution::Type::Normal) || distribution->hasType(Distribution::Type::Student)) {
+    if (distribution->hasType(Distribution::Type::Normal) ||
+        distribution->hasType(Distribution::Type::Student)) {
       // Normal and Student (all distributions with real line support)
       Expression result = Infinity::Builder(is0);
       expression->replaceWithInPlace(result);
@@ -95,4 +99,4 @@ Expression InverseMethod::shallowReduce(Expression * x, const Distribution * dis
   return *expression;
 }
 
-}
+}  // namespace Poincare

@@ -4,40 +4,22 @@
 
 namespace Poincare {
 
-// LayoutNode
-void CodePointLayoutNode::moveCursorLeft(LayoutCursor * cursor, bool * shouldRecomputeLayout, bool forSelection) {
-  if (cursor->position() == LayoutCursor::Position::Right) {
-    cursor->setPosition(LayoutCursor::Position::Left);
-    return;
-  }
-  LayoutNode * parentNode = parent();
-  if (parentNode != nullptr) {
-    parentNode->moveCursorLeft(cursor, shouldRecomputeLayout);
-  }
+bool CodePointLayoutNode::IsCodePoint(Layout l, CodePoint c) {
+  return l.type() == Type::CodePointLayout &&
+         static_cast<CodePointLayout &>(l).codePoint() == c;
 }
 
-void CodePointLayoutNode::moveCursorRight(LayoutCursor * cursor, bool * shouldRecomputeLayout, bool forSelection) {
-  if (cursor->position() == LayoutCursor::Position::Left) {
-    cursor->setPosition(LayoutCursor::Position::Right);
-    return;
-  }
-  LayoutNode * parentNode = parent();
-  if (parentNode != nullptr) {
-    parentNode->moveCursorRight(cursor, shouldRecomputeLayout);
-  }
-}
-
-int CodePointLayoutNode::serialize(char * buffer, int bufferSize, Preferences::PrintFloatMode floatDisplayMode, int numberOfSignificantDigits) const {
+int CodePointLayoutNode::serialize(char *buffer, int bufferSize,
+                                   Preferences::PrintFloatMode floatDisplayMode,
+                                   int numberOfSignificantDigits) const {
   return SerializationHelper::CodePoint(buffer, bufferSize, m_codePoint);
 }
 
-bool CodePointLayoutNode::isCollapsable(int * numberOfOpenParenthesis, bool goingLeft) const {
+bool CodePointLayoutNode::isCollapsable(
+    int *numberOfOpenParenthesis, OMG::HorizontalDirection direction) const {
   if (*numberOfOpenParenthesis <= 0) {
-    if (m_codePoint == '+'
-        || m_codePoint == UCodePointRightwardsArrow
-        || m_codePoint.isEquationOperator()
-        || m_codePoint == ',')
-    {
+    if (m_codePoint == '+' || m_codePoint == UCodePointRightwardsArrow ||
+        m_codePoint.isEquationOperator() || m_codePoint == ',') {
       return false;
     }
     if (m_codePoint == '-') {
@@ -48,10 +30,10 @@ bool CodePointLayoutNode::isCollapsable(int * numberOfOpenParenthesis, bool goin
       if (!parent.isUninitialized()) {
         int indexOfThis = parent.indexOfChild(thisRef);
         if (indexOfThis > 0) {
-          Layout leftBrother = parent.childAtIndex(indexOfThis-1);
-          if (leftBrother.type() == Type::CodePointLayout
-              && static_cast<CodePointLayout&>(leftBrother).codePoint() == UCodePointLatinLetterSmallCapitalE)
-          {
+          Layout leftBrother = parent.childAtIndex(indexOfThis - 1);
+          if (leftBrother.type() == Type::CodePointLayout &&
+              static_cast<CodePointLayout &>(leftBrother).codePoint() ==
+                  UCodePointLatinLetterSmallCapitalE) {
             return true;
           }
         }
@@ -66,32 +48,20 @@ bool CodePointLayoutNode::isCollapsable(int * numberOfOpenParenthesis, bool goin
       if (!parent.isUninitialized()) {
         int indexOfThis = parent.indexOfChild(thisRef);
         Layout brother;
-        if (indexOfThis > 0 && goingLeft) {
-          brother = parent.childAtIndex(indexOfThis-1);
-        } else if (indexOfThis < parent.numberOfChildren() - 1 && !goingLeft) {
-          brother = parent.childAtIndex(indexOfThis+1);
+        if (indexOfThis > 0 && direction.isLeft()) {
+          brother = parent.childAtIndex(indexOfThis - 1);
+        } else if (indexOfThis < parent.numberOfChildren() - 1 &&
+                   direction.isRight()) {
+          brother = parent.childAtIndex(indexOfThis + 1);
         }
-        if (!brother.isUninitialized() && brother.type() == LayoutNode::Type::FractionLayout) {
+        if (!brother.isUninitialized() &&
+            brother.type() == LayoutNode::Type::FractionLayout) {
           return false;
         }
       }
     }
   }
   return true;
-}
-
-bool CodePointLayoutNode::canBeOmittedMultiplicationLeftFactor() const {
-  if (isMultiplicationCodePoint()) {
-    return false;
-  }
-  return LayoutNode::canBeOmittedMultiplicationLeftFactor();
-}
-
-bool CodePointLayoutNode::canBeOmittedMultiplicationRightFactor() const {
-  if (m_codePoint == '!' || isMultiplicationCodePoint()) {
-    return false;
-  }
-  return LayoutNode::canBeOmittedMultiplicationRightFactor();
 }
 
 // Sizing and positioning
@@ -107,42 +77,46 @@ KDSize CodePointLayoutNode::computeSize(KDFont::Size font) {
 }
 
 KDCoordinate CodePointLayoutNode::computeBaseline(KDFont::Size font) {
-  return KDFont::GlyphHeight(font)/2;
+  return KDFont::GlyphHeight(font) / 2;
 }
 
-void CodePointLayoutNode::render(KDContext * ctx, KDPoint p, KDFont::Size font, KDColor expressionColor, KDColor backgroundColor, Layout * selectionStart, Layout * selectionEnd, KDColor selectionColor) {
-  // Handle the case of the middle dot which has to be drawn by hand since it is thinner than the other glyphs.
+void CodePointLayoutNode::render(KDContext *ctx, KDPoint p,
+                                 KDGlyph::Style style) {
+  /* Handle the case of the middle dot which has to be drawn by hand since it is
+   * thinner than the other glyphs. */
   if (m_codePoint == UCodePointMiddleDot) {
     int width = k_middleDotWidth;
-    int height = KDFont::GlyphHeight(font);
-    ctx->fillRect(KDRect(p, width, height), backgroundColor);
-    ctx->fillRect(KDRect(p.translatedBy(KDPoint(width / 2, height / 2 - 1)), 1, 1), expressionColor);
+    int height = KDFont::GlyphHeight(style.font);
+    ctx->fillRect(KDRect(p, width, height), style.backgroundColor);
+    ctx->fillRect(
+        KDRect(p.translatedBy(KDPoint(width / 2, height / 2 - 1)), 1, 1),
+        style.glyphColor);
     return;
   }
-  // General case
-  constexpr int bufferSize = sizeof(CodePoint)/sizeof(char) + 1; // Null-terminating char
+  // General case. + 1 for null-terminating char
+  constexpr int bufferSize = sizeof(CodePoint) / sizeof(char) + 1;
   char buffer[bufferSize];
   SerializationHelper::CodePoint(buffer, bufferSize, m_codePoint);
-  ctx->drawString(buffer, p, font, expressionColor, backgroundColor);
+  ctx->drawString(buffer, p, style);
 }
 
 bool CodePointLayoutNode::isMultiplicationCodePoint() const {
-  return m_codePoint == '*'
-    || m_codePoint == UCodePointMultiplicationSign
-    || m_codePoint == UCodePointMiddleDot;
+  return m_codePoint == '*' || m_codePoint == UCodePointMultiplicationSign ||
+         m_codePoint == UCodePointMiddleDot;
 }
 
 bool CodePointLayoutNode::protectedIsIdenticalTo(Layout l) {
-  assert(l.type() == Type::CodePointLayout || l.type() == Type::CombinedCodePointsLayout);
-  CodePointLayout & cpl = static_cast<CodePointLayout &>(l);
+  assert(l.type() == Type::CodePointLayout ||
+         l.type() == Type::CombinedCodePointsLayout);
+  CodePointLayout &cpl = static_cast<CodePointLayout &>(l);
   return codePoint() == cpl.codePoint();
 }
 
 CodePointLayout CodePointLayout::Builder(CodePoint c) {
-  void * bufferNode = TreePool::sharedPool()->alloc(sizeof(CodePointLayoutNode));
-  CodePointLayoutNode * node = new (bufferNode) CodePointLayoutNode(c);
+  void *bufferNode = TreePool::sharedPool->alloc(sizeof(CodePointLayoutNode));
+  CodePointLayoutNode *node = new (bufferNode) CodePointLayoutNode(c);
   TreeHandle h = TreeHandle::BuildWithGhostChildren(node);
   return static_cast<CodePointLayout &>(h);
 }
 
-}
+}  // namespace Poincare

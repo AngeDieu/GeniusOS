@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# The purpose of this script is to protect the master branch.
+# It is called before each git push and prevents you from doing the following
+# commands without confirmation:
+# `git push origin master``
+# `git push --force origin master`
+# `git push --delete origin master`
+# `git push origin xxxxx:master`
+#
+# Set up (all commands are run from root epsilon folder):
+# 1. Copy this file into your repo in the folder `.git/hooks`:
+#     `cp build/git/pre-push .git/hooks/pre-push`
+# 2. Set executable permissions:
+#     `chmod +x .git/hooks/pre-push`
+# 3. Re-init your git:
+#     `git init`
+#
+
+protected='master'
+
+if read local_ref local_sha remote_ref remote_sha; then
+    if [[ "$remote_ref" == *"$protected"* ]]; then
+        echo -en "\033[1;101mWARNING: You're about to push on $protected. Do you REALLY want to do this ? [y|N] \033[0m"
+        read -n 1 -r < /dev/tty
+        echo
+        if echo $REPLY | grep -E '^[Yy]$' > /dev/null; then
+            exit 0 # push is confirmed
+        else
+            exit 1 # push is cancelled
+        fi
+    fi
+fi

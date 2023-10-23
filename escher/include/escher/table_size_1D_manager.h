@@ -10,11 +10,15 @@ class TableViewDataSource;
 /* This class and its children speed up the computation of width, height,
  * cumulatedSize and indexAfterCumulatedSize in TableViewDataSource */
 class TableSize1DManager {
-public:
+ public:
   constexpr static KDCoordinate k_undefinedSize = -1;
+  // The sizes are memoized and returned with separators
   virtual KDCoordinate computeSizeAtIndex(int i) = 0;
-  virtual KDCoordinate computeCumulatedSizeBeforeIndex(int i, KDCoordinate defaultSize) = 0;
-  virtual int computeIndexAfterCumulatedSize(KDCoordinate offset, KDCoordinate defaultSize) = 0;
+  virtual KDCoordinate computeCumulatedSizeBeforeIndex(
+      int i, KDCoordinate defaultSize) = 0;
+  virtual int computeIndexAfterCumulatedSize(KDCoordinate offset,
+                                             KDCoordinate defaultSize) = 0;
+  virtual bool sizeAtIndexIsMemoized(int i) const { return false; }
 
   virtual void resetMemoization(bool force = true) {}
   virtual void lockMemoization(bool state) const {}
@@ -23,12 +27,22 @@ public:
 /* Use RegularTableSize1DManager if the height or width is constant.
  * The main advantage of this class is to compute cumulatedSizeAtIndex
  * and indexAfterCumulatedSize without going through a for-loop and adding
- * n-times for the same value. */
+ * n-times for the same value.
+ *
+ * WARNING: This size manager does not work properly with table separators. */
 class RegularTableSize1DManager : public TableSize1DManager {
-public:
+ public:
   KDCoordinate computeSizeAtIndex(int i) override { return k_undefinedSize; }
-  KDCoordinate computeCumulatedSizeBeforeIndex(int i, KDCoordinate defaultSize) override { return defaultSize == k_undefinedSize ? k_undefinedSize : i * defaultSize; }
-  int computeIndexAfterCumulatedSize(KDCoordinate offset, KDCoordinate defaultSize) override { return (defaultSize == k_undefinedSize || defaultSize == 0) ? defaultSize : offset / defaultSize; }
+  KDCoordinate computeCumulatedSizeBeforeIndex(
+      int i, KDCoordinate defaultSize) override {
+    return defaultSize == k_undefinedSize ? k_undefinedSize : i * defaultSize;
+  }
+  int computeIndexAfterCumulatedSize(KDCoordinate offset,
+                                     KDCoordinate defaultSize) override {
+    return (defaultSize == k_undefinedSize || defaultSize == 0)
+               ? defaultSize
+               : offset / defaultSize;
+  }
 };
 
 /* MemoizedTableSize1DManager are used for table which have a dynamically
@@ -36,68 +50,117 @@ public:
  * This property slows down navigation due to complex cell size calculation.
  * To avoid that, cells size and cumulated size is memoized around the most
  * recently used cells. Total size is also memoized. */
-template <int N>
 class MemoizedTableSize1DManager : public TableSize1DManager {
-public:
-  MemoizedTableSize1DManager(TableViewDataSource * tableViewDataSource) :
-    m_dataSource(tableViewDataSource),
-    m_memoizationLockedLevel(0)
-  {
-    resetMemoization(true);
-  }
+ public:
+  MemoizedTableSize1DManager(TableViewDataSource* tableViewDataSource)
+      : m_dataSource(tableViewDataSource), m_memoizationLockedLevel(0) {}
   KDCoordinate computeSizeAtIndex(int i) override;
-  KDCoordinate computeCumulatedSizeBeforeIndex(int i, KDCoordinate defaultSize) override;
-  int computeIndexAfterCumulatedSize(KDCoordinate offset, KDCoordinate defaultSize) override;
+  KDCoordinate computeCumulatedSizeBeforeIndex(
+      int i, KDCoordinate defaultSize) override;
+  int computeIndexAfterCumulatedSize(KDCoordinate offset,
+                                     KDCoordinate defaultSize) override;
 
   void resetMemoization(bool force = true) override;
   void lockMemoization(bool state) const override;
 
-  void updateMemoizationForIndex(int index, KDCoordinate previousSize, KDCoordinate newSize = k_undefinedSize);
+  bool sizeAtIndexIsMemoized(int i) const override {
+    return i >= m_memoizedIndexOffset &&
+           i < m_memoizedIndexOffset + memoizedLinesCount();
+  }
+
+  void updateMemoizationForIndex(int index, KDCoordinate previousSize,
+                                 KDCoordinate newSize = k_undefinedSize);
+#if 0
   void deleteIndexFromMemoization(int index, KDCoordinate previousSize);
-protected:
-  virtual int numberOfLines() const = 0; // Return number of rows or columns
+#endif
+
+ protected:
+  virtual int numberOfLines() const = 0;  // Return number of rows or columns
   virtual KDCoordinate sizeAtIndex(int i) const = 0;
   virtual KDCoordinate nonMemoizedSizeAtIndex(int i) const = 0;
   virtual KDCoordinate nonMemoizedCumulatedSizeBeforeIndex(int i) const = 0;
-  TableViewDataSource * m_dataSource;
-private:
-  constexpr static int k_memoizedLinesCount = N;
+  virtual int memoizedLinesCount() const = 0;
+  virtual KDCoordinate* memoizedSizes() = 0;
+  TableViewDataSource* m_dataSource;
+
+ private:
   int getMemoizedIndex(int index) const;
   void setMemoizationIndex(int index);
   void shiftMemoization(bool lowerIndex);
-  KDCoordinate m_memoizedSizes[k_memoizedLinesCount];
   KDCoordinate m_memoizedCumulatedSizeOffset;
-  KDCoordinate m_memoizedTotalSize;
   int m_memoizedIndexOffset;
+  KDCoordinate m_memoizedTotalSize;
+  /* These two values store the last computed value of
+   * computeIndexAfterCumulatedSize. Indeed, this method is called a countless
+   * amount of time each time a table is layouted because it is used to know the
+   * numberOfDisplayableRows which is called by methods like cellAtLocation or
+   * numberOfSubviews.
+   * Most of the time, computeIndexAfterCumulatedSize is always called with the
+   * same offset argument, so we just need to memoize the last computed value to
+   * greatly improve the performances.*/
+  int m_lastIndexAfterCumulatedSize;
+  KDCoordinate m_lastCumulatedSize;
   mutable int m_memoizationLockedLevel;
 };
 
 template <int N>
-class MemoizedColumnWidthManager : public MemoizedTableSize1DManager<N> {
-public:
-  MemoizedColumnWidthManager(TableViewDataSource * dataSource) : MemoizedTableSize1DManager<N>(dataSource) {}
-protected:
-  int numberOfLines() const override;
-  KDCoordinate sizeAtIndex(int i) const override;
-  KDCoordinate nonMemoizedSizeAtIndex(int i) const override;
-  KDCoordinate nonMemoizedCumulatedSizeBeforeIndex(int i) const override;
+class TemplatedMemoizedTableSize1DManager : public MemoizedTableSize1DManager {
+ public:
+  TemplatedMemoizedTableSize1DManager(TableViewDataSource* tableViewDataSource)
+      : MemoizedTableSize1DManager(tableViewDataSource) {
+    // Must be done here since virtual functions are not virtual in constructors
+    resetMemoization(true);
+  }
+
+ private:
+  constexpr static int k_memoizedLinesCount = N;
+  KDCoordinate* memoizedSizes() override { return m_memoizedSizes; }
+  int memoizedLinesCount() const override { return k_memoizedLinesCount; }
+  KDCoordinate m_memoizedSizes[k_memoizedLinesCount];
 };
 
 template <int N>
-class MemoizedRowHeightManager : public MemoizedTableSize1DManager<N> {
-public:
-  MemoizedRowHeightManager(TableViewDataSource * dataSource) : MemoizedTableSize1DManager<N>(dataSource) {}
-protected:
-  int numberOfLines() const override;
-  KDCoordinate sizeAtIndex(int i) const override;
-  KDCoordinate nonMemoizedSizeAtIndex(int i) const override;
-  KDCoordinate nonMemoizedCumulatedSizeBeforeIndex(int i) const override;
+class MemoizedColumnWidthManager
+    : public TemplatedMemoizedTableSize1DManager<N> {
+ public:
+  MemoizedColumnWidthManager(TableViewDataSource* dataSource)
+      : TemplatedMemoizedTableSize1DManager<N>(dataSource) {}
+
+ protected:
+  int numberOfLines() const override {
+    return this->m_dataSource->numberOfColumns();
+  }
+  KDCoordinate sizeAtIndex(int i) const override {
+    return this->m_dataSource->columnWidth(i);
+  }
+  KDCoordinate nonMemoizedSizeAtIndex(int i) const override {
+    return this->m_dataSource->nonMemoizedColumnWidth(i, true);
+  }
+  KDCoordinate nonMemoizedCumulatedSizeBeforeIndex(int i) const override {
+    return this->m_dataSource->nonMemoizedCumulatedWidthBeforeColumn(i);
+  }
 };
 
-using ShortMemoizedColumnWidthManager = MemoizedColumnWidthManager<7>;
-using MemoizedOneRowHeightManager = MemoizedRowHeightManager<1>;
-using ShortMemoizedRowHeightManager = MemoizedRowHeightManager<7>;
-using LongMemoizedRowHeightManager = MemoizedRowHeightManager<10>;
+template <int N>
+class MemoizedRowHeightManager : public TemplatedMemoizedTableSize1DManager<N> {
+ public:
+  MemoizedRowHeightManager(TableViewDataSource* dataSource)
+      : TemplatedMemoizedTableSize1DManager<N>(dataSource) {}
 
-}
+ protected:
+  int numberOfLines() const override {
+    return this->m_dataSource->numberOfRows();
+  }
+  KDCoordinate sizeAtIndex(int i) const override {
+    return this->m_dataSource->rowHeight(i);
+  }
+  KDCoordinate nonMemoizedSizeAtIndex(int i) const override {
+    return this->m_dataSource->nonMemoizedRowHeight(i, true);
+  }
+  KDCoordinate nonMemoizedCumulatedSizeBeforeIndex(int i) const override {
+    return this->m_dataSource->nonMemoizedCumulatedHeightBeforeRow(i);
+  }
+};
+
+}  // namespace Escher
 #endif

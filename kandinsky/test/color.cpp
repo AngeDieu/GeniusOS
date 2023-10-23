@@ -1,12 +1,14 @@
-#include <quiz.h>
 #include <assert.h>
-
 #include <escher/palette.h>
 #include <kandinsky/color.h>
+#include <quiz.h>
+
+#include <array>
 #include <cmath>
 
 QUIZ_CASE(kandinsky_color_rgb) {
-  quiz_assert(sizeof(KDColor) == 2); // We really want KDColor to be packed
+  // We really want KDColor to be packed
+  quiz_assert(sizeof(KDColor) == 2);
 
   quiz_assert(KDColor::RGB24(0xFF0000) == 0xF800);
   quiz_assert(KDColor::RGB24(0x00FF00) == 0x07E0);
@@ -20,8 +22,9 @@ QUIZ_CASE(kandinsky_color_rgb) {
   quiz_assert(KDColor::RGB24(0x123456) == 0x11AA);
 }
 
-void assert_colors_blend_to(KDColor c1, KDColor c2, uint8_t alpha, KDColor res) {
-  quiz_assert(KDColor::Blend(c1, c2, alpha) == res );
+void assert_colors_blend_to(KDColor c1, KDColor c2, uint8_t alpha,
+                            KDColor res) {
+  quiz_assert(KDColor::Blend(c1, c2, alpha) == res);
 }
 
 QUIZ_CASE(kandinsky_color_blend) {
@@ -44,7 +47,7 @@ QUIZ_CASE(kandinsky_color_blend) {
   // Assert that blending two identical colors does not produce strange colors.
   for (uint16_t col = 0; col < 0xFFFF; col++) {
     KDColor color = KDColor::RGB16(col);
-    assert_colors_blend_to(color, color, col>>8, color);
+    assert_colors_blend_to(color, color, col >> 8, color);
   }
 }
 
@@ -67,17 +70,17 @@ QUIZ_CASE(kandinsky_color_hsv) {
    * The following HSV conversions are the conversions of the real RGB values.
    * */
   constexpr static KDColor::HSVColor dataColorsConversion[] = {
-    KDColor::HSVColor({357.0, 1.0, 255.0}), // Red
-    KDColor::HSVColor({226.0, 0.669, 242.0}), // Blue
-    KDColor::HSVColor({95.0, 0.99, 193.0}), // Green
-    KDColor::HSVColor({39.0, 0.808, 255.0}), // YellowDark
-    KDColor::HSVColor({327.0, 0.984, 255.0}), // Magenta
-    KDColor::HSVColor({198.0, 0.593, 236.0}), // Turquoise
-    KDColor::HSVColor({352.0, 0.329, 255.0}), // Pink
-    KDColor::HSVColor({28.0, 0.878, 254.0}), // Orange
+      KDColor::HSVColor({357.0, 1.0, 255.0}),    // Red
+      KDColor::HSVColor({226.0, 0.669, 242.0}),  // Blue
+      KDColor::HSVColor({95.0, 0.99, 193.0}),    // Green
+      KDColor::HSVColor({39.0, 0.808, 255.0}),   // YellowDark
+      KDColor::HSVColor({327.0, 0.984, 255.0}),  // Magenta
+      KDColor::HSVColor({198.0, 0.593, 236.0}),  // Turquoise
+      KDColor::HSVColor({352.0, 0.329, 255.0}),  // Pink
+      KDColor::HSVColor({28.0, 0.878, 254.0}),   // Orange
   };
   constexpr static int nRows = Escher::Palette::numberOfDataColors();
-  static_assert(sizeof(dataColorsConversion)/sizeof(KDColor::HSVColor) == nRows);
+  static_assert(std::size(dataColorsConversion) == nRows);
   for (int i = 0; i < nRows; i++) {
     KDColor conversionColor = KDColor::ConvertHSVToRGB(dataColorsConversion[i]);
     KDColor dataColor = Escher::Palette::DataColor[i];

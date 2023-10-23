@@ -1,4 +1,5 @@
 #include "homogeneity_data_source.h"
+
 #include <escher/even_odd_editable_text_cell.h>
 #include <poincare/print.h>
 #include <string.h>
@@ -7,15 +8,18 @@ using namespace Escher;
 
 namespace Inference {
 
-HomogeneityTableDataSource::HomogeneityTableDataSource() :
-  DynamicCellsDataSource<EvenOddBufferTextCell, k_homogeneityTableNumberOfReusableHeaderCells>(this),
-  m_headerPrefix(I18n::Message::Group),
-  m_topLeftCell(Escher::Palette::WallScreenDark)
-{
+HomogeneityTableDataSource::HomogeneityTableDataSource()
+    : DynamicCellsDataSource<InferenceEvenOddBufferCell,
+                             k_homogeneityTableNumberOfReusableHeaderCells>(
+          this),
+      m_headerPrefix(I18n::Message::Group),
+      m_topLeftCell(Escher::Palette::WallScreenDark) {
+  m_topLeftCell.hide();
 }
 
-void HomogeneityTableDataSource::initCell(EvenOddBufferTextCell, void * cell, int index) {
-  static_cast<EvenOddBufferTextCell *>(cell)->setFont(KDFont::Size::Small);
+void HomogeneityTableDataSource::initCell(InferenceEvenOddBufferCell,
+                                          void *cell, int index) {
+  static_cast<InferenceEvenOddBufferCell *>(cell)->setFont(KDFont::Size::Small);
 }
 
 int HomogeneityTableDataSource::reusableCellCount(int type) {
@@ -27,7 +31,7 @@ int HomogeneityTableDataSource::reusableCellCount(int type) {
   return k_numberOfReusableCells;
 }
 
-HighlightCell * HomogeneityTableDataSource::reusableCell(int i, int type) {
+HighlightCell *HomogeneityTableDataSource::reusableCell(int i, int type) {
   if (type == k_typeOfTopLeftCell) {
     assert(i == 0);
     return &m_topLeftCell;
@@ -37,32 +41,34 @@ HighlightCell * HomogeneityTableDataSource::reusableCell(int i, int type) {
   return innerCell(i);
 }
 
-int HomogeneityTableDataSource::typeAtLocation(int i, int j) {
-  if (i == 0 && j == 0) {
+int HomogeneityTableDataSource::typeAtLocation(int column, int row) {
+  if (column == 0 && row == 0) {
     return k_typeOfTopLeftCell;
   }
-  if (i== 0 || j == 0) {
+  if (column == 0 || row == 0) {
     return k_typeOfHeaderCells;
   }
   return k_typeOfInnerCells;
 }
 
-void HomogeneityTableDataSource::willDisplayCellAtLocation(Escher::HighlightCell * cell, int column, int row) {
-  if (row == 0 && column == 0) {
-    return;  // Top left
+void HomogeneityTableDataSource::fillCellForLocation(
+    Escher::HighlightCell *cell, int column, int row) {
+  int type = typeAtLocation(column, row);
+  if (type == k_typeOfTopLeftCell) {
+    return;
   }
-  // Headers
-  if (row == 0 || column == 0) {
-    Escher::EvenOddBufferTextCell * myCell = static_cast<Escher::EvenOddBufferTextCell *>(cell);
+  if (type == k_typeOfHeaderCells) {
+    InferenceEvenOddBufferCell *myCell =
+        static_cast<InferenceEvenOddBufferCell *>(cell);
     char digit;
     if (row == 0) {
-      myCell->setAlignment(KDContext::k_alignCenter, KDContext::k_alignCenter);
+      myCell->setAlignment(KDGlyph::k_alignCenter, KDGlyph::k_alignCenter);
       myCell->setFont(KDFont::Size::Small);
       myCell->setEven(true);
       assert(column - 1 <= '9' - '1');
       digit = '1' + (column - 1);
     } else {
-      myCell->setAlignment(KDContext::k_alignCenter, KDContext::k_alignCenter);
+      myCell->setAlignment(KDGlyph::k_alignCenter, KDGlyph::k_alignCenter);
       myCell->setFont(KDFont::Size::Small);
       myCell->setEven(row % 2 == 0);
       assert(row - 1 <= 'Z' - 'A');
@@ -70,22 +76,14 @@ void HomogeneityTableDataSource::willDisplayCellAtLocation(Escher::HighlightCell
     }
     constexpr int bufferSize = k_headerTranslationBuffer;
     char txt[bufferSize];
-    Poincare::Print::CustomPrintf(txt, bufferSize, "%s%c", I18n::translate(m_headerPrefix), digit);
+    Poincare::Print::CustomPrintf(txt, bufferSize, "%s%c",
+                                  I18n::translate(m_headerPrefix), digit);
     myCell->setText(txt);
     myCell->setTextColor(KDColorBlack);
   } else {
+    assert(type == k_typeOfInnerCells);
     willDisplayInnerCellAtLocation(cell, column - 1, row - 1);
   }
 }
 
-bool HomogeneityTableDataSource::unselectTopLeftCell(SelectableTableView * t, int previousSelectedCellX, int previousSelectedCellY) {
-  // Prevent top left selection
-  if (t->selectedRow() == 0 && t->selectedColumn() == 0) {
-    t->selectRow(previousSelectedCellY);
-    t->selectColumn(previousSelectedCellX);
-    return true;
-  }
-  return false;
-}
-
-}
+}  // namespace Inference

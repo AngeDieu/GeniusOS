@@ -1,13 +1,15 @@
 #include "dynamic_cells_data_source.h"
-#include "inference/app.h"
+
 #include <new>
+
+#include "inference/app.h"
 
 using namespace Escher;
 
 namespace Inference {
 
 template <typename T, int N>
-DynamicCellsDataSource<T,N>::~DynamicCellsDataSource() {
+DynamicCellsDataSource<T, N>::~DynamicCellsDataSource() {
   if (m_cells) {
     destroyCells();
   }
@@ -17,20 +19,15 @@ template <typename T, int N>
 void DynamicCellsDataSource<T, N>::createCells() {
   if (m_cells == nullptr) {
     createCellsWithOffset(0);
-    // TODO: reloadData(setFirstResponder = false, setSelection = false),
-    // selSelection argument was made especially for this local use. Should we
-    // use 'm_delegate->tableView()->deselectTable();' and ensure that the
-    // SelectionDataSource represents the selection correctly (before/after
-    // the table first/last cell to make sure to re-select the right cell when
-    // selecting the table).
-    m_delegate->tableView()->reloadData(false, false);
+    m_delegate->tableView()->reloadData(false);
   }
 }
 
 template <typename T, int N>
-void DynamicCellsDataSource<T,N>::createCellsWithOffset(size_t offset) {
+void DynamicCellsDataSource<T, N>::createCellsWithOffset(size_t offset) {
   assert(m_cells == nullptr);
-  static_assert(sizeof(T) * N <= App::k_bufferSize, "Inference::App::m_buffer is not large enough");
+  static_assert(sizeof(T) * N <= App::k_bufferSize,
+                "Inference::App::m_buffer is not large enough");
   assert(offset + sizeof(T) * N <= App::k_bufferSize);
   if (offset == 0) {
     /* The buffer gets entirely clean only when creating cells from the
@@ -44,19 +41,19 @@ void DynamicCellsDataSource<T,N>::createCellsWithOffset(size_t offset) {
 }
 
 template <typename T, int N>
-void DynamicCellsDataSource<T,N>::destroyCells() {
+void DynamicCellsDataSource<T, N>::destroyCells() {
   if (m_cells) {
     /* We manually call T destructor since we cannot use 'delete' due to the
      * placement new.
      * Note Bene: we qualify the destructor call (by prefixing it by its class
      * name) to avoid a compiler warning: T is not a final class and has virtual
-     * methods but no virtual destructor; the compiler might think we forgot some
-     * virtualization here but we didn't - we don't want to call a derived
+     * methods but no virtual destructor; the compiler might think we forgot
+     * some virtualization here but we didn't - we don't want to call a derived
      * destructor of children T class. */
     for (int i = 0; i < N; i++) {
       // Make sure not to keep the first responder pointing on a destroyed cell
-      Responder * cellResponder = m_cells[i].responder();
-      Responder * appFirstResponder = App::app()->firstResponder();
+      Responder* cellResponder = m_cells[i].responder();
+      Responder* appFirstResponder = App::app()->firstResponder();
       if (appFirstResponder && appFirstResponder->hasAncestor(cellResponder)) {
         App::app()->setFirstResponder(nullptr);
       }
@@ -67,22 +64,45 @@ void DynamicCellsDataSource<T,N>::destroyCells() {
 }
 
 template <typename T, int N>
-Escher::HighlightCell * DynamicCellsDataSource<T,N>::cell(int i) {
+Escher::HighlightCell* DynamicCellsDataSource<T, N>::cell(int i) {
   createCells();
   return &m_cells[i];
 }
 
-static_assert(k_homogeneityTableNumberOfReusableHeaderCells == HomogeneityTableDataSource::k_numberOfReusableColumns + HomogeneityTableDataSource::k_maxNumberOfReusableRows - 1, "k_homogeneityTableNumberOfReusableHeaderCells should be updated with HomogeneityTableDataSource::k_numberOfReusableColumns and HomogeneityTableDataSource::k_maxNumberOfReusableRows"); // -1 takes the hidden top left cell into account
-static_assert(k_homogeneityTableNumberOfReusableInnerCells == HomogeneityTableDataSource::k_numberOfReusableCells, "k_homogeneityTableNumberOfReusableHeaderCells should be updated with HomogeneityTableDataSource::k_numberOfReusableCells");
-static_assert(k_doubleColumnTableNumberOfReusableCells == GoodnessTableCell::k_numberOfReusableCells, "k_doubleColumnTableNumberOfReusableCells should be updated with GoodnessTableCell::k_numberOfReusableCells");
-static_assert(k_doubleColumnTableNumberOfReusableCells == SlopeTableCell::k_numberOfReusableCells, "k_doubleColumnTableNumberOfReusableCells should be updated with SlopeTableCell::k_numberOfReusableCells");
-static_assert(k_inputControllerNumberOfReusableCells == InputController::k_numberOfReusableCells, "k_inputControllerNumberOfReusableCells should be updated with InputController::k_numberOfReusableCells");
-static_assert(k_resultDataSourceNumberOfReusableCells == ResultsDataSource::k_numberOfReusableCells, "k_resultDataSourceNumberOfReusableCells should be updated with ResultsDataSource::k_numberOfReusableCells");
-template class DynamicCellsDataSource<Escher::EvenOddBufferTextCell, k_homogeneityTableNumberOfReusableHeaderCells>;
-template class DynamicCellsDataSource<Escher::EvenOddBufferTextCell, k_homogeneityTableNumberOfReusableInnerCells>;
-template class DynamicCellsDataSource<Escher::EvenOddEditableTextCell, k_homogeneityTableNumberOfReusableInnerCells>;
-template class DynamicCellsDataSource<Escher::EvenOddEditableTextCell, k_doubleColumnTableNumberOfReusableCells>;
-template class DynamicCellsDataSource<ExpressionCellWithEditableTextWithMessage, k_maxNumberOfExpressionCellsWithEditableTextWithMessage>;
-template class DynamicCellsDataSource<ExpressionCellWithBufferWithMessage, k_maxNumberOfExpressionCellsWithBufferWithMessage>;
-
-}
+// -1 takes the hidden top left cell into account
+static_assert(k_homogeneityTableNumberOfReusableHeaderCells ==
+                  HomogeneityTableDataSource::k_numberOfReusableColumns +
+                      HomogeneityTableDataSource::k_maxNumberOfReusableRows - 1,
+              "k_homogeneityTableNumberOfReusableHeaderCells should be updated "
+              "with HomogeneityTableDataSource::k_numberOfReusableColumns and "
+              "HomogeneityTableDataSource::k_maxNumberOfReusableRows");
+static_assert(k_homogeneityTableNumberOfReusableInnerCells ==
+                  HomogeneityTableDataSource::k_numberOfReusableCells,
+              "k_homogeneityTableNumberOfReusableHeaderCells should be updated "
+              "with HomogeneityTableDataSource::k_numberOfReusableCells");
+static_assert(k_doubleColumnTableNumberOfReusableCells ==
+                  GoodnessTableCell::k_numberOfReusableCells,
+              "k_doubleColumnTableNumberOfReusableCells should be updated with "
+              "GoodnessTableCell::k_numberOfReusableCells");
+static_assert(k_doubleColumnTableNumberOfReusableCells ==
+                  SlopeTableCell::k_numberOfReusableCells,
+              "k_doubleColumnTableNumberOfReusableCells should be updated with "
+              "SlopeTableCell::k_numberOfReusableCells");
+static_assert(k_inputControllerNumberOfReusableCells ==
+                  InputController::k_numberOfReusableCells,
+              "k_inputControllerNumberOfReusableCells should be updated with "
+              "InputController::k_numberOfReusableCells");
+template class DynamicCellsDataSource<
+    InferenceEvenOddBufferCell, k_homogeneityTableNumberOfReusableHeaderCells>;
+template class DynamicCellsDataSource<
+    InferenceEvenOddBufferCell, k_homogeneityTableNumberOfReusableInnerCells>;
+template class DynamicCellsDataSource<
+    InferenceEvenOddEditableCell, k_homogeneityTableNumberOfReusableInnerCells>;
+template class DynamicCellsDataSource<InferenceEvenOddEditableCell,
+                                      k_doubleColumnTableNumberOfReusableCells>;
+template class DynamicCellsDataSource<
+    Escher::MenuCellWithEditableText<Escher::LayoutView,
+                                     Escher::MessageTextView>,
+    k_maxNumberOfParameterCell>;
+template class DynamicCellsDataSource<ResultCell, k_maxNumberOfResultCells>;
+}  // namespace Inference

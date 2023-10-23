@@ -9,16 +9,19 @@
  * Comments and blank lines are ignored.
  * Macros such as "#if" may be used, as the preprocessor will be run before
  * this file is converted to .ld.
- * Calls to "static_assert" are replaced with LD "ASSERT". */
+ * Calls to "static_assert" are replaced with LD "ASSERT".
+ * Formatting must be deactivated */
 
 namespace Ion {
 namespace Device {
 namespace Board {
 namespace Config {
 
-/* The bootloader, kernel and userland starts should be aligned to the begining of a sector (to flash them easily).
- * The bootloader should occupty the whole internal flash
- * The memory layouts are the following:
+// clang-format off
+
+/* The bootloader, kernel and userland starts should be aligned to the beginning
+ * of a sector (to flash them easily). The bootloader should occupy the whole
+ * internal flash. The memory layouts are the following:
  * - internal flash: 4*16k
  * - external flash: 8*4k + 32K + 127 * 64K
  */
@@ -54,13 +57,13 @@ constexpr uint32_t TrampolineOrigin = BootloaderOrigin + BootloaderLength;
  *
  * The kernel initialisation vector table has specific requirements regarding:
  * - its memory space: it must be in the range 0x00000080 to 0x3FFFFF80
- * - its alignement: you must align the offset to the number of exception entries in the vector table. The minimum alignment is 128 words.
+ * - its alignment: you must align the offset to the number of exception entries in the vector table. The minimum alignment is 128 words.
  * [https://www.st.com/content/ccc/resource/technical/document/programming_manual/6c/3a/cb/e7/e4/ea/44/9b/DM00046982.pdf/files/DM00046982.pdf/jcr:content/translations/en.DM00046982.pdf]
  * Therefore, its is also relocated in sRAM at booting.
  */
 
 constexpr uint32_t ExternalFlashOrigin = 0x90000000;
-constexpr uint32_t ExternalFlashLength = 0x800000; // 8MiB
+constexpr uint32_t ExternalFlashLength = 0x800000;              // 8MiB
 constexpr uint32_t StandardExternalFlashSectorLength = 0x10000; // 64KiB
 
 constexpr uint32_t SlotAOffset = 0;
@@ -99,7 +102,7 @@ constexpr uint32_t ExternalAppsSectorUnit = 0x10000;
  * | USERLAND DATA/BSS | HEAP | USERLAND STACK | xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx |
  *
  * The few restrictions to layout the RAM memory are the following:
- * - the begining of Kernel data/bss section should be aligned: the isr table
+ * - the beginning of Kernel data/bss section should be aligned: the isr table
  * is within this section and the VTOR registers can only be configure with
  * some alignments constraints.
  * - the kernel RAM should be aligned to be able to add MPU protection over
@@ -111,7 +114,7 @@ constexpr uint32_t ExternalAppsSectorUnit = 0x10000;
 constexpr uint32_t SRAMOrigin = 0x20000000;
 constexpr uint32_t SRAMLength = 0x40000; // 256KiB
 
-constexpr uint32_t KernelStackLength = 0x400; // 1KiB
+constexpr uint32_t KernelStackLength = 0x400;   // 1KiB
 constexpr uint32_t KernelDataBSSLength = 0xC00; // 3KiB
 constexpr uint32_t KernelSRAMLength = KernelStackLength + KernelDataBSSLength;
 constexpr uint32_t KernelSRAMOrigin = SRAMOrigin + SRAMLength - KernelSRAMLength;
@@ -126,8 +129,9 @@ constexpr uint32_t FlasherLength = 0x10000; // 64KiB
 constexpr uint32_t FlasherOffset = SRAMLength - FlasherLength;
 static_assert(STBootloaderStack < FlasherOffset, "The flasher overlaps ST bootloader stack.");
 
+constexpr uint32_t SignedBinaryOffset = 0;
+
 constexpr uint32_t BenchLength = 0x20000; // 128KiB
-constexpr uint32_t BenchOffset = 0;
 
 /* Signature */
 constexpr uint32_t SignedPayloadLength = 8;
@@ -140,10 +144,11 @@ constexpr uint32_t SignatureLength = SingleSignatureLength * NumberOfSignatures;
 /* Other */
 constexpr int NumberOfMPUSectors = 8;
 
-}
-}
-}
-}
+// clang-format off
+
+} // namespace Config
+} // namespace Board
+} // namespace Device
+} // namespace Ion
 
 #endif
-

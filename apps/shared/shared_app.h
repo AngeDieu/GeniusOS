@@ -6,12 +6,13 @@
 namespace Shared {
 
 class SharedApp : public Escher::App {
-  public:
+ public:
   class Snapshot : public App::Snapshot {
-    public:
-    void pack(App * app) override;
+   public:
+    void tidy() override;
+    void reset() override;
   };
 };
 
-}
+}  // namespace Shared
 #endif

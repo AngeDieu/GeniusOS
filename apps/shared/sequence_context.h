@@ -4,57 +4,18 @@
 #include <poincare/context_with_parent.h>
 #include <poincare/expression.h>
 #include <poincare/symbol.h>
+
 #include "sequence_store.h"
 
 namespace Shared {
 
 class Sequence;
 
-template<typename T>
-class TemplatedSequenceContext {
-public:
-  TemplatedSequenceContext();
-  T valueOfCommonRankSequenceAtPreviousRank(int sequenceIndex, int rank) const;
-  void resetCache();
-  bool iterateUntilRank(int n, SequenceStore * sequenceStore, SequenceContext * sqctx);
-
-  int independentSequenceRank(int sequenceIndex) { return m_independentRanks[sequenceIndex]; }
-  void setIndependentSequenceRank(int rank, int sequenceIndex) { m_independentRanks[sequenceIndex] = rank; }
-  T independentSequenceValue(int sequenceIndex, int depth) { return m_independentRankValues[sequenceIndex][depth]; }
-  void setIndependentSequenceValue(T value, int sequenceIndex, int depth) { m_independentRankValues[sequenceIndex][depth] = value; }
-  void step(SequenceContext * sqctx, int sequenceIndex = -1);
-private:
-  constexpr static int k_maxRecurrentRank = 10000;
-  /* Cache:
-   * We use two types of cache :
-   * The first one is used to to accelerate the
-   * computation of values of recurrent sequences. We memoize the last computed
-   * values of the sequences and their associated ranks (n and n+1 for instance).
-   * Thereby, when another evaluation at a superior rank k > n+1 is called,
-   * we avoid iterating from 0 but can start from n. This cache allows us to step
-   * all of the sequences at once.
-   *
-   * The second one used used for fixed term computation. For instance, if a
-   * sequence is defined using a fixed term of another, u(3) for instance, we
-   * compute its value through the second type of cache. This way, we do not
-   * erase the data stored in the first type of cache and we can compute the
-   * values of each sequence at independent rank. This means that
-   * (u(3), v(5), w(10)) can be computed at the same time.
-   * This cache is therefore used for independent steps of sequences
-   */
-  int m_commonRank;
-  T m_commonRankValues[SequenceStore::k_maxNumberOfSequences][SequenceStore::k_maxRecurrenceDepth+1];
-
-  // Used for fixed computations
-  int m_independentRanks[SequenceStore::k_maxNumberOfSequences];
-  T m_independentRankValues[SequenceStore::k_maxNumberOfSequences][SequenceStore::k_maxRecurrenceDepth+1];
-};
-
 class SequenceContext : public Poincare::ContextWithParent {
-public:
-  SequenceContext(Poincare::Context * parentContext, SequenceStore * sequenceStore) :
-    ContextWithParent(parentContext),
-    m_sequenceStore(sequenceStore) {}
+ public:
+  SequenceContext(Poincare::Context* parentContext,
+                  SequenceStore* sequenceStore);
+
   /* u{n}, v{n} and w{n} must be parsed as sequences in the sequence app
    * so that u{n} can be defined as a function of v{n} without v{n} being
    * already defined.
@@ -62,48 +23,60 @@ public:
    * and calls the parent context in other cases.
    * The other methods (setExpressionForSymbolAbstract and
    * expressionForSymbolAbstract) always call the parent context. */
-  Poincare::Context::SymbolAbstractType expressionTypeForIdentifier(const char * identifier, int length) override;
-  template<typename T> T valueOfCommonRankSequenceAtPreviousRank(int sequenceIndex, int rank) {
-    return static_cast<TemplatedSequenceContext<T>*>(helper<T>())->valueOfCommonRankSequenceAtPreviousRank(sequenceIndex, rank);
-  }
+  Poincare::Context::SymbolAbstractType expressionTypeForIdentifier(
+      const char* identifier, int length) override;
 
-  void resetCache() {
-    m_floatSequenceContext.resetCache();
-    m_doubleSequenceContext.resetCache();
-  }
+  void resetCache();
+  void tidyDownstreamPoolFrom(Poincare::TreeNode* treePoolCursor) override;
+  SequenceStore* sequenceStore() { return m_sequenceStore; }
+  bool sequenceIsNotComputable(int sequenceIndex);
 
-  template<typename T> bool iterateUntilRank(int n) {
-    return static_cast<TemplatedSequenceContext<T>*>(helper<T>())->iterateUntilRank(n, m_sequenceStore, this);
+  void stepUntilRank(int sequenceIndex, int rank);
+  int rank(int sequenceIndex, bool intermediateComputation) {
+    return *(rankPointer(sequenceIndex, intermediateComputation));
   }
+  double storedValueOfSequenceAtRank(int sequenceIndex, int rank);
 
-  template<typename T> int independentSequenceRank(int sequenceIndex) {
-    return static_cast<TemplatedSequenceContext<T>*>(helper<T>())->independentSequenceRank(sequenceIndex);
-  }
+ private:
+  constexpr static int k_maxRecurrentRank = 10000;
+  constexpr static int k_storageDepth = 6;
+  constexpr static int k_numberOfSequences =
+      SequenceStore::k_maxNumberOfSequences;
 
-  template<typename T> void setIndependentSequenceRank(int rank, int sequenceIndex) {
-    static_cast<TemplatedSequenceContext<T>*>(helper<T>())->setIndependentSequenceRank(rank, sequenceIndex);
-  }
+  int* rankPointer(int sequenceIndex, bool intermediateComputation);
+  double* valuesPointer(int sequenceIndex, bool intermediateComputation);
+  void shiftValuesRight(int sequenceIndex, bool intermediateComputation,
+                        int delta);
+  void stepRanks(int sequenceIndex, bool intermediateComputation, int step);
+  void resetValuesOfSequence(int sequenceIndex, bool intermediateComputation);
+  void resetRanksAndValuesOfSequence(int sequenceIndex,
+                                     bool intermediateComputation);
+  void resetComputationStatus();
+  const Poincare::Expression protectedExpressionForSymbolAbstract(
+      const Poincare::SymbolAbstract& symbol, bool clone,
+      ContextWithParent* lastDescendantContext) override;
+  Sequence* sequenceAtNameIndex(int sequenceIndex) const;
+  int rankForInitialValuesStorage(int sequenceIndex) const;
 
-  template<typename T> T independentSequenceValue(int sequenceIndex, int depth) {
-    return static_cast<TemplatedSequenceContext<T>*>(helper<T>())->independentSequenceValue(sequenceIndex, depth);
-  }
+  /* Main ranks for main computations and intermediate ranks for intermediate
+   * computations (ex: computation of v(2) in u(3) = v(2) + 4). If ranks are
+   * {9,5,4} then values are {{u9,u8,u7}, {v5,v4,v3}, {w4,w3,w2}}. */
+  int m_mainRanks[k_numberOfSequences];
+  double m_mainValues[k_numberOfSequences][k_storageDepth];
+  int m_intermediateRanks[k_numberOfSequences];
+  double m_intermediateValues[k_numberOfSequences][k_storageDepth];
+  /* Save initial values to avoid stepping all values back. For example if in an
+   * intermediate computation we ask for v(n) with v(n+1) = v(n)+v(0), we will
+   * always step to rank n and then step back to rank 0, replacing all values
+   * stored in m_intermediateValues. */
+  double m_initialValues[k_numberOfSequences][k_storageDepth];
 
-  template<typename T> void setIndependentSequenceValue(T value, int sequenceIndex, int depth) {
-    static_cast<TemplatedSequenceContext<T>*>(helper<T>())->setIndependentSequenceValue(value, sequenceIndex, depth);
-  }
-
-  template<typename T> void stepSequenceAtIndex(int sequenceIndex) {
-    static_cast<TemplatedSequenceContext<T>*>(helper<T>())->step(this, sequenceIndex);
-  }
-  SequenceStore * sequenceStore() { return m_sequenceStore; }
-  void tidyDownstreamPoolFrom(char * treePoolCursor) override;
-private:
-  TemplatedSequenceContext<float> m_floatSequenceContext;
-  TemplatedSequenceContext<double> m_doubleSequenceContext;
-  SequenceStore * m_sequenceStore;
-  template<typename T> void * helper() { return sizeof(T) == sizeof(float) ? (void*) &m_floatSequenceContext : (void*) &m_doubleSequenceContext; }
+  SequenceStore* m_sequenceStore;
+  bool m_isInsideComputation;
+  int m_smallestRankBeingComputed[k_numberOfSequences];
+  Poincare::TrinaryBoolean m_sequenceIsNotComputable[k_numberOfSequences];
 };
 
-}
+}  // namespace Shared
 
 #endif

@@ -1,10 +1,12 @@
-#include "expressions_list_controller.h"
-#include "scrollable_three_expressions_cell_with_message.h"
 #include "illustrated_expressions_list_controller.h"
+
+#include <apps/shared/poincare_helpers.h>
 #include <poincare/exception_checkpoint.h>
 #include <poincare/symbol.h>
-#include <apps/shared/poincare_helpers.h>
+
 #include "../app.h"
+#include "additionnal_result_cell.h"
+#include "expressions_list_controller.h"
 
 using namespace Poincare;
 using namespace Escher;
@@ -12,8 +14,13 @@ using namespace Escher;
 namespace Calculation {
 
 void IllustratedExpressionsListController::didBecomeFirstResponder() {
-  selectCellAtLocation(0, showIllustration());
-  ListController::didBecomeFirstResponder();
+  selectCell(showIllustration());
+  ExpressionsListController::didBecomeFirstResponder();
+}
+
+void IllustratedExpressionsListController::viewWillAppear() {
+  ChainedExpressionsListController::viewWillAppear();
+  illustrationCell()->reload();  // compute labels
 }
 
 int IllustratedExpressionsListController::numberOfRows() const {
@@ -28,7 +35,8 @@ int IllustratedExpressionsListController::reusableCellCount(int type) {
   return k_maxNumberOfRows;
 }
 
-HighlightCell * IllustratedExpressionsListController::reusableCell(int index, int type) {
+HighlightCell* IllustratedExpressionsListController::reusableCell(int index,
+                                                                  int type) {
   assert(type == k_illustrationCellType || type == k_expressionCellType);
   assert(index >= 0);
   if (type == k_illustrationCellType) {
@@ -37,55 +45,61 @@ HighlightCell * IllustratedExpressionsListController::reusableCell(int index, in
   return &m_cells[index];
 }
 
-KDCoordinate IllustratedExpressionsListController::nonMemoizedRowHeight(int j) {
-  if (typeAtIndex(j) == k_illustrationCellType) {
+KDCoordinate IllustratedExpressionsListController::nonMemoizedRowHeight(
+    int row) {
+  if (typeAtRow(row) == k_illustrationCellType) {
     return k_illustrationHeight;
   }
-  ScrollableThreeExpressionsCellWithMessage tempCell;
-  return heightForCellAtIndexWithWidthInit(&tempCell, j);
+  AdditionnalResultCell tempCell;
+  return protectedNonMemoizedRowHeight(&tempCell, row);
 }
 
-void IllustratedExpressionsListController::willDisplayCellForIndex(HighlightCell * cell, int index) {
-  if (typeAtIndex(index) == k_illustrationCellType) {
+void IllustratedExpressionsListController::fillCellForRow(HighlightCell* cell,
+                                                          int row) {
+  if (typeAtRow(row) == k_illustrationCellType) {
     return;
   }
-  ChainedExpressionsListController::willDisplayCellForIndex(cell, index - showIllustration());
+  ChainedExpressionsListController::fillCellForRow(cell,
+                                                   row - showIllustration());
 }
 
-void IllustratedExpressionsListController::tableViewDidChangeSelection(SelectableTableView * t, int previousSelectedCellX, int previousSelectedCellY, bool withinTemporarySelection) {
-  if (withinTemporarySelection) {
-    return;
-  }
-  // Forbid selecting Illustration cell
-  if (t->selectedRow() == 0 && showIllustration()) {
-    t->selectRow(1);
-  }
-}
-
-void IllustratedExpressionsListController::tableViewDidChangeSelectionAndDidScroll(SelectableTableView * t, int previousSelectedCellX, int previousSelectedCellY, bool withinTemporarySelection) {
-  if (withinTemporarySelection) {
-    return;
-  }
-  /* But scroll to the top when we select the first
-   * ScrollableThreeExpressionsCell in order display the
-   * illustration cell. */
-  if (t->selectedRow() == 1 && showIllustration()) {
-    t->scrollToCell(0, 0);
+void IllustratedExpressionsListController::
+    listViewDidChangeSelectionAndDidScroll(SelectableListView* l,
+                                           int previousSelectedRow,
+                                           KDPoint previousOffset,
+                                           bool withinTemporarySelection) {
+  assert(l == m_listController.selectableListView());
+  if (!withinTemporarySelection && l->selectedRow() == 1 &&
+      showIllustration()) {
+    /* Illustration cell is not selectable so when we select row 1, scroll to
+     * the top to display the illustration. */
+    l->scrollToCell(0);
   }
 }
 
-int IllustratedExpressionsListController::textAtIndex(char * buffer, size_t bufferSize, HighlightCell * cell, int index) {
+int IllustratedExpressionsListController::textAtIndex(char* buffer,
+                                                      size_t bufferSize,
+                                                      HighlightCell* cell,
+                                                      int index) {
   assert(index >= showIllustration());
-  return ChainedExpressionsListController::textAtIndex(buffer, bufferSize, cell, index - showIllustration());
+  return ChainedExpressionsListController::textAtIndex(
+      buffer, bufferSize, cell, index - showIllustration());
 }
 
-void IllustratedExpressionsListController::setLineAtIndex(int index, Poincare::Expression formula, Poincare::Expression expression, Poincare::Context * context, Poincare::Preferences * preferences) {
+void IllustratedExpressionsListController::setLineAtIndex(
+    int index, Poincare::Expression formula, Poincare::Expression expression,
+    Poincare::Context* context, Poincare::Preferences* preferences) {
   m_layouts[index] = Shared::PoincareHelpers::CreateLayout(formula, context);
   Layout exact = getLayoutFromExpression(expression, context, preferences);
-  Layout approximated = getLayoutFromExpression(expression.approximate<double>(context, preferences->complexFormat(), preferences->angleUnit()), context, preferences);
-  // Make it editable to have Horiz(CodePoint("-"),CodePoint("1") == String("-1")
+  Layout approximated = getLayoutFromExpression(
+      expression.approximate<double>(context, preferences->complexFormat(),
+                                     preferences->angleUnit()),
+      context, preferences);
+  /* Make it editable to have Horiz(CodePoint("-"),CodePoint("1") ==
+   * String("-1") */
   m_exactLayouts[index] = exact;
-  m_approximatedLayouts[index] = exact.isIdenticalTo(approximated, true) ? Layout() : approximated;
+  m_approximatedLayouts[index] =
+      exact.isIdenticalTo(approximated, true) ? Layout() : approximated;
 };
 
-}
+}  // namespace Calculation

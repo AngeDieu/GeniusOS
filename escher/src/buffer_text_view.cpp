@@ -1,52 +1,53 @@
+#include <assert.h>
 #include <escher/buffer_text_view.h>
 #include <escher/i18n.h>
-#include <string.h>
 #include <poincare/print.h>
-#include <assert.h>
+#include <string.h>
 
 namespace Escher {
 
-BufferTextView::BufferTextView(KDFont::Size font, float horizontalAlignment, float verticalAlignment,
-    KDColor textColor, KDColor backgroundColor, size_t maxDisplayedTextLength) :
-  TextView(font, horizontalAlignment, verticalAlignment, textColor, backgroundColor),
-  m_buffer(),
-  m_maxDisplayedTextLength(maxDisplayedTextLength)
-{
-  assert(m_maxDisplayedTextLength < k_maxNumberOfChar && m_maxDisplayedTextLength >= 0);
+void AbstractBufferTextView::setText(const char* text) {
+  strlcpy(buffer(), text, maxTextSize());
+  markWholeFrameAsDirty();
 }
 
-const char * BufferTextView::text() const {
-  return m_buffer;
-}
-
-void BufferTextView::setText(const char * text) {
-  assert(m_maxDisplayedTextLength < sizeof(m_buffer));
-  strlcpy(m_buffer, text, m_maxDisplayedTextLength + 1);
-  markRectAsDirty(bounds());
-}
-
-void BufferTextView::setMessageWithPlaceholders(I18n::Message message, ...) {
+void AbstractBufferTextView::setMessageWithPlaceholders(I18n::Message message,
+                                                        ...) {
   va_list args;
   va_start(args, message);
-  privateSetMessageWithPlaceholders(message, args);
+  bool result = privateSetMessageWithPlaceholders(message, args);
+  assert(result);
+  (void)result;
   va_end(args);
 }
 
-void BufferTextView::privateSetMessageWithPlaceholders(I18n::Message message, va_list args) {
-  char tempBuffer[k_maxNumberOfChar];
-  Poincare::Print::PrivateCustomPrintf(tempBuffer, m_maxDisplayedTextLength + 1, I18n::translate(message), args);
-  setText(tempBuffer);
+bool AbstractBufferTextView::unsafeSetMessageWithPlaceholders(
+    I18n::Message message, ...) {
+  va_list args;
+  va_start(args, message);
+  bool result = privateSetMessageWithPlaceholders(message, args);
+  va_end(args);
+  return result;
 }
 
-void BufferTextView::appendText(const char * text) {
-  size_t previousTextLength = strlen(m_buffer);
-  if (previousTextLength < m_maxDisplayedTextLength) {
-    strlcpy(&m_buffer[previousTextLength], text, m_maxDisplayedTextLength + 1 - previousTextLength);
+bool AbstractBufferTextView::privateSetMessageWithPlaceholders(
+    I18n::Message message, va_list args) {
+  int length = Poincare::Print::PrivateCustomPrintf(
+      buffer(), maxTextSize(), I18n::translate(message), args);
+  markWholeFrameAsDirty();
+  return length < maxTextSize();
+}
+
+void AbstractBufferTextView::appendText(const char* text) {
+  int previousTextLength = strlen(buffer());
+  if (previousTextLength < maxTextSize() - 1) {
+    strlcpy(buffer() + previousTextLength, text,
+            maxTextSize() - previousTextLength);
   }
 }
 
-KDSize BufferTextView::minimalSizeForOptimalDisplay() const  {
-  return KDFont::Font(m_font)->stringSize(text());
+KDSize AbstractBufferTextView::minimalSizeForOptimalDisplay() const {
+  return KDFont::Font(font())->stringSize(text());
 }
 
-}
+}  // namespace Escher

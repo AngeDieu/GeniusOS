@@ -1,18 +1,19 @@
 #include "rt0.h"
+
 #include <stdint.h>
 #include <string.h>
 
 typedef void (*cxx_constructor)();
 
 extern "C" {
-  void abort();
-  extern char _data_section_start_flash;
-  extern char _data_section_start_ram;
-  extern char _data_section_end_ram;
-  extern char _bss_section_start_ram;
-  extern char _bss_section_end_ram;
-  extern cxx_constructor _init_array_start;
-  extern cxx_constructor _init_array_end;
+void abort();
+extern char _data_section_start_flash;
+extern char _data_section_start_ram;
+extern char _data_section_end_ram;
+extern char _bss_section_start_ram;
+extern char _bss_section_end_ram;
+extern cxx_constructor _init_array_start;
+extern cxx_constructor _init_array_end;
 }
 
 namespace Ion {
@@ -25,8 +26,10 @@ void configureRAM() {
    * in Flash, but linked as if it were in RAM. Now's our opportunity to copy
    * it. Note that until then the data section (e.g. global variables) contains
    * garbage values and should not be used. */
-  size_t dataSectionLength = (&_data_section_end_ram - &_data_section_start_ram);
-  memcpy(&_data_section_start_ram, &_data_section_start_flash, dataSectionLength);
+  size_t dataSectionLength =
+      (&_data_section_end_ram - &_data_section_start_ram);
+  memcpy(&_data_section_start_ram, &_data_section_start_flash,
+         dataSectionLength);
 
   /* Zero-out the bss section in RAM
    * Until we do, any uninitialized global variable will be unusable. */
@@ -45,19 +48,17 @@ void configureGlobalVariables() {
    * call the pointed function. */
 #define SUPPORT_CPP_GLOBAL_CONSTRUCTORS 0
 #if SUPPORT_CPP_GLOBAL_CONSTRUCTORS
-  for (cxx_constructor * c = &_init_array_start; c < &_init_array_end; c++) {
+  for (cxx_constructor* c = &_init_array_start; c < &_init_array_end; c++) {
     (*c)();
   }
 #else
   /* In practice, static initialized objects are a terrible idea. Since the init
    * order is not specified, most often than not this yields the dreaded static
-   * init order fiasco. How about bypassing the issue altogether? */
-  if (&_init_array_start != &_init_array_end) {
-    abort();
-  }
+   * init order fiasco. The linker asserts that the .init_array section is
+   * empty. */
 #endif
 }
 
-}
-}
-}
+}  // namespace Init
+}  // namespace Device
+}  // namespace Ion

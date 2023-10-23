@@ -5,9 +5,6 @@
 
 namespace Poincare {
 
-/* TODO: should Function directly inherit from Symbol and we remove
- * SymbolAbstract? */
-
 /* TODO: should we keep the size of SymbolAbstractNode as a member to speed up
  * TreePool scan? */
 
@@ -24,35 +21,65 @@ namespace Poincare {
  * */
 
 class SymbolAbstractNode : public ExpressionNode {
-public:
-  virtual const char * name() const = 0;
+ public:
+  SymbolAbstractNode(const char *newName, int length);
+
+  /* A symbol abstract can have a max length of 7 chars, or 9 if it's
+   * surrounded by quotation marks.
+   * This makes it so a 9 chars name (with quotation marks), can be
+   * turned into a 7 char name in the result cells of the solver (by
+   * removing the quotation marks). */
+  constexpr static size_t k_maxNameLengthWithoutQuotationMarks = 7;
+  constexpr static size_t k_maxNameLength =
+      k_maxNameLengthWithoutQuotationMarks + 2;
+  constexpr static size_t k_maxNameSize = k_maxNameLength + 1;
+  static bool NameHasQuotationMarks(const char *name, size_t length) {
+    return length > 2 && name[0] == '"' && name[length - 1] == '"';
+  }
+  static bool NameLengthIsValid(const char *name, size_t length) {
+    return length <= k_maxNameLengthWithoutQuotationMarks ||
+           (NameHasQuotationMarks(name, length) && length <= k_maxNameLength);
+  }
+  static size_t NameWithoutQuotationMarks(char *buffer, size_t bufferSize,
+                                          const char *name, size_t nameLength);
+
+  const char *name() const { return m_name; }
+
   size_t size() const override;
 
   // ExpressionNode
-  int simplificationOrderSameType(const ExpressionNode * e, bool ascending, bool ignoreParentheses) const override;
+  int simplificationOrderSameType(const ExpressionNode *e, bool ascending,
+                                  bool ignoreParentheses) const override;
 
   // Property
-  TrinaryBoolean isPositive(Context * context) const override;
+  TrinaryBoolean isPositive(Context *context) const override;
+  Expression replaceSymbolWithExpression(const SymbolAbstract &symbol,
+                                         const Expression &expression) override;
+  ExpressionNode::LayoutShape leftLayoutShape() const override;
 
   // TreeNode
 #if POINCARE_TREE_LOG
-  void logNodeName(std::ostream & stream) const override {
+  void logNodeName(std::ostream &stream) const override {
     stream << "SymbolAbstract";
   }
-  void logAttributes(std::ostream & stream) const override {
+  void logAttributes(std::ostream &stream) const override {
     stream << " name=\"" << name() << "\"";
   }
 #endif
 
-protected:
+ protected:
   // Layout
-  int serialize(char * buffer, int bufferSize, Preferences::PrintFloatMode floatDisplayMode, int numberOfSignificantDigits) const override;
+  int serialize(char *buffer, int bufferSize,
+                Preferences::PrintFloatMode floatDisplayMode,
+                int numberOfSignificantDigits) const override;
 
-private:
+  char m_name[0];  // MUST be the last member variable
+
+ private:
   virtual size_t nodeSize() const = 0;
 };
 
-/* WARNING: symbol abstract cannot have any virtual methods. Otherwise,
+/* WARNING: SymbolAbstract cannot have any virtual methods. Otherwise,
  * inheriting Expression won't fulfil the requirement:
  * 'sizeof(Expression) == sizeof(ExpressionInheritingFromSymbolAbstract)
  * due to the virtual table. */
@@ -66,23 +93,29 @@ class SymbolAbstract : public Expression {
   friend class SymbolNode;
   friend class SymbolAbstractNode;
   friend class SumAndProductNode;
-public:
-  const char * name() const { return node()->name(); }
-  bool hasSameNameAs(const SymbolAbstract & other) const;
-  static size_t TruncateExtension(char * dst, const char * src, size_t len);
-  static bool matches(const SymbolAbstract & symbol, ExpressionTrinaryTest test, Context * context, void * auxiliary = nullptr);
-  constexpr static size_t k_maxNameSize = 8;
 
-protected:
-  SymbolAbstract(const SymbolAbstractNode * node) : Expression(node) {}
+ public:
+  const char *name() const { return node()->name(); }
+  bool hasSameNameAs(const SymbolAbstract &other) const;
+  static size_t TruncateExtension(char *dst, const char *src, size_t size);
+  static bool matches(const SymbolAbstract &symbol, ExpressionTrinaryTest test,
+                      Context *context, void *auxiliary = nullptr);
+  Expression replaceSymbolWithExpression(const SymbolAbstract &symbol,
+                                         const Expression &expression);
+
+ protected:
+  SymbolAbstract(const SymbolAbstractNode *node) : Expression(node) {}
   template <typename T, typename U>
-  static T Builder(const char * name, int length);
-  SymbolAbstractNode * node() const { return static_cast<SymbolAbstractNode *>(Expression::node()); }
+  static T Builder(const char *name, int length);
+  SymbolAbstractNode *node() const {
+    return static_cast<SymbolAbstractNode *>(Expression::node());
+  }
 
-private:
-  static Expression Expand(const SymbolAbstract & symbol, Context * context, bool clone, SymbolicComputation symbolicComputation);
+ private:
+  static Expression Expand(const SymbolAbstract &symbol, Context *context,
+                           bool clone, SymbolicComputation symbolicComputation);
 };
 
-}
+}  // namespace Poincare
 
 #endif

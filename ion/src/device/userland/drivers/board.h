@@ -7,12 +7,11 @@ namespace Ion {
 namespace Device {
 namespace Board {
 
-void switchExecutableSlot(uint32_t leaveAddress);
-void enableExternalApps();
+void updateClearanceLevelForUnauthenticatedUserland(uint32_t leaveAddress);
+void updateClearanceLevelForExternalApps();
 
-}
-}
-}
+}  // namespace Board
+}  // namespace Device
+}  // namespace Ion
 
 #endif
-

@@ -1,4 +1,5 @@
 #include "apps_window.h"
+
 #include <escher/metric.h>
 extern "C" {
 #include <assert.h>
@@ -6,12 +7,8 @@ extern "C" {
 
 using namespace Escher;
 
-AppsWindow::AppsWindow() :
-  Window(),
-  m_titleBarView(),
-  m_hideTitleBarView(false)
-{
-}
+AppsWindow::AppsWindow()
+    : Window(), m_titleBarView(), m_hideTitleBarView(false) {}
 
 void AppsWindow::setTitle(I18n::Message title) {
   m_titleBarView.setTitle(title);
@@ -19,6 +16,10 @@ void AppsWindow::setTitle(I18n::Message title) {
 
 bool AppsWindow::updateBatteryLevel() {
   return m_titleBarView.setChargeState(Ion::Battery::level());
+}
+
+void AppsWindow::updateBatteryAnimation() {
+  return m_titleBarView.updateBatteryAnimation();
 }
 
 bool AppsWindow::updateIsChargingState() {
@@ -29,16 +30,13 @@ bool AppsWindow::updatePluggedState() {
   return m_titleBarView.setIsPlugged(Ion::USB::isPlugged());
 }
 
-void AppsWindow::refreshPreferences() {
-  m_titleBarView.refreshPreferences();
-}
+void AppsWindow::refreshPreferences() { m_titleBarView.refreshPreferences(); }
 
-void AppsWindow::reloadTitleBarView() {
-  m_titleBarView.reload();
-}
+void AppsWindow::reloadTitleBarView() { m_titleBarView.reload(); }
 
 bool AppsWindow::updateAlphaLock() {
-  return m_titleBarView.setShiftAlphaLockStatus(Ion::Events::shiftAlphaStatus());
+  return m_titleBarView.setShiftAlphaLockStatus(
+      Ion::Events::shiftAlphaStatus());
 }
 
 void AppsWindow::hideTitleBarView(bool hide) {
@@ -52,7 +50,7 @@ int AppsWindow::numberOfSubviews() const {
   return (m_contentView == nullptr ? 1 : 2);
 }
 
-View * AppsWindow::subviewAtIndex(int index) {
+View* AppsWindow::subviewAtIndex(int index) {
   if (index == 0) {
     return &m_titleBarView;
   }
@@ -62,14 +60,16 @@ View * AppsWindow::subviewAtIndex(int index) {
 
 void AppsWindow::layoutSubviews(bool force) {
   KDCoordinate titleHeight = m_hideTitleBarView ? 0 : Metric::TitleBarHeight;
-  m_titleBarView.setFrame(KDRect(0, 0, bounds().width(), titleHeight), force);
+  setChildFrame(&m_titleBarView, KDRect(0, 0, bounds().width(), titleHeight),
+                force);
   if (m_contentView != nullptr) {
-    m_contentView->setFrame(KDRect(0, titleHeight, bounds().width(), bounds().height()-titleHeight), force);
+    setChildFrame(m_contentView,
+                  KDRect(0, titleHeight, bounds().width(),
+                         bounds().height() - titleHeight),
+                  force);
   }
 }
 
 #if ESCHER_VIEW_LOGGING
-const char * AppsWindow::className() const {
-  return "Window";
-}
+const char* AppsWindow::className() const { return "Window"; }
 #endif

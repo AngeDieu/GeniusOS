@@ -15,12 +15,15 @@ app_sequence_src = $(addprefix apps/sequence/,\
   graph/graph_controller.cpp \
   graph/graph_view.cpp \
   graph/term_sum_controller.cpp \
+  list/editable_sequence_cell.cpp \
   list/list_controller.cpp \
   list/list_parameter_controller.cpp \
+  list/sequence_cell.cpp \
   list/sequence_toolbox.cpp \
   list/type_parameter_controller.cpp \
   list/vertical_sequence_title_cell.cpp \
   values/interval_parameter_controller.cpp \
+  values/sequence_column_parameter_controller.cpp \
   values/values_controller.cpp \
 )
 

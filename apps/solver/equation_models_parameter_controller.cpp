@@ -1,44 +1,46 @@
 #include "equation_models_parameter_controller.h"
-#include "list_controller.h"
-#include <poincare/layout_helper.h>
-#include <poincare/preferences.h>
+
 #include <apps/i18n.h>
 #include <assert.h>
+#include <poincare/layout_helper.h>
+#include <poincare/preferences.h>
+
+#include "list_controller.h"
 
 using namespace Poincare;
 using namespace Escher;
 
 namespace Solver {
 
-constexpr const char * EquationModelsParameterController::k_models[k_numberOfModels];
+constexpr const char*
+    EquationModelsParameterController::k_models[k_numberOfModels];
 
-EquationModelsParameterController::EquationModelsParameterController(Responder * parentResponder, EquationStore * equationStore, ListController * listController) :
-  SelectableListViewController(parentResponder),
-  m_emptyModelCell(I18n::Message::Empty),
-  m_equationStore(equationStore),
-  m_listController(listController)
-{
-  m_selectableTableView.setMargins(0);
-  m_selectableTableView.setDecoratorType(ScrollView::Decorator::Type::None);
+EquationModelsParameterController::EquationModelsParameterController(
+    Responder* parentResponder, EquationStore* equationStore,
+    ListController* listController)
+    : SelectableListViewController(parentResponder),
+      m_equationStore(equationStore),
+      m_listController(listController) {
+  m_emptyModelCell.label()->setMessage(I18n::Message::Empty);
+  m_selectableListView.setMargins(0);
+  m_selectableListView.hideScrollBars();
   for (int i = 0; i < k_numberOfExpressionCells; i++) {
-    Poincare::Expression e = Expression::Parse(k_models[i+1], nullptr); // No context needed
-    m_layouts[i] = e.createLayout(Poincare::Preferences::PrintFloatMode::Decimal, Preferences::ShortNumberOfSignificantDigits, nullptr);
-    m_modelCells[i].setLayout(m_layouts[i]);
-    m_modelCells[i].setParentResponder(&m_selectableTableView);
+    Poincare::Expression e =
+        Expression::Parse(k_models[i + 1], nullptr);  // No context needed
+    m_layouts[i] =
+        e.createLayout(Poincare::Preferences::PrintFloatMode::Decimal,
+                       Preferences::ShortNumberOfSignificantDigits, nullptr);
+    m_modelCells[i].label()->setLayout(m_layouts[i]);
   }
 }
 
-const char * EquationModelsParameterController::title() {
+const char* EquationModelsParameterController::title() {
   return I18n::translate(I18n::Message::UseEquationModel);
 }
 
 void EquationModelsParameterController::viewWillAppear() {
   ViewController::viewWillAppear();
-  selectCellAtLocation(0, 0);
-}
-
-void EquationModelsParameterController::didBecomeFirstResponder() {
-  Container::activeApp()->setFirstResponder(&m_selectableTableView);
+  selectCell(0);
 }
 
 bool EquationModelsParameterController::handleEvent(Ion::Events::Event event) {
@@ -63,20 +65,23 @@ int EquationModelsParameterController::numberOfRows() const {
   return 1 + k_numberOfExpressionCells;
 };
 
-KDCoordinate EquationModelsParameterController::nonMemoizedRowHeight(int j) {
-  int type = typeAtIndex(j);
-  int reusableCellIndex = j;
+KDCoordinate EquationModelsParameterController::nonMemoizedRowHeight(int row) {
+  int type = typeAtRow(row);
+  int reusableCellIndex = row;
   if (type == k_modelCellType) {
     reusableCellIndex -= reusableCellCount(k_emptyModelCellType);
   }
-  return heightForCellAtIndex(reusableCell(reusableCellIndex, type), j);
+  return protectedNonMemoizedRowHeight(reusableCell(reusableCellIndex, type),
+                                       row);
 }
 
-HighlightCell * EquationModelsParameterController::reusableCell(int index, int type) {
+HighlightCell* EquationModelsParameterController::reusableCell(int index,
+                                                               int type) {
   assert(index < reusableCellCount(type));
   if (type == k_emptyModelCellType) {
     return &m_emptyModelCell;
   }
+  assert(type == k_modelCellType);
   return &m_modelCells[index];
 }
 
@@ -88,4 +93,4 @@ int EquationModelsParameterController::reusableCellCount(int type) {
   return k_numberOfExpressionCells;
 }
 
-}
+}  // namespace Solver

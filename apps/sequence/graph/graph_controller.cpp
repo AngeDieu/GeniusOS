@@ -1,11 +1,13 @@
 #include "graph_controller.h"
-#include <cmath>
-#include <limits.h>
-#include "../app.h"
-#include <float.h>
-#include <cmath>
-#include <algorithm>
+
 #include <apps/i18n.h>
+#include <float.h>
+#include <limits.h>
+
+#include <algorithm>
+#include <cmath>
+
+#include "../app.h"
 
 using namespace Shared;
 using namespace Poincare;
@@ -13,17 +15,29 @@ using namespace Escher;
 
 namespace Sequence {
 
-GraphController::GraphController(Responder * parentResponder, Escher::InputEventHandlerDelegate * inputEventHandlerDelegate, SequenceStore * sequenceStore, CurveViewRange * graphRange, CurveViewCursor * cursor, int * indexFunctionSelectedByCursor, ButtonRowController * header) :
-  FunctionGraphController(parentResponder, inputEventHandlerDelegate, header, graphRange, &m_view, cursor, indexFunctionSelectedByCursor),
-  m_bannerView(this, inputEventHandlerDelegate, this),
-  m_view(sequenceStore, graphRange, m_cursor, &m_bannerView, &m_cursorView),
-  m_graphRange(graphRange),
-  m_curveParameterController(inputEventHandlerDelegate, this, &m_cobwebController, graphRange, m_cursor),
-  m_sequenceSelectionController(this),
-  m_termSumController(this, inputEventHandlerDelegate, &m_view, graphRange, m_cursor),
-  m_cobwebController(this, inputEventHandlerDelegate, this, &m_view, graphRange, m_cursor, &m_bannerView, &m_cursorView, sequenceStore),
-  m_sequenceStore(sequenceStore)
-{
+GraphController::GraphController(
+    Responder *parentResponder,
+    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
+    Escher::ButtonRowController *header, CurveViewRange *interactiveRange,
+    CurveViewCursor *cursor, int *selectedCurveIndex,
+    SequenceStore *sequenceStore)
+    : FunctionGraphController(parentResponder, inputEventHandlerDelegate,
+                              header, interactiveRange, &m_view, cursor,
+                              selectedCurveIndex),
+      m_bannerView(this, inputEventHandlerDelegate, this),
+      m_view(sequenceStore, interactiveRange, m_cursor, &m_bannerView,
+             &m_cursorView),
+      m_graphRange(interactiveRange),
+      m_curveParameterController(inputEventHandlerDelegate, this,
+                                 &m_cobwebController, interactiveRange,
+                                 m_cursor),
+      m_sequenceSelectionController(this),
+      m_termSumController(this, inputEventHandlerDelegate, &m_view,
+                          interactiveRange, m_cursor),
+      m_cobwebController(this, inputEventHandlerDelegate, &m_view,
+                         interactiveRange, m_cursor, &m_bannerView,
+                         &m_cursorView, sequenceStore),
+      m_sequenceStore(sequenceStore) {
   m_graphRange->setDelegate(this);
 }
 
@@ -37,26 +51,33 @@ I18n::Message GraphController::emptyMessage() {
 void GraphController::viewWillAppear() {
   m_view.setCursorView(&m_cursorView);
   m_cursorView.resetMemoization();
+  if (m_cobwebController.stepIsInitialized()) {
+    moveToRank(m_cobwebController.rankAtCurrentStep());
+    m_cobwebController.resetStep();
+  }
   m_smallestRank = m_sequenceStore->smallestInitialRank();
   FunctionGraphController::viewWillAppear();
-  selectFunctionWithCursor(indexFunctionSelectedByCursor(), true);
 }
 
 float GraphController::interestingXMin() const {
   int nmin = INT_MAX;
   int nbOfActiveModels = functionStore()->numberOfActiveFunctions();
   for (int i = 0; i < nbOfActiveModels; i++) {
-    Shared::Sequence * s = functionStore()->modelForRecord(functionStore()->activeRecordAtIndex(i));
+    Shared::Sequence *s =
+        functionStore()->modelForRecord(recordAtCurveIndex(i));
     nmin = std::min(nmin, s->initialRank());
   }
   assert(nmin < INT_MAX);
   return nmin;
 }
 
-bool GraphController::textFieldDidFinishEditing(AbstractTextField * textField, const char * text, Ion::Events::Event event) {
-  Shared::TextFieldDelegateApp * myApp = textFieldDelegateApp();
-  double floatBody;
-  if (myApp->hasUndefinedValue(text, &floatBody)) {
+bool GraphController::textFieldDidFinishEditing(AbstractTextField *textField,
+                                                const char *text,
+                                                Ion::Events::Event event) {
+  Shared::TextFieldDelegateApp *myApp = textFieldDelegateApp();
+  double floatBody =
+      textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
+  if (myApp->hasUndefinedValue(floatBody)) {
     return false;
   }
   floatBody = std::fmax(0, std::round(floatBody));
@@ -65,71 +86,84 @@ bool GraphController::textFieldDidFinishEditing(AbstractTextField * textField, c
 }
 
 void GraphController::moveToRank(int n) {
-  double y = xyValues(selectedCurveIndex(), n, textFieldDelegateApp()->localContext()).x2();
+  double y =
+      xyValues(selectedCurveIndex(), n, textFieldDelegateApp()->localContext())
+          .y();
   m_cursor->moveTo(n, n, y);
-  interactiveCurveViewRange()->panToMakePointVisible(m_cursor->x(), m_cursor->y(), cursorTopMarginRatio(), cursorRightMarginRatio(), cursorBottomMarginRatio(), cursorLeftMarginRatio(), curveView()->pixelWidth());
+  panToMakeCursorVisible();
   reloadBannerView();
   m_view.reload();
 }
 
-Range2D GraphController::optimalRange(bool computeX, bool computeY, Range2D originalRange) const {
-  Zoom::Function2DWithContext<float> evaluator = [](float x, const void * model, Context * context) {
-    const Shared::Sequence * s = static_cast<const Shared::Sequence *>(model);
-    return s->evaluateXYAtParameter(x, context);
-  };
-
+Range2D GraphController::optimalRange(bool computeX, bool computeY,
+                                      Range2D originalRange) const {
   Range2D result;
   if (computeX) {
     float xMin = interestingXMin();
-    *result.x() = Range1D(xMin, xMin + k_defaultXHalfRange);
+    *result.x() = Range1D(xMin, xMin + k_defaultXHalfRange, k_maxFloat);
   } else {
     *result.x() = *originalRange.x();
   }
   if (computeY) {
-    Zoom zoom(result.xMin(), result.xMax(), InteractiveCurveViewRange::NormalYXRatio(), textFieldDelegateApp()->localContext(), k_maxFloat);
+    Poincare::Context *context = App::app()->localContext();
+    Zoom zoom(result.xMin(), result.xMax(),
+              InteractiveCurveViewRange::NormalYXRatio(), context, k_maxFloat);
     int nbOfActiveModels = functionStore()->numberOfActiveFunctions();
+    Shared::Sequence *sequences[nbOfActiveModels];
     for (int i = 0; i < nbOfActiveModels; i++) {
-      Shared::Sequence * s = functionStore()->modelForRecord(functionStore()->activeRecordAtIndex(i));
-      zoom.fitFullFunction(evaluator, s);
+      sequences[i] = functionStore()->modelForRecord(recordAtCurveIndex(i));
+    }
+    int min = std::ceil(result.xMin());
+    int max = std::floor(result.xMax());
+    /* Loop first on abscissa so that sequences step ranks together. */
+    for (int n = min; n <= max; n++) {
+      for (int i = 0; i < nbOfActiveModels; i++) {
+        zoom.fitPoint(sequences[i]->evaluateXYAtParameter(static_cast<float>(n),
+                                                          context));
+      }
     }
     *result.y() = *zoom.range(true, false).y();
   }
-  return Zoom::Sanitize(result, InteractiveCurveViewRange::NormalYXRatio(), k_maxFloat);
+  return Zoom::Sanitize(result, InteractiveCurveViewRange::NormalYXRatio(),
+                        k_maxFloat);
 }
 
-Layout GraphController::SequenceSelectionController::nameLayoutAtIndex(int j) const {
-  GraphController * graphController = static_cast<GraphController *>(m_graphController);
-  SequenceStore * store = graphController->functionStore();
-  ExpiringPointer<Shared::Sequence> sequence = store->modelForRecord(store->activeRecordAtIndex(j));
+Layout GraphController::SequenceSelectionController::nameLayoutAtIndex(
+    int j) const {
+  GraphController *graphController =
+      static_cast<GraphController *>(m_graphController);
+  SequenceStore *store = graphController->functionStore();
+  ExpiringPointer<Shared::Sequence> sequence =
+      store->modelForRecord(store->activeRecordAtIndex(j));
   return sequence->definitionName().clone();
 }
 
-bool GraphController::openMenuForCurveAtIndex(int index) {
-  Ion::Storage::Record record = functionStore()->activeRecordAtIndex(index);
-  m_termSumController.setRecord(record);
-  return FunctionGraphController::openMenuForCurveAtIndex(index);
+void GraphController::openMenuForCurveAtIndex(int curveIndex) {
+  m_termSumController.setRecord(recordAtCurveIndex(curveIndex));
+  FunctionGraphController::openMenuForCurveAtIndex(curveIndex);
 }
 
-bool GraphController::moveCursorHorizontally(int direction, int scrollSpeed) {
-  double xCursorPosition = std::round(m_cursor->x());
-  if (direction < 0 && xCursorPosition <= m_smallestRank) {
+bool GraphController::moveCursorHorizontally(OMG::HorizontalDirection direction,
+                                             int scrollSpeed) {
+  int xCursorPosition = std::round(m_cursor->x());
+  Shared::Sequence *s =
+      functionStore()->modelForRecord(recordAtSelectedCurveIndex());
+  int x = m_view.nextDotIndex(s, xCursorPosition, direction, scrollSpeed);
+  if (x == xCursorPosition) {
     return false;
   }
-  // The cursor moves by step that is larger than 1 and than a pixel's width.
-  const int step = std::ceil(m_view.pixelWidth()) * scrollSpeed;
-  double x = direction > 0 ? xCursorPosition + step:
-    xCursorPosition -  step;
-  if (x < 0.0) {
-    return false;
-  }
-  Shared::Sequence * s = functionStore()->modelForRecord(functionStore()->activeRecordAtIndex(indexFunctionSelectedByCursor()));
-  double y = s->evaluateXYAtParameter(x, textFieldDelegateApp()->localContext()).x2();
+  double y = s->evaluateXYAtParameter(static_cast<double>(x),
+                                      textFieldDelegateApp()->localContext())
+                 .y();
   m_cursor->moveTo(x, x, y);
   return true;
 }
 
-double GraphController::defaultCursorT(Ion::Storage::Record record, bool ignoreMargins) {
-  return std::fmax(0.0, std::round(Shared::FunctionGraphController::defaultCursorT(record, ignoreMargins)));
+double GraphController::defaultCursorT(Ion::Storage::Record record,
+                                       bool ignoreMargins) {
+  return std::fmax(0.0,
+                   std::round(Shared::FunctionGraphController::defaultCursorT(
+                       record, ignoreMargins)));
 }
 
-}
+}  // namespace Sequence

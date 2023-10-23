@@ -31,7 +31,6 @@ app_distributions_src += $(addprefix apps/distributions/probability/,\
   calculation_cell.cpp \
   calculation_controller.cpp \
   calculation_popup_data_source.cpp \
-  distribution_cell.cpp \
   distribution_controller.cpp \
   distribution_curve_view.cpp \
   parameters_controller.cpp \
@@ -47,7 +46,7 @@ tests_src += $(addprefix apps/distributions/test/,\
 )
 
 # Allow #include "distributions/..."
-sources = apps/apps_container.cpp apps/apps_container_storage.cpp apps/main.cpp $(app_distributions_src) $(app_distributions_test_src) $(tests_src)
+sources = apps/apps_container.cpp apps/apps_container_storage.cpp apps/init.cpp apps/main.cpp $(app_distributions_src) $(app_distributions_test_src) $(tests_src)
 $(call object_for,$(sources)): SFLAGS += -Iapps
 
 # Image dependencies
