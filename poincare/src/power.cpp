@@ -822,9 +822,7 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
   if (baseType == ExpressionNode::Type::Rational &&
       indexType == ExpressionNode::Type::Addition &&
       index.childAtIndex(0).type() == ExpressionNode::Type::Rational) {
-    /* Clone base and index since PowerRationalRational could alter base and/or
-     * index, and make this corrupted when escaping because reduction failed. */
-    Rational rationalIndex = index.childAtIndex(0).clone().convert<Rational>();
+    Rational rationalIndex = index.childAtIndex(0).convert<Rational>();
     if (rationalIndex.unsignedIntegerNumerator().isOne() &&
         !rationalIndex.isInteger()) {
       /* Escape here to avoid infinite loops with the multiplication.
@@ -836,9 +834,8 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
        *   this rule in that case */
       return *this;
     }
-    Rational rationalBase = base.clone().convert<Rational>();
-    Expression p1 =
-        PowerRationalRational(rationalBase, rationalIndex, reductionContext);
+    Expression p1 = PowerRationalRational(base.convert<Rational>(),
+                                          rationalIndex, reductionContext);
     if (p1.isUninitialized()) {
       return *this;
     }
@@ -910,9 +907,8 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
     /* Step 9.1
      * Handle the simple case of r^s, whith r and s rational. */
     if (baseType == ExpressionNode::Type::Rational) {
-      Rational rationalBase = static_cast<Rational &>(base);
-      Expression e =
-          PowerRationalRational(rationalBase, rationalIndex, reductionContext);
+      Expression e = PowerRationalRational(base.convert<Rational>(),
+                                           rationalIndex, reductionContext);
       if (e.isUninitialized()) {
         return *this;
       }
@@ -1438,36 +1434,32 @@ Expression Power::denominator(const ReductionContext &reductionContext) const {
 }
 
 Expression Power::PowerRationalRational(
+    const Rational base, const Rational index,
+    const ReductionContext &reductionContext) {
+  /* Clone base and index since this method could alter base and/or
+   * index, and make this corrupted when escaping because reduction failed. */
+  Rational rationalBase = base.clone().convert<Rational>();
+  Rational rationalIndex = index.clone().convert<Rational>();
+  return UnsafePowerRationalRational(rationalBase, rationalIndex,
+                                     reductionContext);
+}
+
+Expression Power::UnsafePowerRationalRational(
     Rational base, Rational index, const ReductionContext &reductionContext) {
   assert(!base.numeratorOrDenominatorIsInfinity() &&
          !index.numeratorOrDenominatorIsInfinity());
   /* Handle this case right now to always reduce to Nonreal if needed. */
   if (base.isNegative()) {
-    Multiplication res = Multiplication::Builder();
-    /* Compute -1^(a/b) */
-    if (reductionContext.complexFormat() == Preferences::ComplexFormat::Real) {
-      /* On real numbers (-1)^(a/b) =
-       * - 1 if a is even
-       * - -1 if a and b are odd
-       * - has no real solution otherwise */
-      if (!index.unsignedIntegerNumerator().isEven()) {
-        if (index.integerDenominator().isEven()) {
-          return Nonreal::Builder();
-        } else {
-          res.addChildAtIndexInPlace(Rational::Builder(-1), 0,
-                                     res.numberOfChildren());
-        }
-      }
-    } else {
-      // On complex numbers, we pick the first root (-1)^(a/b) = e^(i*pi*a/b)
-      Rational indexClone = index.clone().convert<Rational>();
-      Expression exp = CreateComplexExponent(indexClone, reductionContext);
-      res.addChildAtIndexInPlace(exp, res.numberOfChildren(),
-                                 res.numberOfChildren());
-      exp.shallowReduce(reductionContext);
+    Expression exp = MinusOnePowerRational(index, reductionContext);
+    if (base.isMinusOne()) {
+      return exp;
     }
+    Multiplication res = Multiplication::Builder();
+    res.addChildAtIndexInPlace(exp, res.numberOfChildren(),
+                               res.numberOfChildren());
     base.setSign(true);
-    Expression res2 = PowerRationalRational(base, index, reductionContext);
+    Expression res2 =
+        UnsafePowerRationalRational(base, index, reductionContext);
     if (res2.isUninitialized()) {
       return Expression();
     } else {
@@ -1496,7 +1488,7 @@ Expression Power::PowerRationalRational(
       return std::move(base);
     }
     index.setSign(true);
-    return PowerRationalRational(base, index, reductionContext);
+    return UnsafePowerRationalRational(base, index, reductionContext);
   }
   assert(!index.isNegative());
   /* We are handling an expression of the form (p/q)^(a/b), with a and b
@@ -1695,6 +1687,28 @@ Expression Power::ReduceLogarithmLinearCombination(
     }
   }
   return linearCombination;
+}
+
+Expression Power::MinusOnePowerRational(
+    const Rational index, const ReductionContext &reductionContext) {
+  /* Compute -1^(a/b) */
+  if (reductionContext.complexFormat() == Preferences::ComplexFormat::Real) {
+    /* On real numbers (-1)^(a/b) =
+     * - 1 if a is even
+     * - -1 if a and b are odd
+     * - has no real solution otherwise */
+    if (index.unsignedIntegerNumerator().isEven()) {
+      return Rational::Builder(1);
+    } else if (!index.integerDenominator().isEven()) {
+      return Rational::Builder(-1);
+    } else {
+      return Nonreal::Builder();
+    }
+  }
+  // On complex numbers, we pick the first root (-1)^(a/b) = e^(i*pi*a/b)
+  Rational indexClone = index.clone().convert<Rational>();
+  Expression exp = CreateComplexExponent(indexClone, reductionContext);
+  return exp.shallowReduce(reductionContext);
 }
 
 bool Power::isNthRootOfUnity() const {

@@ -141,9 +141,13 @@ class Power final : public ExpressionTwoChildren<Power, PowerNode> {
   constexpr static int k_maxExactPowerMatrix = 100;
   constexpr static int k_maxNumberOfTermsInExpandedMultinome = 25;
 
-  /* Simplification
-   * WARNING: These two methods alter their arguments */
+  // Simplification
+  // WARNING: These two methods alter their arguments
   static Expression PowerRationalRational(
+      const Rational base, const Rational index,
+      const ReductionContext& reductionContext);
+  // WARNING: These two methods alter their arguments
+  static Expression UnsafePowerRationalRational(
       Rational base, Rational index, const ReductionContext& reductionContext);
   static Expression PowerIntegerRational(
       Integer base, Rational index, const ReductionContext& reductionContext);
@@ -156,6 +160,8 @@ class Power final : public ExpressionTwoChildren<Power, PowerNode> {
   static Expression ReduceLogarithmLinearCombination(
       const ReductionContext& reductionContext, Expression linearCombination,
       const Expression baseOfLogarithmToReduce);
+  static Expression MinusOnePowerRational(
+      const Rational index, const ReductionContext& reductionContext);
   bool isLogarithmOfSameBase(Expression e) const;
   bool isNthRootOfUnity() const;
 
