@@ -196,11 +196,11 @@ constexpr const ToolboxMessageTree
     *const unitVolumeChildrenForImperialToolbox[] = {
         &unitVolumeTeaspoon, &unitVolumeTablespoon, &unitVolumeFluidOunce,
         &unitVolumeCup,      &unitVolumePint,       &unitVolumeQuart,
-        &unitVolumeGallonUs,    &unitVolumeGallonUk,   &unitVolumeLiterNode};
+        &unitVolumeGallonUs, &unitVolumeGallonUk,   &unitVolumeLiterNode};
 constexpr const ToolboxMessageTree *const unitVolumeImperialChildren[] = {
     &unitVolumeTeaspoon, &unitVolumeTablespoon, &unitVolumeFluidOunce,
     &unitVolumeCup,      &unitVolumePint,       &unitVolumeQuart,
-    &unitVolumeGallonUs,    &unitVolumeGallonUk};
+    &unitVolumeGallonUs, &unitVolumeGallonUk};
 constexpr ToolboxMessageTree unitVolumeImperialNode = ToolboxMessageTree::Node(
     I18n::Message::UnitImperialMenu, unitVolumeImperialChildren);
 constexpr const ToolboxMessageTree *const unitVolumeChildrenForMetricToolbox[] =

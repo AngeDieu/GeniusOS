@@ -991,12 +991,12 @@ int UnitNode::VolumeRepresentative::setAdditionalExpressions(
       Unit::Builder(
           representativesOfSameDimension() + Unit::k_quartRepresentativeIndex,
           Prefix::EmptyPrefix()),
-      Unit::Builder(
-          representativesOfSameDimension() + Unit::k_gallonUsRepresentativeIndex,
-          Prefix::EmptyPrefix()),
-      Unit::Builder(
-          representativesOfSameDimension() + Unit::k_gallonUkRepresentativeIndex,
-          Prefix::EmptyPrefix()),
+      Unit::Builder(representativesOfSameDimension() +
+                        Unit::k_gallonUsRepresentativeIndex,
+                    Prefix::EmptyPrefix()),
+      Unit::Builder(representativesOfSameDimension() +
+                        Unit::k_gallonUkRepresentativeIndex,
+                    Prefix::EmptyPrefix()),
   };
   *destImperial = Unit::BuildSplit(value, splitUnits, std::size(splitUnits),
                                    reductionContext);
