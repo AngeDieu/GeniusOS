@@ -6,6 +6,10 @@ Epsilon is a high-performance graphing calculator operating system. It includes 
 
 You can try Epsilon straight from your browser in the [online simulator](https://www.numworks.com/simulator/).
 
+## Features I added:
+- add UK gallon (thanks to [@edwardtianye](https://github.com/edwardtianye/epsilon/commit/f1626498f3accef65e0e76ba7d5c85f2f4db6a2d))
+
+
 ## Diving in
 
 We highly recommend you start by reading the [online documentation](https://www.numworks.com/resources/engineering/software/) for this project. You'll learn how to install the [SDK](https://www.numworks.com/resources/engineering/software/build/) and about the overall architecture of the Epsilon.
