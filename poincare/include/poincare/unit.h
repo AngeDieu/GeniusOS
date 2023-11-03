@@ -1455,9 +1455,9 @@ class Unit : public Expression {
           "qt"),
       "Index for the Quart Representative is incorrect.");
   static constexpr int k_gallonUsRepresentativeIndex = 7;
-  static_assert(strings_equal(k_volumeRepresentatives[k_gallonUsRepresentativeIndex].m_rootSymbol, "galUS"), "Index for the Gallon(US) Representative is incorrect.");
+  static_assert(Helpers::StringsAreEqual(k_volumeRepresentatives[k_gallonUsRepresentativeIndex].m_rootSymbols, "galUS"), "Index for the Gallon(US) Representative is incorrect.");
   static constexpr int k_gallonUkRepresentativeIndex = 8;
-  static_assert(strings_equal(k_volumeRepresentatives[k_gallonUkRepresentativeIndex].m_rootSymbol, "galUK"), "Index for the Gallon(UK) Representative is incorrect.");
+  static_assert(Helpers::StringsAreEqual(k_volumeRepresentatives[k_gallonUkRepresentativeIndex].m_rootSymbols, "galUK"), "Index for the Gallon(UK) Representative is incorrect.");
 
   Unit(const UnitNode* node) : Expression(node) {}
   static Unit Builder(const Representative* representative,
