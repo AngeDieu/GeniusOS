@@ -33,24 +33,21 @@ SuperOS is a fork of Upsilon that seeks to add features that I either liked and 
 - Plenty of simulators for 3DS, Casio Fxcg, TI Nspire...
 
 More details on https://getupsilon.web.app/.
-`<br><br>`
+<br><br>
 
 ## Installation
 
 ### Installer
 
 On your calculator, press 6 and RESET at the same time. Your calculator should turn black with the red LED.
-`<br>`Go to the [Upsilon website](https://getupsilon.web.app/install/) to the "Install" section.
-`<br>`Press on the RECOVERY button and wait for the calculator to push a screen with a recovery message.
-`<br>`Then INSTALL the **dev** version of Upsilon on your slot A. Wait for the firmware to be installed.
-`<br>`Finally, intall [SuperOS](https://mega.nz/folder/Ba81lYoK#Wkg2m5cluolZJ8JGU7jY-Q) by choosing the "Custom Binpack" option.
-
----
-
-
+<br> Go to the [Upsilon website](https://getupsilon.web.app/install/) to the "Install" section.
+<br> Press on the RECOVERY button and wait for the calculator to push a screen with a recovery message.
+<br> Then INSTALL the **dev** version of Upsilon on your slot A. Wait for the firmware to be installed.
+<br> Finally, intall [SuperOS](https://mega.nz/folder/Ba81lYoK#Wkg2m5cluolZJ8JGU7jY-Q) by choosing the "Install Custom Binpack" option.
 
 If it didn't work, follow [Omega&#39;s guide](https://guide.getomega.dev/).
-`<br><br>`
+<br><br>
+
 
 ### Manual
 
@@ -73,7 +70,7 @@ apt-get install build-essential git imagemagick libx11-dev libxext-dev libfreety
 ```
 
 And there you can go to step 2!
-`<br><br>`
+<br><br>
 
 </details>
 
@@ -116,7 +113,7 @@ brew install numworks/tap/epsilon-sdk
 and it will install all dependencies.
 
 And there you can go to step 2!
-`<br><br>`
+<br><br>
 
 </details>
 
@@ -142,7 +139,7 @@ echo "export PATH=$PATH:$HOME/gcc-arm/bin" >> .bashrc
 ```
 
 Just restart terminal and you can go to step 2!
-`<br><br>`
+<br><br>
 
 </details>
 
@@ -279,7 +276,7 @@ or:
 make MODEL=n0100 OMEGA_USERNAME="" binpack -j(nproc)
 ```
 
-to make binpack which you can flash to the calculator from [Ti-planet&#39;s webDFU](https://ti-planet.github.io/webdfu_numworks/n0100/). Binpacks are a great way to share a custom build of Upsilonto friends.
+to make binpack which you can flash to the calculator from [Ti-planet&#39;s webDFU](https://ti-planet.github.io/webdfu_numworks/n0100/). Binpacks are a great way to share a custom build of Upsilon to friends.
 
 </details>
 
