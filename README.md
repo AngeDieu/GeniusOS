@@ -455,7 +455,8 @@ If you need help, you can join our Discord server here : [https://discord.gg/NFv
 
 ## Useful links
 
-- [Upsilon external (to install additional apps and wallpapers)](https://upsilonnumworks.github.io/Upsilon-External/)
+- [Upsilon external](https://upsilonnumworks.github.io/Upsilon-External/) (to install additional apps and wallpapers)
+- [Upsilon workshop](https://yaya-cout.github.io/Upsilon-Workshop/) (to install and share python scripts)
 - [Ulab documentation](https://micropython-ulab.readthedocs.io/en/latest/)
 
 
@@ -469,14 +470,14 @@ To contribute, please refer to [Omega&#39;s Wiki](https://github.com/Omega-Numwo
 Here are the main links toward Omega's different websites and repositories, that have been used for the creation of Upsilon.
 
 - [Upsilon](https://github.com/UpsilonNumworks/Upsilon)
-- [Omega Themes](https://github.com/Omega-Numworks/Omega-Themes)
-- [Omega Website](https://github.com/Omega-Numworks/Omega-Website)
-- [Omega RPN `APP`](https://github.com/Omega-Numworks/Omega-RPN)
-- [Omega Atomic `APP`](https://github.com/Omega-Numworks/Omega-Atomic)
+- [Numworks theme listing](https://github.com/AngeDieu/Numworks-themes-listing)
+- [Upsilon Website](https://github.com/UpsilonNumworks/Upsilon-Website)
+- [External Apps](https://github.com/UpsilonNumworks/Upsilon-External)
+- [Omega App Template `BETA`](https://github.com/Omega-Numworks/Omega-App-Template)
+- [Upsilon RPN `APP`](https://github.com/UpsilonNumworks/Upsilon-RPN)
+- [Upsilon Atomic `APP`](https://github.com/UpsilonNumworks/Atomic)
 - [Omega Design](https://github.com/Omega-Numworks/Omega-Design)
 - [Omega Discord Bot](https://github.com/Omega-Numworks/Omega-Discord-Bot)
-- [Omega App Template `BETA`](https://github.com/Omega-Numworks/Omega-App-Template)
-- [External Apps](https://github.com/Omega-Numworks/External-Apps)
 
 
 ## About Epsilon
