@@ -43,7 +43,7 @@ Download [the last binary](https://nightly.link/AngeDieu/SuperOS/workflows/ci-wo
 <br> On your calculator, press 6 and RESET at the same time. Your calculator should turn black with the red LED.
 <br> Go to the [Upsilon website](https://getupsilon.web.app/install/) to the "Install" section.
 <br> Press on the RECOVERY button and wait for the calculator to push a screen with a recovery message.
-<br> Install the tgz file you downloaded by choosing the "Custom Binpack" option and unselect the last file (epsilon.onboarding with start adress at 0). Wait until everything is installed, disconnect your calculator and boot on the slot A/1 to enjoy your new firmware.
+<br> Install the tgz file you downloaded by choosing the "Install Custom Binpack" option and unselecting the last file (epsilon.onboarding with start adress at 0). Wait until everything is installed, disconnect your calculator and boot on the slot A/1 to enjoy your new firmware.
 
 If it didn't work, follow [Omega's guide](https://guide.getomega.dev/).
 <br><br>
