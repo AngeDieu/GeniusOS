@@ -160,7 +160,12 @@ def handle_git(args):
         else:  # If directory doesn't exist, clone.
             git_clone(args.repo, output_path)
 
-    handle_theme(args, output_path)
+    for root, dirs, files in os.walk(output_path):
+	    if args.theme in dirs:
+                theme_path = root
+                break
+
+    handle_theme(args, theme_path)
 
 
 def handle_theme(args, path):
