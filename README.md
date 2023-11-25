@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/"><img alt="cc by-nc-sa 4.0" src="https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-525252.svg?labelColor=292929&logo=creative%20commons&style=for-the-badge" /></a>
-  <a href="https://github.com/UpsilonNumworks/Upsilon/issues"><img alt="Issues" src="https://img.shields.io/github/issues/UpsilonNumworks/Upsilon.svg?labelColor=292929&logo=git&style=for-the-badge" /></a>
+  <a href="https://github.com/AngeDieu/SuperOS/issues"><img alt="Issues" src="https://img.shields.io/github/issues/AngeDieu/SuperOS.svg?labelColor=292929&logo=git&style=for-the-badge" /></a>
   <br/>
   <a href="https://discord.gg/hnEqPzAJzn"><img alt="Discord" src="https://img.shields.io/discord/663420259851567114?color=blue&labelColor=292929&label=chat%20-%20discord&logo=discord&style=for-the-badge" /></a>
 </p>
@@ -11,27 +11,43 @@
 
 ## About
 
-Upsilon is a fork of Omega, an user-made OS that runs on the Numworks calculator, which brings many features to it, but was discontinued because of a policy change from Numworks. Upsilon is for the people who want to see a future for user-made OSes for Numworks, even after the closure and archiving of Omega.
+SuperOS is a fork of Upsilon that seeks to add features that I either liked and cherry-picked from other forks, or have coded myself. It is intended to be a playground for me to practice on rather than an actual prod project.
+
+[Upsilon](https://getupsilon.web.app) is a fork of Omega, an user-made OS that runs on the Numworks calculator, which brings many features to it, but was discontinued because of a policy change from Numworks. Upsilon is for the people who want to see a future for user-made firmwares for Numworks, even after the closure and archiving of Omega.
 
 ### Some new features
 
-- Enhancements for the Kandinsky python module
-- Support for wallpapers
-- External apps
-- A custom theme
-- Operator overload for python
-- Improvements for the Periodic table application
-- *And everything that has been added to Omega before its termination!* [See Omega's changelog here](https://github.com/Omega-Numworks/Omega/wiki/Changelog) | [Main Omega features + screenshots](https://github.com/Omega-Numworks/Omega/wiki/Main-features).
+#### SuperOS
 
-<br>
+- It's comming soon, don't worry
+
+#### Upsilon
+
+- **Symbolic computation**
+- **Periodic table**, RPN and Reader applications
+- **External apps** (such as KhiCAS, Nofrendo, PeanutGB...)
+- Custom **themes** support
+- Support for **wallpapers**
+- **Python improvements**: Micropython 1.19.1 (Ulab), enhancements in Kandinsky module...
+- **Bootloader** to use 2 firmwares on your calculator (N0110 only).
+- Plenty of simulators for 3DS, Casio Fxcg, TI Nspire...
+
+More details on https://getupsilon.web.app/.
+<br><br>
 
 ## Installation
 
 ### Installer
 
-Go to the [Upsilon website](https://getupsilon.web.app/) to the "Install" section.
-If your calculator is recognized, contains a version of Epsilon lower than 16 and your browser accepts WebUSB, the page will suggest you to install Upsilon.
-Do not disconnect your calculator until the installation is complete.
+Download [the last binary](https://nightly.link/AngeDieu/SuperOS/workflows/ci-workflow/superOS-dev/epsilon-binpack-bootloader.tgz?status=completed) and unzip it. You should obtain a tgz file.
+<br> On your calculator, press 6 and RESET at the same time. Your calculator should turn black with the red LED.
+<br> Go to the [Upsilon website](https://getupsilon.web.app/install/) to the "Install" section.
+<br> Press on the RECOVERY button and wait for the calculator to push a screen with a recovery message.
+<br> Install the tgz file you downloaded by choosing the "Install Custom Binpack" option and unselecting the last file (epsilon.onboarding with start adress at 0). Wait until everything is installed, disconnect your calculator and boot on the slot A/1 to enjoy your new firmware.
+
+If it didn't work, follow [Omega's guide](https://guide.getomega.dev/).
+<br><br>
+
 
 ### Manual
 
@@ -40,19 +56,13 @@ Do not disconnect your calculator until the installation is complete.
 ### 1. Install SDK
 
 <br>
-
 <details>
-
 <summary><b>1.1 Linux</b></summary>
-
 <br>
 
 <details>
-
 <summary>Debian or Ubuntu</summary>
-
 <br>
-
 You just have to install dependencies by running these command with superuser privileges in a Terminal:
 
 ```bash
@@ -60,17 +70,13 @@ apt-get install build-essential git imagemagick libx11-dev libxext-dev libfreety
 ```
 
 And there you can go to step 2!
-
-<br>
+<br><br>
 
 </details>
 
 <details>
-
 <summary>Fedora</summary>
-
 <br>
-
 To install all dependencies:
 
 ```bash
@@ -78,15 +84,11 @@ dnf install make automake gcc gcc-c++ kernel-devel git ImageMagick libX11-devel 
 ```
 
 <br>
-
 </details>
 
 <details>
-
 <summary>Nix or Nixos</summary>
-
 <br>
-
 To install all dependencies:
 
 ```bash
@@ -94,19 +96,14 @@ nix-shell -p gcc libpng libjpeg xorg.libX11 pkg-config freetype xorg.libXext pyt
 ```
 
 <br>
-
 </details>
 
 <br>
-
 </details>
 
 <details>
-
 <summary><b>1.2 Mac</b></summary>
-
 <br>
-
 It's recommended to use [Homebrew](https://brew.sh/). Once it's installed, just run:
 
 ```bash
@@ -115,23 +112,18 @@ brew install numworks/tap/epsilon-sdk
 
 and it will install all dependencies.
 
-<br>
-
 And there you can go to step 2!
-
-<br>
+<br><br>
 
 </details>
 
 <details>
-
 <summary><b>1.3 Windows</b></summary>
 
 <br>
-
 <details>
-
 <summary>With Msys2/Mingw (officialized by numworks but with a lot of bugs)</summary>
+<br>
 
 [Msys2](https://www.msys2.org/) environment is recommended by Numworks to get most of the required tools on Windows easily. It's where you'll paste all the commands of this tutorial. Once it'sinstalled, paste these commands into the Msys2 terminal.
 
@@ -147,11 +139,11 @@ echo "export PATH=$PATH:$HOME/gcc-arm/bin" >> .bashrc
 ```
 
 Just restart terminal and you can go to step 2!
+<br><br>
 
 </details>
 
 <details>
-
 <summary>With WSL 2</summary>
 
 You need a windows version >= 1903.
@@ -173,27 +165,31 @@ dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /nores
 This one allows virtual machines developed by Microsoft.
 
 2. Restart your computer.
-
 3. Download [this file](https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi) and follow instructions.
-
 4. Now open powershell admin like before and type:
 
 ```powershell
 wsl --set-default-version 2
 ```
+
 5. Download [Ubuntu](https://www.microsoft.com/store/apps/9n6svws3rx71) from Microsoft store.
 
 WSL is now installed.
 
 6. Then Install GCC cross compiler for ARM.
+
 ```bash
 apt-get install build-essential git imagemagick libx11-dev libxext-dev libfreetype6-dev libpng-dev libjpeg-dev pkg-config gcc-arm-none-eabi binutils-arm-none-eabi
 ```
 
-### Usbipd installation to connect your calculator
+#### Usbipd installation to connect your calculator
+
 If you want to connect to the calculator, you have to connect to install this [tool](https://github.com/dorssel/usbipd-win/releases/download/v1.3.0/usbipd-win_1.3.0.msi). This will allow you toconnect WSL to the calculator through internet. Follow the on screen information to install.
-#### Ubuntu
+
+#### *Ubuntu*
+
 1. In a WSL Ubuntu command prompt, type:
+
 ```bash
 sudo apt install linux-tools-5.4.0-77-generic hwdata
 ```
@@ -205,9 +201,9 @@ sudo visudo
 ```
 
 3. Add `/usr/lib/linux-tools/5.4.0-77-generic` to the beginning of secure_path. After editing, the line should look similar to this.
-`Defaults secure_path="/usr/lib/linux-tools/5.4.0-77-generic:/usr/local/sbin:..."`
+   `Defaults secure_path="/usr/lib/linux-tools/5.4.0-77-generic:/usr/local/sbin:..."`
 
-#### Debian
+#### *Debian*
 
 1. If you use debian for your WSL distro, use this command instead:
 
@@ -217,7 +213,7 @@ sudo apt install usbip hwdata usbutils
 
 And that's all for installation and set up.
 
-### To connect your calculator
+#### To connect your calculator
 
 1. Open an Admin powershell and type:
 
@@ -233,31 +229,28 @@ usbipd wsl attach --busid <BUSID>
 ```
 
 It will ask you to type your wsl's password and will connect your calculator to WSL.
-
 You can now go to step 2!
-
 </details>
 
 </details>
-
 <br>
+
+
 
 ### 2. Set up repo
 
 Clone repo and use 'upsilon-dev' branch by pasting these two commands:
 
 ```bash
-git clone --recursive https://github.com/UpsilonNumworks/Upsilon.git
-cd Upsilon
-git checkout upsilon-dev
+git clone https://github.com/AngeDieu/superOS.git
+cd superOS
 ```
-
 <br>
+
 
 ### 3. Choose the target
 
 <details>
-
 <summary><b>Model n0100</b></summary>
 
 (note: you can change the `EPSILON_I18N=en` flag to `fr`, `nl`, `pt`, `it`, `de`, `es` or `hu`).
@@ -283,12 +276,12 @@ or:
 make MODEL=n0100 OMEGA_USERNAME="" binpack -j(nproc)
 ```
 
-to make binpack which you can flash to the calculator from [Ti-planet's webDFU](https://ti-planet.github.io/webdfu_numworks/n0100/). Binpacks are a great way to share a custom build of Upsilonto friends.
+to make binpack which you can flash to the calculator from [Ti-planet&#39;s webDFU](https://ti-planet.github.io/webdfu_numworks/n0100/). Binpacks are a great way to share a custom build of Upsilon to friends.
 
 </details>
 
-<details>
 
+<details>
 <summary><b>Model n0110</b></summary>
 
 The bootloader allows you to install 2 firmware in separated "slots". If so, external apps won't have all the space but half. Bootloader will allow use of all of the memory if only one slot is flashed. In legacy mode, external apps use all the space available.
@@ -320,10 +313,9 @@ or:
 make OMEGA_USERNAME="" binpack -j(nproc)
 ```
 
-to make binpack which you can flash to the calculator from [Ti-planet's webDFU](https://ti-planet.github.io/webdfu_numworks/n0110/). You'll find them at `output/release/device/bootloader/`. Binpacks are a great way to share a custom build of Upsilon to friends.
+to make binpack which you can flash to the calculator from [Ti-planet&#39;s webDFU](https://ti-planet.github.io/webdfu_numworks/n0110/). You'll find them at `output/release/device/bootloader/`. Binpacks are a great way to share a custom build of Upsilon to friends.
+
 </details>
-
-
 
 <details>
 <summary>Model N0110 legacy (deprecated, use bootloader instead for Epsilon protection)</summary>
@@ -349,7 +341,8 @@ or:
 make MODEL=n0110 OMEGA_USERNAME="" binpack -j(nproc)
 ```
 
-to make binpack which you can flash to the calculator from [Ti-planet's webDFU](https://ti-planet.github.io/webdfu_numworks/n0110/). You'll find them at `output/release/device/bootloader/`. Binpacks are a great way to share a custom build of Upsilon to friends.
+to make binpack which you can flash to the calculator from [Ti-planet&#39;s webDFU](https://ti-planet.github.io/webdfu_numworks/n0110/). You'll find them at `output/release/device/bootloader/`. Binpacks are a great way to share a custom build of Upsilon to friends.
+
 </details>
 
 </details>
@@ -360,14 +353,19 @@ to make binpack which you can flash to the calculator from [Ti-planet's webDFU](
 <summary><b>Native simulator</b></summary>
 
 Run this command:
+
 ```bash
-make clean
+make PLATFROM=simulator TARGET={target} clean
 ```
+
 You can either build using the following command that will automatically detect your platform:
+
 ```bash
 make PLATFORM=simulator
 ```
+
 or, choose the command corresponding to your platform:
+
 ```bash
 make PLATFORM=simulator TARGET=android
 make PLATFORM=simulator TARGET=ios
@@ -399,13 +397,14 @@ source emsdk_env.sh
 Then, compile Upsilon :
 
 ```bash
-make clean
+make PLATFORM=simulator TARGET=web clean
 make PLATFORM=simulator TARGET=web OMEGA_USERNAME="{Your name, max 15 characters}" -j$(nproc)
 ```
 
 The simulator is now in `output/release/simulator/web/simulator.zip`
 
 </details>
+
 
 <details>
 
@@ -414,9 +413,6 @@ The simulator is now in `output/release/simulator/web/simulator.zip`
 You need devkitPro and devkitARM installed and in your path (instructions [here](https://devkitpro.org/wiki/Getting_Started))
 
 ```bash
-git clone --recursive https://github.com/UpsilonNumworks/Upsilon.git
-cd Upsilon
-git checkout upsilon-dev
 make PLATFORM=simulator TARGET=3ds -j(nproc)
 ```
 
@@ -425,26 +421,25 @@ You can then put epsilon.3dsx on a SD card to run it from the HBC or use 3dslink
 ```bash
 3dslink output/release/simulator/3ds/epsilon.3dsx -a <3DS' IP ADDRESS>
 ```
-
+<br>
 </details>
 
-<br>
 
 <details>
-  <summary><b>Casio fx-CG-series Port</b></summary>
-  
+<summary><b>Casio fx-CG-series Port</b></summary>
+
 First, install gint and fxsdk along with a cross compiler for the calculator. There are instructions for this (in French, but Google Translate works well enough) [here](https://www.planet-casio.com/Fr/forums/topic16614-last-giteapc-installer-et-mettre-a-jour-automatiquement-des-projets-gitea.html).
 
 Next:
+
 ```bash
-git clone --recursive https://github.com/UpsilonNumworks/Upsilon.git
-cd Omega
-git checkout upsilon-dev
 make PLATFORM=simulator TARGET=fxcg -j$(nproc)
 ```
+
 Then copy the file at `./output/release/simulator/fxcg/epsilon.g3a` to the calculator over USB.
 
 </details>
+
 
 Important: Don't forget the `--recursive` tag, because Upsilon relies on submodules.
 Also, you can change the number of processes that run in parallel during the build by changing the value of the `-j` flag.
@@ -452,7 +447,7 @@ Don't forget to put your pseudo instead of `{your pseudo, max 15 char}`. If you 
 
 <br>
 
-If you need help, you can join our Discord server here : <https://discord.gg/NFvzdCBTQn>
+If you need help, you can join our Discord server here : [https://discord.gg/NFvzdCBTQn](https://discord.gg/NFvzdCBTQn)
 
 <a href="https://discord.gg/NFvzdCBTQn"><p align="center"><img alt="Omega Banner Discord" src="https://user-images.githubusercontent.com/12123721/86287349-54ef5800-bbe8-11ea-80c1-34eb1f93eebd.png" /></p></a>
 
@@ -460,25 +455,30 @@ If you need help, you can join our Discord server here : <https://discord.gg/NFv
 
 ## Useful links
 
-- [Upsilon external (to install additional apps and wallpapers)](https://upsilonnumworks.github.io/Upsilon-External/)
+- [Upsilon external](https://upsilonnumworks.github.io/Upsilon-External/) (to install additional apps and wallpapers)
+- [Upsilon workshop](https://yaya-cout.github.io/Upsilon-Workshop/) (to install and share python scripts)
 - [Ulab documentation](https://micropython-ulab.readthedocs.io/en/latest/)
+
 
 ## Contributing
 
-To contribute, please refer to [Omega's Wiki](https://github.com/Omega-Numworks/Omega/wiki/Contributing), the same rules apply here.
+To contribute, please refer to [Omega&#39;s Wiki](https://github.com/Omega-Numworks/Omega/wiki/Contributing), the same rules apply here.
+
 
 ## Related repositories
 
 Here are the main links toward Omega's different websites and repositories, that have been used for the creation of Upsilon.
 
-- [Omega Themes](https://github.com/Omega-Numworks/Omega-Themes)
-- [Omega Website](https://github.com/Omega-Numworks/Omega-Website)
-- [Omega RPN `APP`](https://github.com/Omega-Numworks/Omega-RPN)
-- [Omega Atomic `APP`](https://github.com/Omega-Numworks/Omega-Atomic)
+- [Upsilon](https://github.com/UpsilonNumworks/Upsilon)
+- [Numworks theme listing](https://github.com/AngeDieu/Numworks-themes-listing)
+- [Upsilon Website](https://github.com/UpsilonNumworks/Upsilon-Website)
+- [External Apps](https://github.com/UpsilonNumworks/Upsilon-External)
+- [Omega App Template `BETA`](https://github.com/Omega-Numworks/Omega-App-Template)
+- [Upsilon RPN `APP`](https://github.com/UpsilonNumworks/Upsilon-RPN)
+- [Upsilon Atomic `APP`](https://github.com/UpsilonNumworks/Atomic)
 - [Omega Design](https://github.com/Omega-Numworks/Omega-Design)
 - [Omega Discord Bot](https://github.com/Omega-Numworks/Omega-Discord-Bot)
-- [Omega App Template `BETA`](https://github.com/Omega-Numworks/Omega-App-Template)
-- [External Apps](https://github.com/Omega-Numworks/External-Apps)
+
 
 ## About Epsilon
 
@@ -487,6 +487,7 @@ Upsilon is a fork of Omega, after the project's discontinuation.
 Omega is a fork of Epsilon, a high-performance graphing calculator operating system. It includes eight apps that cover the high school mathematics curriculum.
 
 You can try Epsilon straight from your browser in the [online simulator](https://www.numworks.com/simulator/).
+
 
 ## License
 
