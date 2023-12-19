@@ -38,6 +38,8 @@ public:
   void setSyntaxhighlighting(bool syntaxhighlight) { m_syntaxhighlighting = syntaxhighlight; }
   int brightnessLevel() const { return m_brightnessLevel; }
   void setBrightnessLevel(int brightnessLevel);
+  int getDecimalShift() const { return m_decimalShift; }
+  void setDecimalShift(int shift) { m_decimalShift = shift; }
   const KDFont * font() const { return m_font; }
   void setFont(const KDFont * font) { m_font = font; }
   constexpr static int NumberOfBrightnessStates = 15;
@@ -69,6 +71,7 @@ private:
     m_brightnessShortcut(4),
     m_externalAppWritePermission(false),
     m_externalAppShown(true),
+    m_decimalShift(0),
     m_font(KDFont::LargeFont) {}
   I18n::Language m_language;
   I18n::Country m_country;
@@ -86,6 +89,7 @@ private:
   int m_brightnessShortcut;
   bool m_externalAppWritePermission;
   bool m_externalAppShown;
+  int m_decimalShift;
   const KDFont * m_font;
 };
 
