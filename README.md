@@ -176,7 +176,7 @@ wsl --set-default-version 2
 
 WSL is now installed.
 
-6. Then Install GCC cross compiler for ARM.
+6. Then Install GCC cross compiler for ARM. In your WSL terminal, run:
 
 ```bash
 apt-get install build-essential git imagemagick libx11-dev libxext-dev libfreetype6-dev libpng-dev libjpeg-dev pkg-config gcc-arm-none-eabi binutils-arm-none-eabi
