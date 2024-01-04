@@ -901,12 +901,7 @@ const ToolboxMessageTree Networking[] = {
   ToolboxMessageTree::Node(I18n::Message::IP, IP),
 };
 
-const ToolboxMessageTree Electricity[] = {
-  ToolboxMessageTree::Node(I18n::Message::IP, IP),
-};
-
 const ToolboxMessageTree SI[] = {
-  ToolboxMessageTree::Node(I18n::Message::Electricity, Electricity),
   ToolboxMessageTree::Node(I18n::Message::Dynamics, Dynamics),
   ToolboxMessageTree::Node(I18n::Message::Energitic, Energitic),
   ToolboxMessageTree::Node(I18n::Message::RDM, RDM),
