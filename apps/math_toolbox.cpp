@@ -852,7 +852,67 @@ const ToolboxMessageTree Physics[] = {
   ToolboxMessageTree::Node(I18n::Message::PlanckUnitsTag, PlanckUnits),
 };
 
+//MES TEST CI DESSOUS, INTEGRATION DE LA SI
 
+const ToolboxMessageTree Dynamics[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::TMDCommandWithArgs, I18n::Message::TMDTAG),
+  ToolboxMessageTree::Leaf(I18n::Message::PFDCommandWithArgs, I18n::Message::PFDTAG),
+  ToolboxMessageTree::Leaf(I18n::Message::KeplerCommandWithArgs, I18n::Message::KeplerTAG),
+};
+
+const ToolboxMessageTree Energitic[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::PowerCommandWithArgs, I18n::Message::PowerTAG),
+  ToolboxMessageTree::Leaf(I18n::Message::RendementCommandWithArgs, I18n::Message::RendementTAG),
+  ToolboxMessageTree::Leaf(I18n::Message::EppCommandWithArgs, I18n::Message::EppTAG),
+  ToolboxMessageTree::Leaf(I18n::Message::EcCommandWithArgs, I18n::Message::EcTAG),
+  ToolboxMessageTree::Leaf(I18n::Message::EprCommandWithArgs, I18n::Message::EprTAG),
+};
+
+const ToolboxMessageTree RDM[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::TMDCommandWithArgs, I18n::Message::TMDTAG),
+};
+
+const ToolboxMessageTree Sensors[] = {
+  ToolboxMessageTree::Leaf(I18n::Message::QuantumCommandWithArgs, I18n::Message::QuantumTAG),
+};
+
+const ToolboxMessageTree ClassA[] = {
+    ToolboxMessageTree::Leaf(I18n::Message::RangeATAG, I18n::Message::RangeA, false, I18n::Message::RangeA),
+    ToolboxMessageTree::Leaf(I18n::Message::SubnetATAG, I18n::Message::SubnetA, false, I18n::Message::SubnetA),
+};
+
+const ToolboxMessageTree ClassB[] = {
+    ToolboxMessageTree::Leaf(I18n::Message::RangeTAG, I18n::Message::RangeB, false, I18n::Message::RangeB),
+    ToolboxMessageTree::Leaf(I18n::Message::SubnetTAG, I18n::Message::SubnetB, false, I18n::Message::SubnetB),
+};
+
+const ToolboxMessageTree ClassC[] = {
+    ToolboxMessageTree::Leaf(I18n::Message::RangeTAG, I18n::Message::RangeC, false, I18n::Message::RangeC),
+    ToolboxMessageTree::Leaf(I18n::Message::SubnetTAG, I18n::Message::SubnetC, false, I18n::Message::SubnetC),
+};
+
+const ToolboxMessageTree IP[] = {
+  ToolboxMessageTree::Node(I18n::Message::ClassA, ClassA),
+  ToolboxMessageTree::Node(I18n::Message::ClassB, ClassB),
+  ToolboxMessageTree::Node(I18n::Message::ClassC, ClassC),
+};
+
+const ToolboxMessageTree Networking[] = {
+  ToolboxMessageTree::Node(I18n::Message::IP, IP),
+};
+
+const ToolboxMessageTree Electricity[] = {
+  ToolboxMessageTree::Node(I18n::Message::IP, IP),
+};
+
+const ToolboxMessageTree SI[] = {
+  ToolboxMessageTree::Node(I18n::Message::Electricity, Electricity),
+  ToolboxMessageTree::Node(I18n::Message::Dynamics, Dynamics),
+  ToolboxMessageTree::Node(I18n::Message::Energitic, Energitic),
+  ToolboxMessageTree::Node(I18n::Message::RDM, RDM),
+  ToolboxMessageTree::Node(I18n::Message::Sensors, Sensors),
+  ToolboxMessageTree::Node(I18n::Message::Networking, Networking),
+};
 
 const ToolboxMessageTree menu[] = {
   #ifdef _FXCG
@@ -876,7 +936,8 @@ const ToolboxMessageTree menu[] = {
   ToolboxMessageTree::Node(I18n::Message::HyperbolicTrigonometry, trigonometryChildren),
   ToolboxMessageTree::Node(I18n::Message::Fluctuation, predictionChildren),
   ToolboxMessageTree::Node(I18n::Message::Chemistry, chemistry),
-  ToolboxMessageTree::Node(I18n::Message::Physics, Physics)
+  ToolboxMessageTree::Node(I18n::Message::Physics, Physics),
+  ToolboxMessageTree::Node(I18n::Message::SI, SI)
   };
 
 const ToolboxMessageTree toolboxModel = ToolboxMessageTree::Node(I18n::Message::Toolbox, menu);
@@ -935,4 +996,3 @@ int MathToolbox::indexAfterFork() const {
     assert(unitFormat == Preferences::UnitFormat::Imperial);
     return 1;
 }
-
