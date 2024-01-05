@@ -70,7 +70,8 @@ constexpr const int
   Unit::k_cupRepresentativeIndex,
   Unit::k_pintRepresentativeIndex,
   Unit::k_quartRepresentativeIndex,
-  Unit::k_gallonRepresentativeIndex;
+  Unit::k_gallonRepresentativeIndex,
+  Unit::k_gallonUkRepresentativeIndex;
 
 // UnitNode::Prefix
 const UnitNode::Prefix * UnitNode::Prefix::Prefixes() {
@@ -619,6 +620,7 @@ int UnitNode::VolumeRepresentative::setAdditionalExpressions(double value, Expre
     Unit::Builder(representativesOfSameDimension() + Unit::k_pintRepresentativeIndex, Prefix::EmptyPrefix()),
     Unit::Builder(representativesOfSameDimension() + Unit::k_quartRepresentativeIndex, Prefix::EmptyPrefix()),
     Unit::Builder(representativesOfSameDimension() + Unit::k_gallonRepresentativeIndex, Prefix::EmptyPrefix()),
+    Unit::Builder(representativesOfSameDimension() + Unit::k_gallonUkRepresentativeIndex, Prefix::EmptyPrefix()),
   };
   *destImperial = Unit::BuildSplit(value, splitUnits, sizeof(splitUnits)/sizeof(Unit), reductionContext);
   return 2;

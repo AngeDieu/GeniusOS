@@ -637,6 +637,7 @@ public:
     VolumeRepresentative("pt", 16*0.0000295735295625, Prefixable::None, Prefixable::None),
     VolumeRepresentative("qt", 32*0.0000295735295625, Prefixable::None, Prefixable::None),
     VolumeRepresentative("gal", 128*0.0000295735295625, Prefixable::None, Prefixable::None),
+    VolumeRepresentative("galUK", 128*0.0000355163303281, Prefixable::None, Prefixable::None),
   };
   /* FIXME : Some ratio are too precise too be well approximated by double.
    * Maybe switch to a rational representation with two int. */
@@ -700,6 +701,8 @@ public:
   static_assert(strings_equal(k_volumeRepresentatives[k_quartRepresentativeIndex].m_rootSymbol, "qt"), "Index for the Quart Representative is incorrect.");
   static constexpr int k_gallonRepresentativeIndex = 7;
   static_assert(strings_equal(k_volumeRepresentatives[k_gallonRepresentativeIndex].m_rootSymbol, "gal"), "Index for the Gallon Representative is incorrect.");
+  static constexpr int k_gallonUkRepresentativeIndex = 8;
+  static_assert(strings_equal(k_volumeRepresentatives[k_gallonUkRepresentativeIndex].m_rootSymbol, "galUK"), "Index for the Gallon Representative is incorrect.");
 
   Unit(const UnitNode * node) : Expression(node) {}
   static Unit Builder(const Representative * representative, const Prefix * prefix);
