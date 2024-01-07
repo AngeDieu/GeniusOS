@@ -596,6 +596,7 @@ public:
     PressureRepresentative("Pa", 1., Prefixable::All, Prefixable::LongScale),
     PressureRepresentative("bar", 100000, Prefixable::All, Prefixable::LongScale),
     PressureRepresentative("atm", 101325, Prefixable::None, Prefixable::None),
+    PressureRepresentative("psi", 6894.7572932, Prefixable::None, Prefixable::None),
   };
   typedef UnitNode::EnergyRepresentative EnergyRepresentative;
   static constexpr const EnergyRepresentative k_energyRepresentatives[] = {
