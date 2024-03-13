@@ -19,7 +19,9 @@ SuperOS is a fork of Upsilon that seeks to add features that I either liked and 
 
 #### SuperOS
 
-- It's comming soon, don't worry
+- **new themes**
+- technical improvements (bug patches)
+- translation and typo fixes
 
 #### Upsilon
 
