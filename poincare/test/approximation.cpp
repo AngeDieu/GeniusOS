@@ -1,7 +1,6 @@
 #include <apps/shared/global_context.h>
 #include <poincare/constant.h>
 #include <poincare/infinity.h>
-#include <poincare/list_sort.h>
 #include <poincare/undefined.h>
 
 #include "helper.h"
@@ -14,11 +13,13 @@ void assert_expression_approximates_to_scalar(
     Preferences::AngleUnit angleUnit = Degree,
     Preferences::ComplexFormat complexFormat = Cartesian,
     Preferences::MixedFractions mixedFractionsParameter =
-        Preferences::MixedFractions::Enabled) {
+        Poincare::Preferences::MixedFractions::Enabled) {
   Shared::GlobalContext globalContext;
   Preferences::sharedPreferences->enableMixedFractions(mixedFractionsParameter);
   Expression e = parse_expression(expression, &globalContext, false);
-  T result = e.approximateToScalar<T>(&globalContext, complexFormat, angleUnit);
+  ApproximationContext approximationContext(&globalContext, complexFormat,
+                                            angleUnit);
+  T result = e.approximateToScalar<T>(approximationContext);
   quiz_assert_print_if_failure(
       roughly_equal(result, approximation, Poincare::Float<T>::EpsilonLax(),
                     true),
@@ -70,7 +71,8 @@ void assert_float_approximates_to(Float<T> f, const char *result) {
   Shared::GlobalContext globalContext;
   int numberOfDigits = PrintFloat::SignificantDecimalDigits<T>();
   char buffer[500];
-  f.template approximate<T>(&globalContext, Cartesian, Radian)
+  f.template approximate<T>(
+       ApproximationContext(&globalContext, Cartesian, Radian))
       .serialize(buffer, sizeof(buffer), DecimalMode, numberOfDigits);
   quiz_assert_print_if_failure(strcmp(buffer, result) == 0, result);
 }
@@ -259,6 +261,8 @@ QUIZ_CASE(poincare_approximation_power) {
   assert_expression_approximates_to<float>("e^(i×π+2)", "-7.38906", Radian,
                                            MetricUnitFormat, Cartesian, 6);
   assert_expression_approximates_to<double>("e^(i×π+2)", "-7.3890560989307");
+  assert_expression_approximates_to<double>("(-1)^2", "1");
+  assert_expression_approximates_to<double>("(-1)^3", "-1");
   assert_expression_approximates_to<float>("(-1)^(1/3)", "0.5+0.8660254×i");
   assert_expression_approximates_to<double>("(-1)^(1/3)",
                                             "0.5+0.86602540378444×i");
@@ -296,6 +300,8 @@ QUIZ_CASE(poincare_approximation_power) {
                                            MetricUnitFormat, Cartesian);
   assert_expression_simplifies_approximates_to<float>("3.5^2.0000001", "12.25");
   assert_expression_simplifies_approximates_to<float>("3.7^2.0000001", "13.69");
+  assert_expression_simplifies_approximates_to<double>(
+      "(13619-(185477161)^(1/2))^(-1)", Undefined::Name());
 }
 
 QUIZ_CASE(poincare_approximation_subtraction) {
@@ -444,7 +450,8 @@ void assert_expression_approximation_is_bounded(const char *expression,
                                                 bool upBoundIncluded = false) {
   Shared::GlobalContext globalContext;
   Expression e = parse_expression(expression, &globalContext, true);
-  T result = e.approximateToScalar<T>(&globalContext, Cartesian, Radian);
+  ApproximationContext approximationContext(&globalContext, Cartesian, Radian);
+  T result = e.approximateToScalar<T>(approximationContext);
   quiz_assert_print_if_failure(result >= lowBound, expression);
   quiz_assert_print_if_failure(
       result < upBound || (result == upBound && upBoundIncluded), expression);
@@ -495,6 +502,8 @@ QUIZ_CASE(poincare_approximation_function) {
                                            Cartesian, 6);
   assert_expression_approximates_to<double>("det([[1,23,3][4,5,6][7,8,9]])",
                                             "126");
+  assert_expression_approximates_to<double>("det([[1,undef][4,6]])",
+                                            Undefined::Name());
 
   // FIXME: the determinant computation is not precised enough to be displayed
   // with 7 significant digits
@@ -740,6 +749,8 @@ QUIZ_CASE(poincare_approximation_function) {
                                            "[[1,1.1,1][0,1,-0.5][0,0,1]]");
   assert_expression_approximates_to<float>("rref([[0,2,-1][5,6,7][10,11,10]])",
                                            "[[1,0,0][0,1,0][0,0,1]]");
+  assert_expression_approximates_to<float>("ref([[0,-1][undef,10]])",
+                                           "[[undef,undef][undef,undef]]");
 
   assert_expression_approximates_to<float>("cross([[1][2][3]],[[4][7][8]])",
                                            "[[-5][4][-1]]");
@@ -829,7 +840,8 @@ void assert_no_duplicates_in_list(const char *expression) {
   Shared::GlobalContext globalContext;
   Expression e = parse_expression(expression, &globalContext, true);
   e = ListSort::Builder(e);
-  Expression result = e.approximate<T>(&globalContext, Cartesian, Radian);
+  Expression result =
+      e.approximate<T>(ApproximationContext(&globalContext, Cartesian, Radian));
   assert(result.type() == ExpressionNode::Type::List);
   List list = static_cast<List &>(result);
   int n = list.numberOfChildren();
@@ -858,7 +870,7 @@ QUIZ_CASE(poincare_approximation_unique_random) {
 
   /* The simplification process should understand that the expression is not a
    * scalar if it encounters a randintnorep. */
-  assert_expression_simplifies_and_approximates_to(
+  assert_expression_simplifies_approximates_to<double>(
       "rem(randintnorep(1,10,5),1)", "{0,0,0,0,0}");
 }
 
@@ -866,6 +878,10 @@ QUIZ_CASE(poincare_approximation_integral) {
   assert_expression_approximates_to<float>("int(x,x, 1, 2)", "1.5");
   assert_expression_approximates_to<double>("int(x,x, 1, 2)", "1.5");
   assert_expression_approximates_to<float>("int(1/x,x,0,1)", Undefined::Name());
+
+  // Ensure this does not take up too much time
+  assert_expression_approximates_to<double>("int(e^(x^3),x,0,6)",
+                                            Undefined::Name());
 
   assert_expression_approximates_to<float>("int(1+cos(a),a, 0, 180)", "180");
   assert_expression_approximates_to<double>("int(1+cos(a),a, 0, 180)", "180");
@@ -1988,12 +2004,12 @@ QUIZ_CASE(poincare_approximation_mix) {
   assert_expression_approximates_to<float>("4/2×(2+3)", "10");
   assert_expression_approximates_to<double>("4/2×(2+3)", "10");
 
-  assert_expression_simplifies_and_approximates_to("1.0092^(20)",
-                                                   "1.2010050593402");
-  assert_expression_simplifies_and_approximates_to(
+  assert_expression_simplifies_approximates_to<double>("1.0092^(20)",
+                                                       "1.2010050593402");
+  assert_expression_simplifies_approximates_to<double>(
       "1.0092^(50)×ln(3/2)", "0.6409373488899", Degree, MetricUnitFormat,
       Cartesian, 13);
-  assert_expression_simplifies_and_approximates_to(
+  assert_expression_simplifies_approximates_to<double>(
       "1.0092^(50)×ln(1.0092)", "0.01447637354655", Degree, MetricUnitFormat,
       Cartesian, 13);
   assert_expression_approximates_to<double>("1.0092^(20)", "1.2010050593402");
@@ -2037,8 +2053,32 @@ QUIZ_CASE(poincare_approximation_lists_access) {
 }
 
 QUIZ_CASE(poincare_approximation_lists_functions) {
-  assert_expression_approximates_to<double>("sort({5,8,7,undef,-inf})",
-                                            "{-∞,5,7,8,undef}");
+  // Sort a list of complexes
+  assert_expression_approximates_to<double>("sort({})", "{}");
+  assert_expression_approximates_to<double>("sort({4})", "{4}");
+  assert_expression_approximates_to<double>("sort({undef})", "{undef}");
+  assert_expression_approximates_to<double>("sort({i})", "{i}");
+  assert_expression_approximates_to<double>("sort({-1,5,2+6,-0})",
+                                            "{-1,0,5,8}");
+  assert_expression_approximates_to<double>("sort({-1,-2,-inf,inf})",
+                                            "{-∞,-2,-1,∞}");
+  assert_expression_approximates_to<double>("sort({-1,undef,-2,-inf,inf})",
+                                            "{-1,undef,-2,-∞,∞}");
+  assert_expression_approximates_to<double>("sort({-1,i,8,-0})", "{-1,i,8,0}");
+  assert_expression_approximates_to<double>("sort({-1,undef,1})",
+                                            "{-1,undef,1}");
+  // Sort list of points
+  assert_expression_approximates_to<double>(
+      "sort({(8,1),(5,0),(5,-3),(1,0),(5,9)})",
+      "{(1,0),(5,-3),(5,0),(5,9),(8,1)}");
+  assert_expression_approximates_to<double>("sort({(8,1),(5,i),(5,-3)})",
+                                            "{(8,1),(5,undef),(5,-3)}");
+  assert_expression_approximates_to<double>("sort({(undef,1),(6,1),(5,-3)})",
+                                            "{(undef,1),(6,1),(5,-3)}");
+  assert_expression_approximates_to<double>(
+      "sort({(inf,1),(6,1),(5,-3),(-inf,9),(-inf,1)})",
+      "{(-∞,1),(-∞,9),(5,-3),(6,1),(∞,1)}");
+  // Mean
   assert_expression_approximates_to_scalar<double>("mean({5,8,7,4,12})", 7.2);
   assert_expression_approximates_to_scalar<double>(
       "mean({5,8,7,4,12},{1,2,3,5,6})", 7.882352941176471);
@@ -2079,11 +2119,19 @@ QUIZ_CASE(poincare_approximation_lists_functions) {
   assert_expression_approximates_to_scalar<double>("min({1,2,3})", 1.);
   // undef is never the min (unless there are only undef in the list)
   assert_expression_approximates_to<double>("min({undef})", Undefined::Name());
-  assert_expression_approximates_to_scalar<double>("min({1,undef,3})", 1.);
+  assert_expression_approximates_to<double>("min({1,undef,3})",
+                                            Undefined::Name());
+  assert_expression_approximates_to<double>("min({1,undef,i})",
+                                            Undefined::Name());
+  assert_expression_approximates_to<double>("min({1,7,i})", Undefined::Name());
   assert_expression_approximates_to_scalar<double>("max({1,2,3})", 3.);
   // undef is never the max (unless there are only undef in the list)
   assert_expression_approximates_to<double>("max({undef})", Undefined::Name());
-  assert_expression_approximates_to_scalar<double>("max({1,undef,3})", 3.);
+  assert_expression_approximates_to<double>("max({1,undef,3})",
+                                            Undefined::Name());
+  assert_expression_approximates_to<double>("max({1,undef,i})",
+                                            Undefined::Name());
+  assert_expression_approximates_to<double>("max({1,7,i})", Undefined::Name());
   assert_expression_approximates_to_scalar<double>("sum({1,2,3})", 6.);
   assert_expression_approximates_to_scalar<double>("prod({1,4,9})", 36.);
 }
@@ -2104,8 +2152,10 @@ void assert_expression_approximates_with_value_for_symbol(
     Preferences::ComplexFormat complexFormat = Cartesian) {
   Shared::GlobalContext globalContext;
   Expression e = parse_expression(expression, &globalContext, false);
-  T result = e.approximateWithValueForSymbol<T>(
-      symbol, symbolValue, &globalContext, complexFormat, angleUnit);
+  ApproximationContext approximationContext(&globalContext, complexFormat,
+                                            angleUnit);
+  T result = e.approximateWithValueForSymbol<T>(symbol, symbolValue,
+                                                approximationContext);
   quiz_assert_print_if_failure(
       roughly_equal(result, approximation, Poincare::Float<T>::EpsilonLax(),
                     true),
@@ -2131,6 +2181,11 @@ QUIZ_CASE(poincare_approximation_booleans) {
   assert_expression_approximates_to<float>("True + 3", Undefined::Name());
 }
 
+QUIZ_CASE(poincare_approximation_comparison_operators) {
+  assert_expression_approximates_to<float>("4000!4=9", "False");
+  assert_expression_approximates_to<float>("4000!4!=9", "True");
+}
+
 QUIZ_CASE(poincare_approximation_piecewise_operator) {
   assert_expression_approximates_to<float>("piecewise(3,1<0,2)", "2");
   assert_expression_approximates_to<float>("piecewise(3,1>0,2)", "3");
@@ -2145,7 +2200,7 @@ QUIZ_CASE(poincare_approximation_piecewise_operator) {
 
 QUIZ_CASE(poincare_approximation_point) {
   assert_expression_approximates_to<float>("(1,2)", "(1,2)");
-  assert_expression_approximates_to<float>("(1/0,2)", Undefined::Name());
+  assert_expression_approximates_to<float>("(1/0,2)", "(undef,2)");
   assert_expression_approximates_to<float>("(1,2)+3", Undefined::Name());
   assert_expression_approximates_to<float>("abs((1.23,4.56))",
                                            Undefined::Name());
@@ -2153,7 +2208,7 @@ QUIZ_CASE(poincare_approximation_point) {
                                            "{(3,7),(11,15)}");
 
   assert_expression_approximates_to<double>("(1,2)", "(1,2)");
-  assert_expression_approximates_to<double>("(1/0,2)", Undefined::Name());
+  assert_expression_approximates_to<double>("(1/0,2)", "(undef,2)");
   assert_expression_approximates_to<double>("(1,2)+3", Undefined::Name());
   assert_expression_approximates_to<double>("abs((1.23,4.56))",
                                             Undefined::Name());
@@ -2171,10 +2226,12 @@ QUIZ_CASE(poincare_approximation_keeping_symbols) {
   assert_expression_approximates_keeping_symbols_to("int(x,x,0,2)+int(x,x,0,x)",
                                                     "int(x,x,0,x)+2");
   assert_expression_approximates_keeping_symbols_to(
-      "[[x,1/2][1/2+x,cos(4/3+x)]]", "[[x,0.5][x+0.5,cos(x+1.333333333)]]");
-  assert_expression_approximates_keeping_symbols_to("{x,undef,3/4+x,1/2}",
-                                                    "{x,undef,x+0.75,0.5}");
-  assert_expression_approximates_keeping_symbols_to("3/5→x", "0.6→x");
+      "[[x,cos(10)][1/2+x,cos(4/3+x)]]",
+      "[[x,0.984807753][\u00122×x+1\u0013/2,cos(\u00123×x+4\u0013/3)]]");
+  assert_expression_approximates_keeping_symbols_to(
+      "{x,undef,cos(10)+x,cos(10)}", "{x,undef,x+0.984807753,0.984807753}");
+  assert_expression_approximates_keeping_symbols_to("cos(10)→x",
+                                                    "0.984807753→x");
   assert_expression_approximates_keeping_symbols_to("4×kg×s^(-3)",
                                                     Undefined::Name());
   assert_expression_approximates_keeping_symbols_to("piecewise(T×x<0)",
@@ -2182,12 +2239,3 @@ QUIZ_CASE(poincare_approximation_keeping_symbols) {
   // Check that it still reduces
   assert_expression_approximates_keeping_symbols_to("x^2+x×x", "2×x^2");
 }
-
-template void assert_expression_approximates_to_scalar(
-    const char *expression, float approximation,
-    Preferences::AngleUnit angleUnit, Preferences::ComplexFormat complexFormat,
-    Preferences::MixedFractions mixedFractionsParameter);
-template void assert_expression_approximates_to_scalar(
-    const char *expression, double approximation,
-    Preferences::AngleUnit angleUnit, Preferences::ComplexFormat complexFormat,
-    Preferences::MixedFractions mixedFractionsParameter);

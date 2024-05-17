@@ -166,8 +166,9 @@ int Addition::getPolynomialCoefficients(Context* context,
                                         const char* symbolName,
                                         Expression coefficients[]) const {
   int deg = polynomialDegree(context, symbolName);
-  if (deg < 0 || deg > Expression::k_maxPolynomialDegree) {
-    return -1;
+  if (deg <= 0 || deg > Expression::k_maxPolynomialDegree) {
+    return defaultGetPolynomialCoefficients(deg, context, symbolName,
+                                            coefficients);
   }
   for (int k = 0; k < deg + 1; k++) {
     coefficients[k] = Addition::Builder();
@@ -178,7 +179,11 @@ int Addition::getPolynomialCoefficients(Context* context,
   for (int i = 0; i < childrenNumber; i++) {
     int d = childAtIndex(i).getPolynomialCoefficients(context, symbolName,
                                                       intermediateCoefficients);
-    assert(d < Expression::k_maxNumberOfPolynomialCoefficients);
+    assert(d <= deg);
+    if (d < 0) {
+      // We couldn't calculate child's polynomial coefficients
+      return -1;
+    }
     for (int j = 0; j < d + 1; j++) {
       static_cast<Addition&>(coefficients[j])
           .addChildAtIndexInPlace(intermediateCoefficients[j],
@@ -335,8 +340,8 @@ Expression Addition::shallowReduce(ReductionContext reductionContext) {
     parentOfThis = parentOfThis.parent();
   }
   if (!parentOfThis.isUninitialized() &&
-      (parentOfThis.type() == ExpressionNode::Type::Addition ||
-       parentOfThis.type() == ExpressionNode::Type::Subtraction)) {
+      parentOfThis.isOfType({ExpressionNode::Type::Addition,
+                             ExpressionNode::Type::Subtraction})) {
     return *this;
   }
 
@@ -378,8 +383,7 @@ Expression Addition::shallowReduce(ReductionContext reductionContext) {
        * Recurse to run the reduction, then create the result
        * result = MUL( addition, unit1, unit2...) */
       Expression addition = shallowReduce(reductionContext);
-      if (addition.type() == ExpressionNode::Type::Nonreal ||
-          addition.type() == ExpressionNode::Type::Undefined) {
+      if (addition.isUndefined()) {
         return replaceWithUndefinedInPlace();
       }
       Multiplication result = Multiplication::Builder(unit);
@@ -772,8 +776,8 @@ bool Addition::TermHasSquaredTrigFunctionWithBase(
     const Expression& e, const ReductionContext& reductionContext,
     Expression& base, Expression& coefficient, bool* cosine) {
   if (e.type() == ExpressionNode::Type::Power &&
-      (e.childAtIndex(0).type() == ExpressionNode::Type::Cosine ||
-       e.childAtIndex(0).type() == ExpressionNode::Type::Sine) &&
+      e.childAtIndex(0).isOfType(
+          {ExpressionNode::Type::Cosine, ExpressionNode::Type::Sine}) &&
       e.childAtIndex(1).isIdenticalTo(Rational::Builder(2))) {
     *cosine = e.childAtIndex(0).type() == ExpressionNode::Type::Cosine;
     coefficient = Rational::Builder(1);

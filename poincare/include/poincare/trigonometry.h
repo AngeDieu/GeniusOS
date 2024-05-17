@@ -12,12 +12,15 @@ class Trigonometry final {
     Cosine = 0,
     Sine = 1,
   };
+  static Expression AnglePeriodInAngleUnit(Preferences::AngleUnit angleUnit);
   static Expression PiExpressionInAngleUnit(Preferences::AngleUnit angleUnit);
   static double PiInAngleUnit(Preferences::AngleUnit angleUnit);
-  static bool isDirectTrigonometryFunction(const Expression& e);
-  static bool isInverseTrigonometryFunction(const Expression& e);
-  static bool isAdvancedTrigonometryFunction(const Expression& e);
-  static bool isInverseAdvancedTrigonometryFunction(const Expression& e);
+  static double ConvertAngleToRadian(double angle,
+                                     Preferences::AngleUnit angleUnit);
+  static bool IsDirectTrigonometryFunction(const Expression& e);
+  static bool IsInverseTrigonometryFunction(const Expression& e);
+  static bool IsAdvancedTrigonometryFunction(const Expression& e);
+  static bool IsInverseAdvancedTrigonometryFunction(const Expression& e);
   static bool AreInverseFunctions(const Expression& directFunction,
                                   const Expression& inverseFunction);
   /* Returns a (unreduced) division between pi in each unit, or 1 if the units
@@ -26,19 +29,17 @@ class Trigonometry final {
                                          Preferences::AngleUnit toUnit);
   static bool ExpressionIsEquivalentToTangent(const Expression& e);
   static bool ExpressionIsEquivalentToInverseOfTangent(const Expression& e);
-  static Expression shallowReduceDirectFunction(
+  static Expression ShallowReduceDirectFunction(
       Expression& e, ReductionContext reductionContext);
-  static Expression shallowReduceInverseFunction(
+  static Expression ShallowReduceInverseFunction(
       Expression& e, ReductionContext reductionContext);
-  static Expression shallowReduceAdvancedFunction(
+  static Expression ShallowReduceAdvancedFunction(
       Expression& e, ReductionContext reductionContext);
-  static Expression shallowReduceInverseAdvancedFunction(
+  static Expression ShallowReduceInverseAdvancedFunction(
       Expression& e, ReductionContext reductionContext);
-  static Expression replaceWithAdvancedFunction(Expression& e,
+  static Expression ReplaceWithAdvancedFunction(Expression& e,
                                                 Expression& denominator);
-  // , Function f, bool inverse
-  static Expression table(const Expression e, ExpressionNode::Type type,
-                          const ReductionContext& reductionContext);
+
   template <typename T>
   static std::complex<T> ConvertToRadian(const std::complex<T> c,
                                          Preferences::AngleUnit angleUnit);
@@ -58,7 +59,7 @@ class Trigonometry final {
    * Expression::isLinearCombinationOfFunction */
   static bool DetectLinearPatternOfCosOrSin(
       const Expression& e, ReductionContext reductionContext,
-      const char* symbol, bool acceptAddition,
+      const char* symbol, bool acceptConstantTerm,
       double* coefficientBeforeCos = nullptr,
       double* coefficientBeforeSymbol = nullptr, double* angle = nullptr);
 

@@ -2,7 +2,6 @@
 
 #include <assert.h>
 #include <float.h>
-#include <inference/models/statistic/interfaces/significance_tests.h>
 #include <poincare/print.h>
 
 namespace Inference {
@@ -15,14 +14,15 @@ HomogeneityTest::HomogeneityTest() {
 }
 
 void HomogeneityTest::setGraphTitle(char* buffer, size_t bufferSize) const {
-  const char* format = I18n::translate(
-      I18n::Message::StatisticGraphControllerTestTitleFormatHomogeneityTest);
   Poincare::Print::CustomPrintf(
-      buffer, bufferSize, format, threshold(),
+      buffer, bufferSize, "%s=%*.*ed %s=%*.*ed %s=%*.*ed",
+      I18n::translate(I18n::Message::GreekAlpha), threshold(),
       Poincare::Preferences::PrintFloatMode::Decimal,
       Poincare::Preferences::ShortNumberOfSignificantDigits,
-      testCriticalValue(), Poincare::Preferences::PrintFloatMode::Decimal,
-      Poincare::Preferences::ShortNumberOfSignificantDigits, pValue(),
+      criticalValueSymbol(), testCriticalValue(),
+      Poincare::Preferences::PrintFloatMode::Decimal,
+      Poincare::Preferences::ShortNumberOfSignificantDigits,
+      I18n::translate(I18n::Message::PValue), pValue(),
       Poincare::Preferences::PrintFloatMode::Decimal,
       Poincare::Preferences::ShortNumberOfSignificantDigits);
 }

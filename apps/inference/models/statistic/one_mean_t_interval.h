@@ -1,8 +1,6 @@
 #ifndef INFERENCE_MODELS_STATISTIC_ONE_MEAN_T_INTERVAL_H
 #define INFERENCE_MODELS_STATISTIC_ONE_MEAN_T_INTERVAL_H
 
-#include "interfaces/distributions.h"
-#include "interfaces/significance_tests.h"
 #include "interval.h"
 
 namespace Inference {
@@ -40,22 +38,6 @@ class OneMeanTInterval : public Interval {
   const char* estimateSymbol() const override {
     return OneMean::EstimateSymbol();
   }
-  Poincare::Layout testCriticalValueSymbol() override {
-    return DistributionT::TestCriticalValueSymbol();
-  }
-
-  // Distribution: t
-  float canonicalDensityFunction(float x) const override {
-    return DistributionT::CanonicalDensityFunction(x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveFunctionAtAbscissa(double x) const override {
-    return DistributionT::CumulativeNormalizedDistributionFunction(
-        x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveInverseForProbability(double p) const override {
-    return DistributionT::CumulativeNormalizedInverseDistributionFunction(
-        p, m_degreesOfFreedom);
-  }
 
  private:
   // Significance Test:: OneMean
@@ -67,11 +49,6 @@ class OneMeanTInterval : public Interval {
     return OneMean::TParameterRepresentationAtIndex(i);
   }
   double* parametersArray() override { return m_params; }
-
-  // Distribution: t
-  float computeYMax() const override {
-    return DistributionT::YMax(m_degreesOfFreedom);
-  }
 
   void privateCompute() override { OneMean::ComputeTInterval(this); }
 

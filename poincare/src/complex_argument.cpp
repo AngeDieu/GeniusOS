@@ -39,10 +39,10 @@ Expression ComplexArgumentNode::shallowReduce(
 }
 
 template <typename T>
-Complex<T> ComplexArgumentNode::computeOnComplex(
+std::complex<T> ComplexArgumentNode::computeOnComplex(
     const std::complex<T> c, Preferences::ComplexFormat,
     Preferences::AngleUnit angleUnit) {
-  return Complex<T>::Builder(std::arg(c));
+  return std::arg(c);
 }
 
 Expression ComplexArgument::shallowReduce(ReductionContext reductionContext) {
@@ -73,9 +73,8 @@ Expression ComplexArgument::shallowReduce(ReductionContext reductionContext) {
   } else if (c.isPositive(context) == TrinaryBoolean::False) {
     res = Constant::PiBuilder();
   } else {
-    double approximation =
-        c.approximateToScalar<double>(context, reductionContext.complexFormat(),
-                                      reductionContext.angleUnit(), true);
+    ApproximationContext approximationContext(reductionContext, true);
+    double approximation = c.approximateToScalar<double>(approximationContext);
     if (approximation < 0.0) {
       res = Constant::PiBuilder();
     } else if (approximation > 0.0) {

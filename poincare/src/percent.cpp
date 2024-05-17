@@ -123,6 +123,15 @@ TrinaryBoolean PercentAdditionNode::isNull(Context* context) const {
              : TrinaryBoolean::False;
 }
 
+bool PercentAdditionNode::childAtIndexNeedsUserParentheses(
+    const Expression& child, int childIndex) const {
+  if (childIndex == 1 && child.isOfType({Type::Opposite})) {
+    // Do not add parenthesis since this will be transformed with a down arrow
+    return false;
+  }
+  return PercentSimpleNode::childAtIndexNeedsUserParentheses(child, childIndex);
+}
+
 // PercentSimpleNode
 
 int PercentAdditionNode::createSecondChildLayout(
@@ -278,8 +287,8 @@ Expression PercentAddition::deepBeautify(
   }
   // Skip the Addition's shallowBeautify
   Expression child1 = e.childAtIndex(1);
-  assert(child1.type() == ExpressionNode::Type::Addition ||
-         child1.type() == ExpressionNode::Type::Subtraction);
+  assert(child1.isOfType(
+      {ExpressionNode::Type::Addition, ExpressionNode::Type::Subtraction}));
   SimplificationHelper::deepBeautifyChildren(child1, reductionContext);
   // We add missing Parentheses after beautifying the parent and child
   if (e.node()->childAtIndexNeedsUserParentheses(child1, 0)) {

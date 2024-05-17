@@ -10,15 +10,6 @@ using namespace Poincare;
 namespace Shared {
 
 bool ZoomCurveViewController::handleEvent(Ion::Events::Event event) {
-  if (event == Ion::Events::OnOff) {
-    /* If the display is turned on while all curves have been interrupted,
-     * redrawing the curve view will be skipped. Since the frame info has been
-     * lost on powering down, this would lead to a noisy screen. */
-    curveView()->resetInterruption();
-    /* Return false here as the OnOff event needs to be caught downstream for
-     * the screen to be redrawn. */
-    return false;
-  }
   if (event == Ion::Events::Plus || event == Ion::Events::Minus) {
     return handleZoom(event);
   }
@@ -26,6 +17,12 @@ bool ZoomCurveViewController::handleEvent(Ion::Events::Event event) {
     return handleEnter();
   }
   return false;
+}
+
+void ZoomCurveViewController::viewWillAppear() {
+  interactiveCurveViewRange()->setOffscreenYAxis(offscreenYAxis());
+  /* Force a reload in case some curves were interrupted. */
+  curveView()->reload(true);
 }
 
 bool ZoomCurveViewController::handleZoom(Ion::Events::Event event) {

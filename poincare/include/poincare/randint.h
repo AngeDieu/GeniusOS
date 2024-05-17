@@ -64,7 +64,6 @@ class Randint final : public ExpressionUpToTwoChildren<Randint, RandintNode> {
 
  public:
   using ExpressionBuilder::ExpressionBuilder;
-
   Expression shallowReduce(ReductionContext reductionContext);
 };
 

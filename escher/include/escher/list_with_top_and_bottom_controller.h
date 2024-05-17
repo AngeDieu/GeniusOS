@@ -15,7 +15,7 @@ class ListWithTopAndBottomDataSource
         m_bottomCell(bottomView) {}
 
   int numberOfRows() const override;
-  KDCoordinate separatorBeforeRow(int index) override;
+  KDCoordinate separatorBeforeRow(int row) override;
   HighlightCell* reusableCell(int index, int type) override;
   int reusableCellCount(int type) override;
 
@@ -25,9 +25,12 @@ class ListWithTopAndBottomDataSource
   void setBottomView(View* view) { m_bottomCell.setView(view); }
 
  protected:
+  void initWidth(TableView* tableView) override;
   KDCoordinate nonMemoizedRowHeight(int j) override;
-  void fillCellForRow(HighlightCell* cell, int index) override;
-  int typeAtRow(int index) const override;
+  void fillCellForRow(HighlightCell* cell, int row) override;
+  int typeAtRow(int row) const override;
+  bool canSelectCellAtRow(int row) override;
+  bool canStoreCellAtRow(int row) override;
 
  private:
   constexpr static int k_topCellType = 0;
@@ -54,7 +57,6 @@ class ListWithTopAndBottomDataSource
       assert(m_view);
       setChildFrame(m_view, bounds(), force);
     }
-    bool protectedIsSelectable() override { return false; }
 
    private:
     View* m_view;
@@ -74,13 +76,11 @@ class ListWithTopAndBottomController : public SelectableViewController,
                                  View* bottomView = nullptr);
 
   View* view() override { return &m_selectableListView; }
-  void resetMemoization(bool force = true) override {
-    return m_outerDataSource.resetMemoization(force);
-  }
+  SelectableListView* selectableListView() { return &m_selectableListView; }
   void listViewDidChangeSelectionAndDidScroll(
       SelectableListView* l, int previousRow, KDPoint previousOffset,
       bool withinTemporarySelection = false) override;
-  void selectFirstCell() { selectCell(m_outerDataSource.hasTopView()); }
+  void selectFirstCell() { selectRow(firstCellIndex()); }
 
  protected:
   constexpr static KDGlyph::Format k_messageFormat = {
@@ -90,14 +90,15 @@ class ListWithTopAndBottomController : public SelectableViewController,
       .horizontalAlignment = KDGlyph::k_alignCenter};
 
   void didBecomeFirstResponder() override;
+  void viewWillAppear() override;
   int innerRowFromRow(int row) const {
     assert(row >= m_outerDataSource.hasTopView());
     return row - m_outerDataSource.hasTopView();
   }
   int innerSelectedRow() const { return innerRowFromRow(selectedRow()); }
   void selectLastCell() {
-    selectCell(m_outerDataSource.numberOfRows() - 1 -
-               m_outerDataSource.hasBottomView());
+    selectRow(m_outerDataSource.numberOfRows() - 1 -
+              m_outerDataSource.hasBottomView());
   }
   void setTopView(View* view) { m_outerDataSource.setTopView(view); }
   void setBottomView(View* view) { m_outerDataSource.setBottomView(view); }
@@ -105,6 +106,10 @@ class ListWithTopAndBottomController : public SelectableViewController,
   SelectableListView m_selectableListView;
 
  private:
+  void resetSizeMemoization() override {
+    return m_outerDataSource.resetSizeMemoization();
+  }
+  int firstCellIndex() { return m_outerDataSource.hasTopView(); }
   ListWithTopAndBottomDataSource m_outerDataSource;
 };
 

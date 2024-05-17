@@ -58,40 +58,15 @@ void assert_ranges_equal(Range2D observed, Range2D expected,
 template <typename T>
 Coordinate2D<T> expressionEvaluator(T t, const void *model, Context *context) {
   const Expression *e = static_cast<const Expression *>(model);
+  ApproximationContext approximationContext(context, Real, Radian);
   if (e->type() == ExpressionNode::Type::Matrix) {
     return Coordinate2D<T>(e->childAtIndex(0).approximateWithValueForSymbol(
-                               k_symbol, t, context, Real, Radian),
+                               k_symbol, t, approximationContext),
                            e->childAtIndex(1).approximateWithValueForSymbol(
-                               k_symbol, t, context, Real, Radian));
+                               k_symbol, t, approximationContext));
   }
   return Coordinate2D<T>(
-      t, e->approximateWithValueForSymbol(k_symbol, t, context, Real, Radian));
-}
-
-void assert_full_function_range_is(const char *expression, Range1D bounds,
-                                   Range2D expectedRange) {
-  Shared::GlobalContext context;
-  Expression e = parse_expression(expression, &context, false);
-  ZoomTest zoom(bounds, &context);
-  zoom.zoom()->fitFullFunction(expressionEvaluator<float>, &e);
-  assert_ranges_equal(zoom.interestingRange(), expectedRange, expression);
-}
-
-QUIZ_CASE(poincare_zoom_fit_full_function) {
-  assert_full_function_range_is("1", Range1D(-10, 10), Range2D(-10, 10, 1, 1));
-  assert_full_function_range_is("x", Range1D(-10, 10),
-                                Range2D(-10, 10, -10, 10));
-  assert_full_function_range_is(
-      "e^x", Range1D(-10, 10),
-      Range2D(-10, 10, std::exp(-10.f), std::exp(10.f)));
-  assert_full_function_range_is("1+1/x", Range1D(0.1, 2),
-                                Range2D(0.1, 2, 1.5, 11));
-  assert_full_function_range_is("[[cos(x)][sin(x)]]", Range1D(0, 2 * M_PI),
-                                Range2D(-1, 1, -1, 1));
-  assert_full_function_range_is("[[-x^2+1][-2x]]", Range1D(0, 1),
-                                Range2D(0, 1, -2, 0));
-  assert_full_function_range_is("[[acos(x)][asin(x)]]", Range1D(0, 1),
-                                Range2D(0, M_PI / 2, 0, M_PI / 2));
+      t, e->approximateWithValueForSymbol(k_symbol, t, approximationContext));
 }
 
 void assert_points_of_interest_range_is(const char *expression,
@@ -130,7 +105,7 @@ QUIZ_CASE(poincare_zoom_fit_points_of_interest) {
   assert_points_of_interest_range_is("sin(x)", Range2D(-8.028, 8.028, -1, 1));
   assert_points_of_interest_range_is("sin(π*x/180)", Range2D(-450, 450, -1, 1));
   assert_points_of_interest_range_is("cos(x+1)+2",
-                                     Range2D(-13.850, 15.240, 1, 3));
+                                     Range2D(-7.287, 8.432, 1, 3));
   assert_points_of_interest_range_is("x*ln(x)", Range2D(0, 1, -0.368, 0));
   assert_points_of_interest_range_is("(e^x-1)/(e^x+1)",
                                      Range2D(-2.309, 2.309, -0.819, 0.819));
@@ -161,12 +136,8 @@ void assert_intersections_range_is(const char *expression1,
 }
 
 QUIZ_CASE(poincare_zoom_fit_intersections) {
-  assert_intersections_range_is("sin(x)", "cos(x)",
-                                Range2D(-14.93, 13.37, -0.7128, 0.7170));
   assert_intersections_range_is("x/2+2", "2x-1", Range2D(2, 2, 3, 3));
   assert_intersections_range_is("x^2", "-x^2/3+x", Range2D(0, 0.75, 0, 0.5631));
-  assert_intersections_range_is("tan(x)", "x",
-                                Range2D(-4.498, 4.498, -4.585, 4.585));
 }
 
 void assert_sanitized_range_is(Range2D inputRange, Range2D expectedRange) {

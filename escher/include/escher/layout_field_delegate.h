@@ -11,22 +11,28 @@ class LayoutField;
 
 class LayoutFieldDelegate : public ContextProvider {
  public:
-  virtual bool layoutFieldShouldFinishEditing(LayoutField* layoutField,
-                                              Ion::Events::Event event) = 0;
+  bool layoutFieldShouldFinishEditing(LayoutField* layoutField,
+                                      Ion::Events::Event event) {
+    return event == Ion::Events::OK || event == Ion::Events::EXE;
+  }
   virtual bool layoutFieldDidReceiveEvent(LayoutField* layoutField,
-                                          Ion::Events::Event event) = 0;
+                                          Ion::Events::Event event) {
+    return false;
+  }
   virtual bool layoutFieldDidFinishEditing(LayoutField* layoutField,
-                                           Poincare::Layout layoutR,
                                            Ion::Events::Event event) {
     return false;
   }
   virtual void layoutFieldDidAbortEditing(LayoutField* layoutField) {}
-  virtual bool layoutFieldDidHandleEvent(LayoutField* layoutField,
-                                         bool returnValue,
-                                         bool layoutDidChange) {
-    return returnValue;
-  }
+  virtual void layoutFieldDidHandleEvent(LayoutField* layoutField) {}
   virtual void layoutFieldDidChangeSize(LayoutField* layoutField) {}
+
+  virtual bool insertTextForStoEvent(Escher::LayoutField* layoutField) const {
+    return false;
+  }
+  virtual bool insertTextForAnsEvent(Escher::LayoutField* layoutField) const {
+    return false;
+  }
 };
 
 }  // namespace Escher

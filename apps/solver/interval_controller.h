@@ -11,13 +11,11 @@ namespace Solver {
 
 class IntervalController : public Shared::FloatParameterController<double> {
  public:
-  IntervalController(
-      Escher::Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate);
+  IntervalController(Escher::Responder* parentResponder);
   const char* title() override;
   TELEMETRY_ID("Interval");
   int numberOfRows() const override;
-  void fillCellForRow(Escher::HighlightCell* cell, int row) override;
+  KDCoordinate nonMemoizedRowHeight(int row) override;
 
  private:
   Escher::HighlightCell* reusableParameterCell(int index, int type) override;
@@ -28,7 +26,6 @@ class IntervalController : public Shared::FloatParameterController<double> {
   double parameterAtIndex(int index) override;
   bool setParameterAtIndex(int parameterIndex, double f) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
 
   constexpr static int k_maxNumberOfCells = 2;

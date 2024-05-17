@@ -7,13 +7,11 @@
 namespace Escher {
 
 EditableExpressionCell::EditableExpressionCell(
-    Responder* parentResponder,
-    InputEventHandlerDelegate* inputEventHandlerDelegate,
-    LayoutFieldDelegate* layoutDelegate)
+    Responder* parentResponder, LayoutFieldDelegate* layoutDelegate)
     : HighlightCell(),
       Responder(parentResponder),
-      m_layoutField(this, inputEventHandlerDelegate, layoutDelegate) {
-  m_layoutField.setMargins(k_topMargin, k_margin, k_margin, k_margin);
+      m_layoutField(this, layoutDelegate) {
+  m_layoutField.setMargins(k_margins);
   m_expressionBody[0] = 0;
 }
 
@@ -32,12 +30,13 @@ void EditableExpressionCell::layoutSubviews(bool force) {
 }
 
 void EditableExpressionCell::didBecomeFirstResponder() {
-  Container::activeApp()->setFirstResponder(&m_layoutField);
+  App::app()->setFirstResponder(&m_layoutField);
 }
 
 KDSize EditableExpressionCell::minimalSizeForOptimalDisplay() const {
   KDSize size = m_layoutField.minimalSizeForOptimalDisplay();
-  return KDSize(size.width(), std::max(size.height(), k_minimalHeigh));
+  return KDSize(size.width(),
+                std::clamp(size.height(), k_minimalHeight, k_maximalHeight));
 }
 
 }  // namespace Escher

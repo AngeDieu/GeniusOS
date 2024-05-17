@@ -241,6 +241,7 @@ void PointsOfInterestCache::computeBetween(float start, float end) {
         start, end, ContinuousFunction::k_unknownName, context);
     solver.setSearchStep(searchStep);
     solver.stretch();
+    solver.setGrowthSpeed(Solver<double>::GrowthSpeed::Fast);
     Coordinate2D<double> solution;
     while (std::isfinite(
         (solution = (solver.*next)(e)).x())) {  // assignment in condition
@@ -256,7 +257,7 @@ void PointsOfInterestCache::computeBetween(float start, float end) {
   /* Do not compute intersections if store is full because re-creating a
    * ContinuousFunction object each time a new function is intersected
    * is very slow. */
-  if (store->memoizationIsFull() || !f->shouldDisplayIntersections()) {
+  if (store->memoizationOverflows() || !f->shouldDisplayIntersections()) {
     return;
   }
 
@@ -296,14 +297,6 @@ void PointsOfInterestCache::append(double x, double y,
                                    Solver<double>::Interest interest,
                                    uint32_t data, int subCurveIndex) {
   assert(std::isfinite(x) && std::isfinite(y));
-#if __EMSCRIPTEN__
-  // Cap the total number of points
-  if (m_interestingPointsOverflowPool ||
-      (numberOfPoints() > k_numberOfPointsToOverflowEmscripten)) {
-    m_interestingPointsOverflowPool = true;
-    return;
-  }
-#endif
   ExpiringPointer<ContinuousFunction> f =
       App::app()->functionStore()->modelForRecord(m_record);
   m_list.append(x, y, data, interest, f->isAlongY(), subCurveIndex);

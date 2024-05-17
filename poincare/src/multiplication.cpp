@@ -120,7 +120,7 @@ double MultiplicationNode::degreeForSortingAddition(bool symbolsOnly) const {
 }
 
 template <typename T>
-Complex<T> MultiplicationNode::computeOnComplex(
+std::complex<T> MultiplicationNode::computeOnComplex(
     const std::complex<T> c, const std::complex<T> d,
     Preferences::ComplexFormat complexFormat) {
   // Special case to prevent (inf,0)*(1,0) from returning (inf, nan).
@@ -128,20 +128,20 @@ Complex<T> MultiplicationNode::computeOnComplex(
     constexpr T zero = static_cast<T>(0.0);
     // Handle case of pure imaginary/real multiplications
     if (c.imag() == zero && d.imag() == zero) {
-      return Complex<T>::Builder(c.real() * d.real(), zero);
+      return std::complex<T>(c.real() * d.real(), zero);
     }
     if (c.real() == zero && d.real() == zero) {
-      return Complex<T>::Builder(-c.imag() * d.imag(), zero);
+      return std::complex<T>(-c.imag() * d.imag(), zero);
     }
     if (c.imag() == zero && d.real() == zero) {
-      return Complex<T>::Builder(zero, c.real() * d.imag());
+      return std::complex<T>(zero, c.real() * d.imag());
     }
     if (c.real() == zero && d.imag() == zero) {
-      return Complex<T>::Builder(zero, c.imag() * d.real());
+      return std::complex<T>(zero, c.imag() * d.real());
     }
     // Other cases are left to the standard library, and might return NaN.
   }
-  return Complex<T>::Builder(c * d);
+  return c * d;
 }
 
 template <typename T>
@@ -379,8 +379,9 @@ int Multiplication::getPolynomialCoefficients(Context *context,
                                               const char *symbolName,
                                               Expression coefficients[]) const {
   int deg = polynomialDegree(context, symbolName);
-  if (deg < 0 || deg > Expression::k_maxPolynomialDegree) {
-    return -1;
+  if (deg <= 0 || deg > Expression::k_maxPolynomialDegree) {
+    return defaultGetPolynomialCoefficients(deg, context, symbolName,
+                                            coefficients);
   }
   // Initialization of coefficients
   for (int i = 1; i <= deg; i++) {
@@ -396,7 +397,11 @@ int Multiplication::getPolynomialCoefficients(Context *context,
     // childAtIndex(i) = b(0)+b(1)*X+b(2)*X^2+b(3)*x^3+...
     int degI = childAtIndex(i).getPolynomialCoefficients(
         context, symbolName, intermediateCoefficients);
-    assert(degI <= Expression::k_maxPolynomialDegree);
+    assert(degI <= deg);
+    if (degI < 0) {
+      // We couldn't calculate child's polynomial coefficients
+      return -1;
+    }
     for (int j = deg; j > 0; j--) {
       // new coefficients[j] = b(0)*a(j)+b(1)*a(j-1)+b(2)*a(j-2)+...
       Addition a = Addition::Builder();
@@ -553,6 +558,7 @@ static bool CanSimplifyUnitProduct(
 
 Expression Multiplication::shallowBeautify(
     const ReductionContext &reductionContext) {
+  ApproximationContext approximationContext(reductionContext);
   /* Beautifying a Multiplication consists in several possible operations:
    * - Add Opposite ((-3)*x -> -(3*x), useful when printing fractions)
    * - Recognize derived units in the product of units
@@ -593,9 +599,7 @@ Expression Multiplication::shallowBeautify(
     if (units.isPureAngleUnit()) {
       if (unitConversionMode == UnitConversion::Default) {
         // Pure angle unit is the only unit allowed to be evaluated exactly
-        double value = self.approximateToScalar<double>(
-            reductionContext.context(), reductionContext.complexFormat(),
-            reductionContext.angleUnit());
+        double value = self.approximateToScalar<double>(approximationContext);
         Expression toUnit = units.clone();
         Unit::ChooseBestRepresentativeAndPrefixForValue(toUnit, &value,
                                                         reductionContext);
@@ -718,9 +722,7 @@ Expression Multiplication::shallowBeautify(
      * most relevant.
      */
 
-    double value = self.approximateToScalar<double>(
-        reductionContext.context(), reductionContext.complexFormat(),
-        reductionContext.angleUnit());
+    double value = self.approximateToScalar<double>(approximationContext);
     if (std::isnan(value)) {
       // If the value is undefined, return "undef" without any unit
       result = Undefined::Builder();
@@ -1033,9 +1035,8 @@ Expression Multiplication::shallowReduce(ReductionContext reductionContext) {
         Expression o0 = childAtIndex(0);
         Number m = Number::Multiplication(static_cast<Number &>(o0),
                                           static_cast<Number &>(o));
-        if ((IsInfinity(m, context) || m.isUndefined()) &&
-            !IsInfinity(o0, context) && !o0.isUndefined() &&
-            !IsInfinity(o, context) && !o.isUndefined()) {
+        if ((IsInfinity(m) || m.isUndefined()) && !IsInfinity(o0) &&
+            !o0.isUndefined() && !IsInfinity(o) && !o.isUndefined()) {
           // Stop the reduction due to a multiplication overflow
           ExceptionCheckpoint::Raise();
         }
@@ -1083,7 +1084,7 @@ Expression Multiplication::shallowReduce(ReductionContext reductionContext) {
         // Check that other children don't match inf or matrix
         if (!recursivelyMatches(
                 [](const Expression e, Context *context) {
-                  return IsInfinity(e, context) || IsMatrix(e, context);
+                  return IsInfinity(e) || IsMatrix(e, context);
                 },
                 context)) {
           Expression result = Rational::Builder(0);
@@ -1492,9 +1493,7 @@ bool Multiplication::factorizeSineAndCosine(
    * cos/sin into 1/tan. Indeed, cos(pi/2)/sin(pi/2) is defined, but tan(pi/2)
    * is undef. */
   if (tanPower.isPositive() == TrinaryBoolean::False &&
-      tan.approximate<float>(reductionContext.context(),
-                             reductionContext.complexFormat(),
-                             reductionContext.angleUnit(), true)
+      tan.approximate<float>(ApproximationContext(reductionContext, true))
           .isUndefined()) {
     return false;
   }
@@ -1568,10 +1567,7 @@ bool Multiplication::TermHasNumeralExponent(const Expression &e) {
   if (e.type() != ExpressionNode::Type::Power) {
     return true;
   }
-  if (e.childAtIndex(1).isNumber()) {
-    return true;
-  }
-  return false;
+  return e.childAtIndex(1).isNumber();
 }
 
 bool Multiplication::TermIsPowerOfRationals(const Expression &e) {
@@ -1656,10 +1652,10 @@ template MatrixComplex<double> MultiplicationNode::computeOnComplexAndMatrix<
     double>(std::complex<double> const, const MatrixComplex<double>,
             Preferences::ComplexFormat);
 
-template Complex<float> MultiplicationNode::computeOnComplex<float>(
+template std::complex<float> MultiplicationNode::computeOnComplex<float>(
     const std::complex<float>, const std::complex<float>,
     Preferences::ComplexFormat);
-template Complex<double> MultiplicationNode::computeOnComplex<double>(
+template std::complex<double> MultiplicationNode::computeOnComplex<double>(
     const std::complex<double>, const std::complex<double>,
     Preferences::ComplexFormat);
 

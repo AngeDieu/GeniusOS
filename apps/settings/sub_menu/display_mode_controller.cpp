@@ -1,11 +1,11 @@
 #include "display_mode_controller.h"
 
+#include <apps/shared/poincare_helpers.h>
 #include <assert.h>
 #include <poincare/integer.h>
 
 #include <cmath>
 
-#include "../../shared/poincare_helpers.h"
 #include "../app.h"
 
 using namespace Poincare;
@@ -14,18 +14,15 @@ using namespace Escher;
 
 namespace Settings {
 
-DisplayModeController::DisplayModeController(
-    Responder *parentResponder,
-    InputEventHandlerDelegate *inputEventHandlerDelegate)
+DisplayModeController::DisplayModeController(Responder *parentResponder)
     : PreferencesController(parentResponder),
-      m_editableCell(&m_selectableListView, inputEventHandlerDelegate, this) {
+      m_editableCell(&m_selectableListView, this) {
   m_editableCell.label()->setMessage(I18n::Message::SignificantFigures);
 }
 
 KDCoordinate DisplayModeController::nonMemoizedRowHeight(int row) {
   if (row == numberOfRows() - 1) {
-    // Do not call protectedNonMemoizedRowHeight as it will reset edited text.
-    return m_editableCell.minimalSizeForOptimalDisplay().height();
+    return protectedNonMemoizedRowHeight(&m_editableCell, row);
   }
   return PreferencesController::nonMemoizedRowHeight(row);
 }
@@ -64,14 +61,13 @@ void DisplayModeController::fillCellForRow(HighlightCell *cell, int row) {
 bool DisplayModeController::textFieldShouldFinishEditing(
     AbstractTextField *textField, Ion::Events::Event event) {
   return (event == Ion::Events::Up && selectedRow() > 0) ||
-         TextFieldDelegate::textFieldShouldFinishEditing(textField, event);
+         MathTextFieldDelegate::textFieldShouldFinishEditing(textField, event);
 }
 
 bool DisplayModeController::textFieldDidFinishEditing(
-    AbstractTextField *textField, const char *text, Ion::Events::Event event) {
-  double floatBody =
-      textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
-  if (textFieldDelegateApp()->hasUndefinedValue(floatBody)) {
+    AbstractTextField *textField, Ion::Events::Event event) {
+  double floatBody = ParseInputFloatValue<double>(textField->draftText());
+  if (HasUndefinedValue(floatBody)) {
     return false;
   }
   if (floatBody < 1.0) {
@@ -82,8 +78,8 @@ bool DisplayModeController::textFieldDidFinishEditing(
       floatBody < 3.0) {
     floatBody = 3.0;
   }
-  if (floatBody > PrintFloat::k_numberOfStoredSignificantDigits) {
-    floatBody = PrintFloat::k_numberOfStoredSignificantDigits;
+  if (floatBody > PrintFloat::k_maxNumberOfSignificantDigits) {
+    floatBody = PrintFloat::k_maxNumberOfSignificantDigits;
   }
   Preferences::sharedPreferences->setNumberOfSignificantDigits(
       (char)std::round(floatBody));

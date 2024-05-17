@@ -5,11 +5,12 @@
 #include <apps/shared/continuous_function_store.h>
 #include <apps/shared/expression_function_title_cell.h>
 #include <apps/shared/interval_parameter_controller.h>
-#include <apps/shared/scrollable_two_layouts_cell.h>
 #include <apps/shared/values_controller.h>
 #include <escher/button_state.h>
 #include <escher/even_odd_editable_text_cell.h>
 #include <escher/even_odd_message_text_cell.h>
+#include <escher/heavy_table_size_manager.h>
+#include <escher/scrollable_two_layouts_cell.h>
 #include <escher/toggleable_dot_view.h>
 #include <omg/round.h>
 
@@ -19,10 +20,10 @@
 namespace Graph {
 
 class ValuesController : public Shared::ValuesController,
-                         public Shared::PrefacedTableViewDelegate {
+                         public Escher::PrefacedTableViewDelegate,
+                         public Escher::HeavyTableSizeManagerDelegate {
  public:
   ValuesController(Escher::Responder *parentResponder,
-                   Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
                    Escher::ButtonRowController *header,
                    FunctionParameterController *functionParameterController);
   bool displayButtonExactValues() const;
@@ -72,10 +73,6 @@ class ValuesController : public Shared::ValuesController,
       OMG::CeilDivision(k_maxNumberOfDisplayableColumns, 2);
   constexpr static int k_maxNumberOfDisplayableAbscissaCells =
       k_maxNumberOfDisplayableSymbolTypes * k_maxNumberOfDisplayableRows;
-  constexpr static int k_valuesCellBufferSize =
-      2 * Poincare::PrintFloat::charSizeForFloatsWithPrecision(
-              Poincare::Preferences::VeryLargeNumberOfSignificantDigits) +
-      3;  // The largest buffer holds (-1.234567E-123;-1.234567E-123)
   constexpr static KDCoordinate k_maxColumnWidth = 2 * k_cellWidth;
   constexpr static KDCoordinate k_maxRowHeight = 5 * k_cellHeight;
   static KDSize ApproximatedParametricCellSize();
@@ -86,13 +83,26 @@ class ValuesController : public Shared::ValuesController,
    * when exact results are switched on is slow because all layouts
    * need to be computed. The speed optimization could come from either
    * a change of API or a change in the way scrollView/tableView work. */
-  KDCoordinate nonMemoizedColumnWidth(int column) override;
-  KDCoordinate nonMemoizedRowHeight(int row) override;
+  KDCoordinate nonMemoizedColumnWidth(int column) override {
+    assert(false);
+    return -1;
+  }
+  KDCoordinate nonMemoizedRowHeight(int row) override {
+    assert(false);
+    return -1;
+  }
   Escher::TableSize1DManager *columnWidthManager() override {
-    return &m_widthManager;
+    return m_tableSizeManager.columnWidthManager();
   }
   Escher::TableSize1DManager *rowHeightManager() override {
-    return &m_heightManager;
+    return m_tableSizeManager.rowHeightManager();
+  }
+  void rowWasDeleted(int column, int row) override;
+
+  // HeavyTableSizeManagerDelegate
+  KDSize cellSizeAtLocation(int row, int col) override;
+  KDSize maxCellSize() const override {
+    return KDSize(k_maxColumnWidth, k_maxRowHeight);
   }
 
   // ColumnHelper
@@ -100,9 +110,8 @@ class ValuesController : public Shared::ValuesController,
 
   // EditableCellTableViewController
   void reloadEditedCell(int column, int row) override;
-  void updateSizeMemoizationForRow(int row,
-                                   KDCoordinate rowPreviousHeight) override {
-    m_heightManager.updateMemoizationForIndex(row, rowPreviousHeight);
+  void updateSizeMemoizationForRow(int row) override {
+    m_tableSizeManager.rowDidChange(row);
   }
   void setTitleCellStyle(Escher::HighlightCell *titleCell, int column) override;
 
@@ -154,14 +163,27 @@ class ValuesController : public Shared::ValuesController,
   int numberOfColumnsForSymbolType(int symbolTypeIndex) const;
   Shared::ContinuousFunctionProperties::SymbolType symbolTypeAtColumn(
       int *column) const;
+  bool cellHasValue(int column, int row, bool includeEmptyLastRow) const {
+    return row <= numberOfElementsInColumn(column) + includeEmptyLastRow;
+  }
 
+  // + 1 for title row
+  constexpr static int k_maxNumberOfRows =
+      Shared::Interval::k_maxNumberOfElements + 1;
+  // Only k_maxNumberOfMemoizedModels functions are computed
+  constexpr static int k_maxNumberOfColumns =
+      Shared::ContinuousFunctionProperties::k_numberOfVariableSymbolTypes +
+      Shared::ContinuousFunctionStore::k_maxNumberOfMemoizedModels;
+  Escher::HeavyTableSizeManager<k_maxNumberOfRows, k_maxNumberOfColumns>
+      m_tableSizeManager;
   mutable int m_numberOfValuesColumnsForType[k_maxNumberOfSymbolTypes];
   Shared::ExpressionFunctionTitleCell
       m_functionTitleCells[k_maxNumberOfDisplayableColumns];
   Escher::EvenOddExpressionCell m_valueCells[k_maxNumberOfDisplayableCells];
   Escher::EvenOddMessageTextCell
       m_abscissaTitleCells[k_maxNumberOfDisplayableSymbolTypes];
-  Escher::EvenOddEditableTextCell<>
+  Escher::EvenOddEditableTextCell<
+      Poincare::PrintFloat::k_maxNumberOfSignificantDigits>
       m_abscissaCells[k_maxNumberOfDisplayableAbscissaCells];
   FunctionParameterController *m_functionParameterController;
   Shared::IntervalParameterController m_intervalParameterController;
@@ -170,8 +192,6 @@ class ValuesController : public Shared::ValuesController,
   Escher::AbstractButtonCell m_setIntervalButton;
   Escher::ButtonState m_exactValuesButton;
   Escher::ToggleableDotView m_exactValuesDotView;
-  Escher::MemoizedColumnWidthManager<7> m_widthManager;
-  Escher::MemoizedRowHeightManager<10> m_heightManager;
   bool m_exactValuesAreActivated;
   mutable Poincare::Layout m_memoizedLayouts[k_maxNumberOfDisplayableCells];
 };

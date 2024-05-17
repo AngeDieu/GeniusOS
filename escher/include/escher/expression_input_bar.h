@@ -19,7 +19,7 @@ class AbstractExpressionInputBar : public View {
   virtual LayoutField* layoutField() = 0;
 
  protected:
-  constexpr static KDCoordinate k_margin = Metric::LayoutViewMargin;
+  constexpr static KDMargins k_margins = KDMargins(Metric::LayoutViewMargin);
 
  private:
   constexpr static KDCoordinate k_minimalHeight =
@@ -35,15 +35,14 @@ template <class T>
 class TemplatedExpressionInputBar : public AbstractExpressionInputBar {
  public:
   TemplatedExpressionInputBar(Responder* parentResponder,
-                              InputEventHandlerDelegate* inputEventHandler,
                               LayoutFieldDelegate* layoutFieldDelegate)
       : AbstractExpressionInputBar(),
-        m_field(parentResponder, inputEventHandler, layoutFieldDelegate) {
-    layoutField()->setMargins(k_margin);
+        m_field(parentResponder, layoutFieldDelegate) {
+    layoutField()->setMargins(k_margins);
   }
 
-  const LayoutField* layoutField() const override { return &m_field; }
-  LayoutField* layoutField() override { return &m_field; }
+  const T* layoutField() const override { return &m_field; }
+  T* layoutField() override { return &m_field; }
 
  private:
   T m_field;

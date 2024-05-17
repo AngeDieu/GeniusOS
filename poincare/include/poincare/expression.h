@@ -118,6 +118,7 @@ class Expression : public TreeHandle {
   friend class Randint;
   friend class RandintNode;
   friend class RealPart;
+  friend class RightwardsArrowExpressionNode;
   friend class Round;
   friend class Secant;
   friend class Sequence;
@@ -178,6 +179,8 @@ class Expression : public TreeHandle {
   }
   bool isUndefined() const { return node()->isUndefined(); }
   bool allChildrenAreUndefined();
+  bool allChildrenAreReal(Context* context,
+                          bool canContainMatrices = true) const;
   bool isNumber() const { return node()->isNumber(); }
   bool isZero() const;
   bool isRationalOne() const;
@@ -194,11 +197,11 @@ class Expression : public TreeHandle {
   bool isDivisionOfIntegers() const;
   bool isAlternativeFormOfRationalNumber() const;
   template <typename T>
-  bool hasDefinedComplexApproximation(Context* context,
-                                      Preferences::ComplexFormat complexFormat,
-                                      Preferences::AngleUnit angleUnit,
-                                      T* returnRealPart = nullptr,
-                                      T* returnImagPart = nullptr) const;
+  bool hasDefinedComplexApproximation(
+      const ApproximationContext& approximationContext,
+      T* returnRealPart = nullptr, T* returnImagPart = nullptr) const;
+  bool isScalarComplex(Preferences::ComplexFormat complexFormat,
+                       Preferences::AngleUnit angleUnit) const;
   bool isCombinationOfUnits() const { return node()->isCombinationOfUnits(); }
   /* This two functions only return true if the discontinuity is not asymptotic
    * (i.e. for the functions random, randint, round, floor and ceil).
@@ -206,9 +209,8 @@ class Expression : public TreeHandle {
    * discontinuous. */
   bool involvesDiscontinuousFunction(Context* context) const;
   bool isDiscontinuousBetweenValuesForSymbol(
-      const char* symbol, float x1, float x2, Context* context,
-      Preferences::ComplexFormat complexFormat,
-      Preferences::AngleUnit angleUnit) const;
+      const char* symbol, float x1, float x2,
+      const ApproximationContext& approximationContext) const;
   bool hasBooleanValue() const;
   bool hasMatrixOrListChild(Context* context, bool isReduced = true) const {
     return node()->hasMatrixOrListChild(context, isReduced);
@@ -222,14 +224,24 @@ class Expression : public TreeHandle {
   typedef TrinaryBoolean (*ExpressionTrinaryTest)(const Expression e,
                                                   Context* context,
                                                   void* auxiliary);
+  struct IgnoredSymbols {
+    Symbol* head;
+    void* tail;
+  };
   bool recursivelyMatches(
       ExpressionTrinaryTest test, Context* context = nullptr,
       SymbolicComputation replaceSymbols =
           SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition,
-      void* auxiliary = nullptr) const;
+      void* auxiliary = nullptr,
+      IgnoredSymbols* ignoredSymbols = nullptr) const;
   typedef bool (*ExpressionTest)(const Expression e, Context* context);
   bool recursivelyMatches(
       ExpressionTest test, Context* context = nullptr,
+      SymbolicComputation replaceSymbols =
+          SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition) const;
+  typedef bool (*SimpleExpressionTest)(const Expression e);
+  bool recursivelyMatches(
+      SimpleExpressionTest test, Context* context = nullptr,
       SymbolicComputation replaceSymbols =
           SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition) const;
   typedef bool (*ExpressionTestAuxiliary)(const Expression e, Context* context,
@@ -240,26 +252,44 @@ class Expression : public TreeHandle {
           SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition,
       void* auxiliary = nullptr) const;
 
-  bool deepIsMatrix(Context* context, bool canContainMatrices = true,
+  bool deepIsOfType(std::initializer_list<ExpressionNode::Type> types,
+                    Context* context = nullptr) const;
+  bool deepIsMatrix(Context* context = nullptr, bool canContainMatrices = true,
                     bool isReduced = true) const;
   bool deepIsList(Context* context) const;
   // Set of ExpressionTest that can be used with recursivelyMatches
-  static bool IsUninitialized(const Expression e, Context* context) {
+  static bool IsUninitialized(const Expression e) {
     return e.isUninitialized();
   }
-  static bool IsUndefined(const Expression e, Context* context) {
-    return e.isUndefined();
+  static bool IsUndefined(const Expression e) { return e.isUndefined(); }
+  static bool IsNAry(const Expression e) {
+    return e.isOfType(
+        {ExpressionNode::Type::Addition, ExpressionNode::Type::Multiplication});
   }
-  static bool IsNAry(const Expression e, Context* context);
-  static bool IsApproximate(const Expression e, Context* context);
-  static bool IsRandom(const Expression e, Context* context);
+  static bool IsApproximate(const Expression e) {
+    return e.isOfType({ExpressionNode::Type::Decimal,
+                       ExpressionNode::Type::Float,
+                       ExpressionNode::Type::Double});
+  }
+  static bool IsRandom(const Expression e);
   static bool IsMatrix(const Expression e, Context* context);
-  static bool IsInfinity(const Expression e, Context* context);
-  static bool IsPercent(const Expression e, Context* context);
+  static bool IsInfinity(const Expression e) {
+    return e.isOfType({ExpressionNode::Type::Infinity});
+  }
+  static bool IsPercent(const Expression e) {
+    return e.isOfType({ExpressionNode::Type::PercentSimple,
+                       ExpressionNode::Type::PercentAddition});
+  }
   static bool IsDiscontinuous(const Expression e, Context* context);
-  static bool IsSymbolic(const Expression e, Context* context);
-  static bool IsPoint(const Expression e, Context*) {
+  static bool IsSymbolic(const Expression e);
+  static bool IsPoint(const Expression e) {
     return e.isUndefined() || e.type() == ExpressionNode::Type::Point;
+  }
+  static bool IsSequence(const Expression e) {
+    return e.type() == ExpressionNode::Type::Sequence;
+  }
+  static bool IsFactorial(const Expression e) {
+    return e.type() == ExpressionNode::Type::Factorial;
   }
 
   typedef bool (*PatternTest)(const Expression& e, Context* context,
@@ -326,13 +356,13 @@ class Expression : public TreeHandle {
    * a symbol. Beware that 2^3 is generalized as x^3, not x^x. */
   void replaceNumericalValuesWithSymbol(Symbol x);
   /* Return any numerical value in the expression. */
-  float getNumericalValue();
+  float getNumericalValue() const;
 
   /* Units */
   // Call this method on properly reduced expressions only
   Expression removeUnit(Expression* unit) { return node()->removeUnit(unit); }
-  bool hasUnit(bool ignoreAngleUnits = false, bool replaceSymbols = false,
-               Context* ctx = nullptr) const;
+  bool hasUnit(bool ignoreAngleUnits = false, bool* hasAngleUnits = nullptr,
+               bool replaceSymbols = false, Context* ctx = nullptr) const;
   bool isPureAngleUnit() const;
   bool isInRadians(Context* context) const;
 
@@ -382,7 +412,7 @@ class Expression : public TreeHandle {
                 Preferences::PrintFloatMode floatDisplayMode =
                     Preferences::PrintFloatMode::Decimal,
                 int numberOfSignificantDigits =
-                    PrintFloat::k_numberOfStoredSignificantDigits) const;
+                    PrintFloat::k_maxNumberOfSignificantDigits) const;
 
   /* Simplification */
   /* Simplification routines are divided in 2 groups:
@@ -397,30 +427,15 @@ class Expression : public TreeHandle {
    *   r*e^(i*th) reduced and approximated.) */
   static Expression ParseAndSimplify(
       const char* text, Context* context,
-      Preferences::ComplexFormat complexFormat,
-      Preferences::AngleUnit angleUnit, Preferences::UnitFormat unitFormat,
       SymbolicComputation symbolicComputation =
           SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition,
       UnitConversion unitConversion = UnitConversion::Default,
       bool* reductionFailure = nullptr);
   Expression cloneAndSimplify(ReductionContext reductionContext,
                               bool* reductionFailure = nullptr);
-
-  static void ParseAndSimplifyAndApproximate(
-      const char* text, Expression* parsedExpression,
-      Expression* simplifiedExpression, Expression* approximateExpression,
-      Context* context, Preferences::ComplexFormat complexFormat,
-      Preferences::AngleUnit angleUnit, Preferences::UnitFormat unitFormat,
-      SymbolicComputation symbolicComputation =
-          SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition,
-      UnitConversion unitConversion = UnitConversion::Default);
   void cloneAndSimplifyAndApproximate(
       Expression* simplifiedExpression, Expression* approximateExpression,
-      Context* context, Preferences::ComplexFormat complexFormat,
-      Preferences::AngleUnit angleUnit, Preferences::UnitFormat unitFormat,
-      SymbolicComputation symbolicComputation =
-          SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition,
-      UnitConversion unitConversion = UnitConversion::Default,
+      const ReductionContext& reductionContext,
       bool approximateKeepingSymbols = false) const;
   Expression cloneAndReduce(ReductionContext reductionContext) const;
   /* TODO: deepReduceWithSystemCheckpoint should be private but we need to make
@@ -473,28 +488,21 @@ class Expression : public TreeHandle {
   template <typename U>
   static U ParseAndSimplifyAndApproximateToScalar(
       const char* text, Context* context,
-      Preferences::ComplexFormat complexFormat,
-      Preferences::AngleUnit angleUnit, Preferences::UnitFormat unitFormat,
       SymbolicComputation symbolicComputation =
-          SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition);
+          SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined);
   template <typename U>
-  Expression approximate(Context* context,
-                         Preferences::ComplexFormat complexFormat,
-                         Preferences::AngleUnit angleUnit,
-                         bool withinReduce = false) const;
+  Expression approximate(
+      const ApproximationContext& approximationContext) const;
   // WARNING: this will reduce the expression before removing units
   template <typename U>
   Expression approximateKeepingUnits(
       const ReductionContext& reductionContext) const;
   template <typename U>
-  U approximateToScalar(Context* context,
-                        Preferences::ComplexFormat complexFormat,
-                        Preferences::AngleUnit angleUnit,
-                        bool withinReduce = false) const;
+  U approximateToScalar(const ApproximationContext& approximationContext) const;
   template <typename U>
-  U approximateWithValueForSymbol(const char* symbol, U x, Context* context,
-                                  Preferences::ComplexFormat complexFormat,
-                                  Preferences::AngleUnit angleUnit) const;
+  U approximateWithValueForSymbol(
+      const char* symbol, U x,
+      const ApproximationContext& approximationContext) const;
   // This also reduces the expression. Approximation is in double.
   Expression cloneAndApproximateKeepingSymbols(
       ReductionContext reductionContext) const;
@@ -561,6 +569,9 @@ class Expression : public TreeHandle {
   Direct<Expression, ExpressionNode> directChildren() const {
     return Direct<Expression, ExpressionNode>(*this);
   }
+  template <typename U>
+  Evaluation<U> approximateToEvaluation(
+      const ApproximationContext& approximationContext) const;
 
  protected:
   Expression(const ExpressionNode* n) : TreeHandle(n) {}
@@ -749,20 +760,20 @@ class Expression : public TreeHandle {
   Expression defaultUnaryFunctionDifferential() { return *this; }
 
   /* Approximation */
-  template <typename U>
-  Evaluation<U> approximateToEvaluation(
-      Context* context, Preferences::ComplexFormat complexFormat,
-      Preferences::AngleUnit angleUnit, bool withinReduce = false) const;
-
   Expression deepApproximateKeepingSymbols(ReductionContext reductionContext,
-                                           bool* parentShouldApproximate,
+                                           bool* parentCanApproximate,
                                            bool* parentShouldReduce);
+  Expression deepApproximateKeepingSymbols(ReductionContext reductionContext) {
+    bool dummy = false;
+    return deepApproximateKeepingSymbols(reductionContext, &dummy, &dummy);
+  }
   void deepApproximateChildrenKeepingSymbols(
-      const ReductionContext& reductionContextbool, bool* shouldApproximate,
+      const ReductionContext& reductionContextbool, bool* canApproximate,
       bool* shouldReduce);
 
   /* Properties */
-  int defaultGetPolynomialCoefficients(Context* context, const char* symbol,
+  int defaultGetPolynomialCoefficients(int degree, Context* context,
+                                       const char* symbol,
                                        Expression expression[]) const;
 
   /* Builder */

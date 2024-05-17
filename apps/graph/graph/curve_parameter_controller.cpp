@@ -14,23 +14,23 @@ using namespace Escher;
 namespace Graph {
 
 CurveParameterController::CurveParameterController(
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
     InteractiveCurveViewRange *graphRange, BannerView *bannerView,
-    CurveViewCursor *cursor, GraphView *graphView)
+    CurveViewCursor *cursor, GraphView *graphView,
+    GraphController *graphController)
     : ExplicitFloatParameterController(parentResponder()),
-      m_abscissaCell(&m_selectableListView, inputEventHandlerDelegate, this),
-      m_imageCell(&m_selectableListView, inputEventHandlerDelegate, this),
-      m_derivativeNumberCell(&m_selectableListView, inputEventHandlerDelegate,
-                             this),
+      m_abscissaCell(&m_selectableListView, this),
+      m_imageCell(&m_selectableListView, this),
+      m_derivativeNumberCell(&m_selectableListView, this),
       m_graphRange(graphRange),
       m_cursor(cursor),
       m_preimageGraphController(nullptr, graphView, bannerView, graphRange,
                                 cursor),
-      m_calculationParameterController(this, inputEventHandlerDelegate,
-                                       graphView, bannerView, graphRange,
-                                       cursor) {
+      m_calculationParameterController(this, graphView, bannerView, graphRange,
+                                       cursor),
+      m_graphController(graphController) {
   m_calculationCell.label()->setMessage(I18n::Message::Find);
   m_optionsCell.label()->setMessage(I18n::Message::Options);
+  m_derivativeNumberCell.setEditable(false);
 }
 
 Escher::HighlightCell *CurveParameterController::cell(int index) {
@@ -62,7 +62,7 @@ const char *CurveParameterController::title() {
   return m_title;
 }
 
-void CurveParameterController::fillCellForRow(HighlightCell *cell, int row) {
+void CurveParameterController::fillParameterCellAtRow(int row) {
   I18n::Message name = I18n::Message::Default;
   MenuCellWithEditableText<OneLineBufferTextView<KDFont::Size::Large>>
       *parameterCells[] = {&m_abscissaCell, &m_imageCell,
@@ -75,51 +75,47 @@ void CurveParameterController::fillCellForRow(HighlightCell *cell, int row) {
   }
   if (name != I18n::Message::Default) {
     parameterCells[row]->label()->setMessageWithPlaceholders(name);
-    ExplicitFloatParameterController::fillCellForRow(cell, row);
+    ExplicitFloatParameterController::fillParameterCellAtRow(row);
     return;
   }
-  if (cell == &m_derivativeNumberCell) {
-    m_derivativeNumberCell.setEditable(false);
-  }
-  if (cell == &m_imageCell || cell == &m_derivativeNumberCell) {
+  if (cell(row) == &m_imageCell || cell(row) == &m_derivativeNumberCell) {
     // The parameter requires a custom name built from the function name
     constexpr size_t bufferSize =
         Escher::OneLineBufferTextView<KDFont::Size::Large>::MaxTextSize();
     char buffer[bufferSize];
-    if (cell == &m_imageCell) {
+    if (cell(row) == &m_imageCell) {
       function()->nameWithArgument(buffer, bufferSize);
     } else {
-      assert(cell == &m_derivativeNumberCell);
+      assert(cell(row) == &m_derivativeNumberCell);
       function()->derivativeNameWithArgument(buffer, bufferSize);
     }
     parameterCells[row]->label()->setText(buffer);
-    ExplicitFloatParameterController::fillCellForRow(cell, row);
+    ExplicitFloatParameterController::fillParameterCellAtRow(row);
   }
 }
 
-float CurveParameterController::parameterAtIndex(int index) {
+double CurveParameterController::parameterAtIndex(int index) {
+  Poincare::Context *ctx = App::app()->localContext();
   if (isDerivative(index)) {
     assert(function()->canDisplayDerivative());
-    return function()->approximateDerivative(m_cursor->x(),
-                                             App::app()->localContext());
+    return function()->approximateDerivative(m_cursor->x(), ctx);
   }
-  float t = m_cursor->t();
-  float x = m_cursor->x();
-  float y = m_cursor->y();
+  double t = m_cursor->t();
+  double x = m_cursor->x();
+  double y = m_cursor->y();
   if (function()->properties().isScatterPlot() &&
       (t != std::round(t) ||
-       t >= function()->iterateScatterPlot(nullptr).length())) {
+       t >= function()->iterateScatterPlot(ctx).length())) {
     /* FIXME This will display the first point of a multi-point scatter plot
      * when accessed through the Calculate button, which is not super useful,
      * but there is no real alternative barring some UX changes. */
-    t = 0.f;
-    Poincare::Coordinate2D<float> xy =
-        function()->evaluateXYAtParameter(t, nullptr);
+    t = 0.;
+    Poincare::Coordinate2D<double> xy =
+        function()->evaluateXYAtParameter(t, ctx);
     x = xy.x();
     y = xy.y();
   }
-  return function()->evaluateCurveParameter(index, t, x, y,
-                                            App::app()->localContext());
+  return function()->evaluateCurveParameter(index, t, x, y, ctx);
 }
 
 bool CurveParameterController::confirmParameterAtIndex(int parameterIndex,
@@ -136,20 +132,17 @@ bool CurveParameterController::confirmParameterAtIndex(int parameterIndex,
       Poincare::Preferences::sharedPreferences->numberOfSignificantDigits(),
       pixelWidth, false);
 
-  Poincare::Coordinate2D<double> xy =
-      function()->evaluateXYAtParameter(f, App::app()->localContext());
-  m_cursor->moveTo(f, xy.x(), xy.y());
   m_graphRange->setZoomAuto(false);
-  m_graphRange->centerAxisAround(CurveViewRange::Axis::X, m_cursor->x());
-  m_graphRange->centerAxisAround(CurveViewRange::Axis::Y, m_cursor->y());
+  m_graphController->moveCursorAndCenterIfNeeded(f);
+
   return true;
 }
 
 bool CurveParameterController::textFieldDidFinishEditing(
-    AbstractTextField *textField, const char *text, Ion::Events::Event event) {
+    AbstractTextField *textField, Ion::Events::Event event) {
   int index = selectedRow();
-  if (!ExplicitFloatParameterController::textFieldDidFinishEditing(
-          textField, text, event)) {
+  if (!ExplicitFloatParameterController::textFieldDidFinishEditing(textField,
+                                                                   event)) {
     return false;
   }
   StackViewController *stack =
@@ -162,12 +155,11 @@ bool CurveParameterController::textFieldDidFinishEditing(
   return true;
 }
 
-TextField *CurveParameterController::textFieldOfCellAtIndex(
-    HighlightCell *thisCell, int index) {
-  assert(cell(index) == &m_abscissaCell || cell(index) == &m_imageCell ||
-         cell(index) == &m_derivativeNumberCell);
+TextField *CurveParameterController::textFieldOfCellAtRow(int row) {
+  assert(cell(row) == &m_abscissaCell || cell(row) == &m_imageCell ||
+         cell(row) == &m_derivativeNumberCell);
   return static_cast<MenuCellWithEditableText<
-      OneLineBufferTextView<KDFont::Size::Large>> *>(thisCell)
+      OneLineBufferTextView<KDFont::Size::Large>> *>(cell(row))
       ->textField();
 }
 
@@ -203,8 +195,8 @@ void CurveParameterController::setRecord(Ion::Storage::Record record) {
       shouldDisplayDerivative() ||
       function()->properties().numberOfCurveParameters() == 3);
   m_calculationCell.setVisible(shouldDisplayCalculation());
-  selectCell(0);
-  resetMemoization();
+  selectRow(0);
+  m_selectableListView.resetSizeAndOffsetMemoization();
   m_preimageGraphController.setRecord(record);
 }
 
@@ -216,9 +208,7 @@ void CurveParameterController::viewWillAppear() {
   m_derivativeNumberCell.setVisible(
       shouldDisplayDerivative() ||
       function()->properties().numberOfCurveParameters() == 3);
-  resetMemoization();
-  m_selectableListView.reloadData();
-  SelectableListViewController::viewWillAppear();
+  ExplicitFloatParameterController::viewWillAppear();
 }
 
 bool CurveParameterController::shouldDisplayCalculation() const {
@@ -227,6 +217,17 @@ bool CurveParameterController::shouldDisplayCalculation() const {
 
 bool CurveParameterController::shouldDisplayDerivative() const {
   return function()->displayDerivative();
+}
+
+void CurveParameterController::didBecomeFirstResponder() {
+  if (!function()->isActive()) {
+    static_cast<StackViewController *>(parentResponder())
+        ->popUntilDepth(
+            Shared::InteractiveCurveViewController::k_graphControllerStackDepth,
+            true);
+    return;
+  }
+  Shared::ExplicitFloatParameterController::didBecomeFirstResponder();
 }
 
 }  // namespace Graph

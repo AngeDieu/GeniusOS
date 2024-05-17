@@ -19,7 +19,7 @@ app_sequence_src = $(addprefix apps/sequence/,\
   list/list_controller.cpp \
   list/list_parameter_controller.cpp \
   list/sequence_cell.cpp \
-  list/sequence_toolbox.cpp \
+  list/sequence_toolbox_data_source.cpp \
   list/type_parameter_controller.cpp \
   list/vertical_sequence_title_cell.cpp \
   values/interval_parameter_controller.cpp \

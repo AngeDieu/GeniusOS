@@ -3,19 +3,20 @@
 #include "helpers.h"
 
 QUIZ_CASE(solver_error) {
+  setComplexFormatAndAngleUnit(Cartesian, Radian);
   assert_solves_to_error("cos(x)=0", RequireApproximateSolution);
   assert_solves_to_error("x+y+z+a+b+c+d=0", TooManyVariables);
   assert_solves_to_error("x^2+y=0", NonLinearSystem);
   assert_solves_to_error("x^3+x^2+1=int(1/t,t,0,1)", EquationUndefined);
   assert_solves_to_error("x×(x^2×int(1/t,t,0,1)+1)=0", EquationUndefined);
-  Poincare::Preferences::sharedPreferences->setComplexFormat(
-      Poincare::Preferences::ComplexFormat::Real);
-  assert_solves_to_error("x-arcsin(10)=0", EquationNonreal);
-  Poincare::Preferences::sharedPreferences->setComplexFormat(
-      Poincare::Preferences::ComplexFormat::Cartesian);
+  assert_solves_to_error("x-[[2,3]]=0", EquationUndefined);
+  assert_solves_to_error("x[[2,3]]=0", EquationUndefined);
+  assert_solves_to_no_solution("x-{2,3}=0");
+  assert_solves_to_no_solution("x{2,3}=0");
 }
 
 QUIZ_CASE(solver_linear_system) {
+  setComplexFormatAndAngleUnit(Cartesian, Radian);
   assert_solves_to(
       {"x+y=0", "3x+y+z=-5", "4z-π=0", "a+b+c=0", "a=3", "c=a+2"},
       {"x=(-π-20)/8", "y=(π+20)/8", "z=π/4", "a=3", "b=-8", "c=5"});
@@ -49,11 +50,16 @@ QUIZ_CASE(solver_linear_system) {
   assert_solves_to_no_solution("e=1");
   assert_solves_to_no_solution("i=5");
   assert_solves_to_no_solution("x-x+2=0");
+  assert_solves_to_no_solution("x/x-1+x=0");
+
+  assert_solves_to("√(x)^(2)=-1", {"x=-1"});
+  assert_solves_to("sin(asin(x))=2", {"x=2"});
 }
 
-QUIZ_CASE(solver_polynomial_system) {
-  set_complex_format(Cartesian);
+QUIZ_CASE(solver_polynomial_equation) {
+  setComplexFormatAndAngleUnit(Cartesian, Radian);
   assert_solves_to("(x-3)^2=0", {"x=3", "delta=0"});
+  assert_solves_to("(x-2π)(x/2-pi)=0", {"x=2π", "delta=0"});
   assert_solves_to("(x-π)(x-ln(2))=0",
                    {"x=ln(2)", "x=π", "delta=ln(2)^2+π^2-2×π×ln(2)"});
   assert_solves_to("(x-√(2))(x-√(3))=0",
@@ -76,10 +82,12 @@ QUIZ_CASE(solver_polynomial_system) {
   assert_solves_to("x^3-3x-2=0", {"x=-1", "x=2", "delta=0"});
   assert_solves_to("x^3-4x^2+6x-24=0",
                    {"x=4", "x=-√(6)×i", "x=√(6)×i", "delta=-11616"});
+  assert_solves_to("x^2+x/x-1=0", {"delta=0"});
+  assert_solves_to("x^2*(x-1)/x=0", {"x=1", "delta=1"});
 }
 
 QUIZ_CASE(solver_approximate) {
-  Poincare::Preferences::sharedPreferences->setAngleUnit(Degree);
+  setComplexFormatAndAngleUnit(Cartesian, Degree);
   assert_solves_numerically_to("(3x)^3/(0.1-3x)^3=10^(-8)", -10, 10,
                                {0.000071660});
   assert_solves_numerically_to("(x-1)/(2×(x-2)^2)=20.8", -10, 10,
@@ -136,7 +144,7 @@ QUIZ_CASE(solver_approximate) {
 }
 
 QUIZ_CASE(solver_complex_real) {
-  set_complex_format(Real);
+  setComplexFormatAndAngleUnit(Real, Radian);
   // We still want complex solutions if the input has some complex value
   assert_solves_to("x+i=0", "x=-i");
   assert_solves_to_error("x+√(-1)=0", EquationNonreal);
@@ -144,7 +152,12 @@ QUIZ_CASE(solver_complex_real) {
   assert_solves_to("x^2+x+π=0", {"delta=-4π+1"});
   assert_solves_to_error("x^2-√(-1)=0", EquationNonreal);
   assert_solves_to_error("x+√(-1)×√(-1)=0", EquationNonreal);
+  assert_solves_to_error("x-arcsin(10)=0", EquationNonreal);
+  assert_solves_to_no_solution("√(x)^(2)=-1");
+  assert_solves_to_no_solution("sin(asin(x))=2");
   assert_solves_to("root(-8,3)*x+3=0", "x=3/2");
+  assert_solves_to_error("x√(cot(4π/5))=0", EquationUndefined);
+  assert_solves_to_error({"x√(cot(4π/5))=0", "0=0"}, EquationUndefined);
   // With a predefined variable that should be ignored
   set("h", "3");
   assert_solves_to("(h-1)*(h-2)=0", {"h=1", "h=2", "delta=1"});
@@ -158,24 +171,22 @@ QUIZ_CASE(solver_complex_real) {
   set("h", "i+1");
   assert_solves_to("(h-i)^2=0", {"h=i", "delta=0"});  // Complex solutions
   unset("h");
-  reset_complex_format();
 }
 
 QUIZ_CASE(solver_complex_cartesian) {
-  set_complex_format(Cartesian);
+  setComplexFormatAndAngleUnit(Cartesian, Radian);
   assert_solves_to("x+i=0", "x=-i");
   assert_solves_to("x+√(-1)=0", "x=-i");
-  assert_solves_to({"x^2+x+1=0"},
+  assert_solves_to("x^2+x+1=0",
                    {"x=-1/2-((√(3))/2)i", "x=-1/2+((√(3))/2)i", "delta=-3"});
   assert_solves_to("x^2-√(-1)=0",
                    {"x=-√(2)/2-(√(2)/2)i", "x=√(2)/2+(√(2)/2)i", "delta=4i"});
   assert_solves_to("x+√(-1)×√(-1)=0", "x=1");
   assert_solves_to("root(-8,3)*x+3=0", "x=-3/4+(3√(3)/4)*i");
-  reset_complex_format();
 }
 
 QUIZ_CASE(solver_complex_polar) {
-  set_complex_format(Polar);
+  setComplexFormatAndAngleUnit(Polar, Radian);
   assert_solves_to("x+i=0", "x=e^(-(π/2)i)");
   assert_solves_to("x+√(-1)=0", "x=e^(-(π/2)i)");
   assert_solves_to("x^2+x+1=0",
@@ -183,10 +194,10 @@ QUIZ_CASE(solver_complex_polar) {
   assert_solves_to("x^2-√(-1)=0",
                    {"x=e^(-(3π/4)i)", "x=e^((π/4)i)", "delta=4e^((π/2)i)"});
   assert_solves_to("root(-8,3)*x+3=0", "x=3/2×e^((2π/3)i)");
-  reset_complex_format();
 }
 
 QUIZ_CASE(solver_symbolic_computation) {
+  setComplexFormatAndAngleUnit(Cartesian, Radian);
   /* This test case needs the user defined variable. Indeed, in the equation
    * store, m_variables is just before m_userVariables, so bad fetching in
    * m_variables might fetch into m_userVariables and create problems. */
@@ -209,7 +220,7 @@ QUIZ_CASE(solver_symbolic_computation) {
 
   set("a", "x");
   // a is undef
-  assert_solves_to({"a=0"}, {"a=0"});
+  assert_solves_to("a=0", {"a=0"});
 
   unset("a");
 
@@ -261,7 +272,7 @@ QUIZ_CASE(solver_symbolic_computation) {
   assert_solves_to({"c+d=5", "c-d=1"}, {"c=3", "d=2"});
 
   set("j", "8_g");
-  assert_solves_to({"j+1=0"}, {"j=-1"});
+  assert_solves_to("j+1=0", {"j=-1"});
 
   unset("a");
   unset("b");
@@ -298,4 +309,8 @@ QUIZ_CASE(solver_symbolic_computation) {
   assert_solves_to_error("cos(πx)+cos(a)=0", RequireApproximateSolution);
   // Value of a was not ignored, which would have resulted in a NonLinearSystem
   unset("a");
+
+  set("c", "arcsin(10)cb=0");
+  assert_solves_to_error("arcsin(10)cb=0", NonLinearSystem);
+  unset("c");
 }

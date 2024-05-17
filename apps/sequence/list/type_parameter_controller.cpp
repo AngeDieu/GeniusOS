@@ -19,25 +19,18 @@ namespace Sequence {
 
 TypeParameterController::TypeParameterController(Responder *parentResponder,
                                                  ListController *list,
-                                                 KDCoordinate topMargin,
-                                                 KDCoordinate rightMargin,
-                                                 KDCoordinate bottomMargin,
-                                                 KDCoordinate leftMargin)
-    : SelectableCellListPage<MenuCell<LayoutView, MessageTextView>,
-                             k_numberOfCells, RegularListViewDataSource>(
-          parentResponder),
+                                                 KDMargins margins)
+    : UniformSelectableListController<MenuCell<LayoutView, MessageTextView>,
+                                      k_numberOfCells>(parentResponder),
       m_listController(list) {
-  cellAtIndex(k_indexOfExplicit)
-      ->subLabel()
-      ->setMessage(I18n::Message::Explicit);
-  cellAtIndex(k_indexOfRecurrence)
+  cell(k_indexOfExplicit)->subLabel()->setMessage(I18n::Message::Explicit);
+  cell(k_indexOfRecurrence)
       ->subLabel()
       ->setMessage(I18n::Message::SingleRecurrence);
-  cellAtIndex(k_indexOfDoubleRecurrence)
+  cell(k_indexOfDoubleRecurrence)
       ->subLabel()
       ->setMessage(I18n::Message::DoubleRecurrence);
-  m_selectableListView.setMargins(topMargin, rightMargin, bottomMargin,
-                                  leftMargin);
+  m_selectableListView.setMargins(margins);
   m_selectableListView.hideScrollBars();
 }
 
@@ -52,7 +45,7 @@ void TypeParameterController::viewWillAppear() {
   assert(nextName != nullptr);
   const char *subscripts[k_numberOfCells] = {"n", "n+1", "n+2"};
   for (size_t j = 0; j < k_numberOfCells; j++) {
-    cellAtIndex(j)->label()->setLayout(HorizontalLayout::Builder(
+    cell(j)->label()->setLayout(HorizontalLayout::Builder(
         CodePointLayout::Builder(nextName[0]),
         VerticalOffsetLayout::Builder(
             LayoutHelper::String(subscripts[j], strlen(subscripts[j])),
@@ -65,15 +58,15 @@ void TypeParameterController::viewWillAppear() {
 void TypeParameterController::viewDidDisappear() {
   // Tidy layouts
   for (size_t i = 0; i < k_numberOfCells; i++) {
-    cellAtIndex(i)->label()->setLayout(Layout());
+    cell(i)->label()->setLayout(Layout());
   }
   m_selectableListView.deselectTable();
   ViewController::viewDidDisappear();
 }
 
 void TypeParameterController::didBecomeFirstResponder() {
-  selectCell(isNewModel() ? k_indexOfExplicit
-                          : static_cast<uint8_t>(sequence()->type()));
+  selectRow(isNewModel() ? k_indexOfExplicit
+                         : static_cast<uint8_t>(sequence()->type()));
   SelectableListViewController::didBecomeFirstResponder();
 }
 
@@ -108,12 +101,10 @@ bool TypeParameterController::handleEvent(Ion::Events::Event event) {
     Ion::Storage::Record record =
         sequenceStore()->recordAtIndex(sequenceStore()->numberOfModels() - 1);
     Shared::Sequence *newSequence = sequenceStore()->modelForRecord(record);
-    newSequence->setInitialRank(
-        GlobalPreferences::sharedGlobalPreferences->sequencesInitialRank());
     newSequence->setType(static_cast<Shared::Sequence::Type>(selectedRow()));
     // Make all the lines of the added sequence visible
     m_listController->showLastSequence();
-    Container::activeApp()->modalViewController()->dismissModal();
+    App::app()->modalViewController()->dismissModal();
     m_listController->editExpression(Ion::Events::OK);
     return true;
   }

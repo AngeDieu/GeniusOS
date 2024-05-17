@@ -22,12 +22,12 @@ const App::Descriptor* App::Snapshot::descriptor() const {
 
 void App::Snapshot::reset() {
   // Delete all equations
-  m_equationStore.removeAll();
+  EquationStore::RemoveAll();
   Shared::SharedApp::Snapshot::reset();
 }
 
 void App::prepareForIntrusiveStorageChange() {
-  LayoutFieldDelegateApp::prepareForIntrusiveStorageChange();
+  MathApp::prepareForIntrusiveStorageChange();
   m_stackViewController.popUntilDepth(1, true);
 }
 
@@ -35,36 +35,18 @@ void App::storageDidChangeForRecord(Ion::Storage::Record record) {
   equationStore()->storageDidChangeForRecord(record);
 }
 
-void App::Snapshot::tidy() {
-  // Delete all expressions of equations
-  m_equationStore.tidyDownstreamPoolFrom();
-  SharedApp::Snapshot::tidy();
-}
-
 App::App(Snapshot* snapshot)
-    : LayoutFieldDelegateApp(snapshot, &m_stackViewController),
-      m_solutionsController(&m_alternateEmptyViewController),
-      m_intervalController(nullptr, this),
-      m_alternateEmptyViewController(nullptr, &m_solutionsController,
-                                     &m_solutionsController),
-      m_listController(&m_listFooter, this, snapshot->equationStore(),
-                       &m_listFooter),
+    : MathApp(snapshot, &m_stackViewController),
+      m_solutionsController(nullptr),
+      m_intervalController(nullptr),
+      m_listController(&m_listFooter, &m_equationStore, &m_listFooter),
       m_listFooter(&m_stackViewController, &m_listController, &m_listController,
                    ButtonRowController::Position::Bottom,
                    ButtonRowController::Style::EmbossedGray,
                    ButtonRowController::Size::Large),
       m_stackViewController(&m_modalViewController, &m_listFooter,
                             StackViewController::Style::GrayGradation),
-      m_system(snapshot->equationStore()),
+      m_system(&m_equationStore),
       m_context(AppsContainer::sharedAppsContainer()->globalContext()) {}
-
-bool App::isAcceptableExpression(EditableField* field,
-                                 const Poincare::Expression exp) {
-  /* Complete LayoutFieldDelegateApp acceptable conditions by only accepting
-   * the Equal OperatorType in the list of equations. */
-  return LayoutFieldDelegateApp::isAcceptableExpression(field, exp) &&
-         (field != m_listController.layoutField() ||
-          Poincare::ComparisonNode::IsBinaryEquality(exp));
-}
 
 }  // namespace Solver

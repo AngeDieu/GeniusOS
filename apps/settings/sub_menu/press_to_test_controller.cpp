@@ -1,11 +1,12 @@
 #include "press_to_test_controller.h"
 
+#include <apps/apps_container.h>
 #include <apps/i18n.h>
 #include <assert.h>
+#include <escher/stack_view_controller.h>
 
 #include <cmath>
 
-#include "../../apps_container.h"
 #include "press_to_test_success.h"
 
 using namespace Poincare;
@@ -18,7 +19,7 @@ PressToTestController::PressToTestController(Responder *parentResponder)
     : ListWithTopAndBottomController(parentResponder, &m_topMessageView,
                                      &m_bottomMessageView),
       m_topMessageView(I18n::Message::Default, k_messageFormat),
-      m_bottomMessageView(I18n::Message::ToDeactivatePressToTest1,
+      m_bottomMessageView(I18n::Message::ToDeactivatePressToTest,
                           k_messageFormat),
       m_tempPressToTestParams{},
       m_activateButton(
@@ -73,7 +74,7 @@ KDCoordinate PressToTestController::nonMemoizedRowHeight(int row) {
   }
   assert(typeAtRow(row) == k_switchCellType);
   PressToTestSwitch tempCell;
-  return nonMemoizedRowHeightWithWidthInit(&tempCell, row);
+  return protectedNonMemoizedRowHeight(&tempCell, row);
 }
 
 void PressToTestController::setParamAtIndex(int index, bool value) {
@@ -89,6 +90,9 @@ void PressToTestController::setParamAtIndex(int index, bool value) {
       break;
     case I18n::Message::PressToTestImplicitPlots:
       m_tempPressToTestParams.forbidImplicitPlots = value;
+      break;
+    case I18n::Message::PressToTestGraphDetails:
+      m_tempPressToTestParams.forbidGraphDetails = value;
       break;
     case I18n::Message::PressToTestElements:
       m_tempPressToTestParams.forbidElementsApp = value;
@@ -120,6 +124,8 @@ bool PressToTestController::getParamAtIndex(int index) {
       return m_tempPressToTestParams.forbidInequalityGraphing;
     case I18n::Message::PressToTestImplicitPlots:
       return m_tempPressToTestParams.forbidImplicitPlots;
+    case I18n::Message::PressToTestGraphDetails:
+      return m_tempPressToTestParams.forbidGraphDetails;
     case I18n::Message::PressToTestElements:
       return m_tempPressToTestParams.forbidElementsApp;
     case I18n::Message::PressToTestStatDiagnostics:
@@ -143,7 +149,7 @@ void PressToTestController::setMessages() {
     m_topMessageView.setMessage(I18n::Message::PressToTestActiveIntro);
     setBottomView(&m_bottomMessageView);
   } else {
-    m_topMessageView.setMessage(I18n::Message::PressToTestIntro1);
+    m_topMessageView.setMessage(I18n::Message::PressToTestIntro);
     setBottomView(nullptr);
   }
 }
@@ -179,13 +185,13 @@ bool PressToTestController::handleEvent(Ion::Events::Event event) {
   return false;
 }
 
-void PressToTestController::didBecomeFirstResponder() {
+void PressToTestController::viewWillAppear() {
   // Reset selection and params only if exam mode has been activated.
   if (Preferences::sharedPreferences->examMode().isActive()) {
     resetController();
   }
   setMessages();
-  ListWithTopAndBottomController::didBecomeFirstResponder();
+  ListWithTopAndBottomController::viewWillAppear();
 }
 
 int PressToTestController::numberOfRows() const {
@@ -217,6 +223,7 @@ void PressToTestController::fillCellForRow(HighlightCell *cell, int row) {
     assert(!Preferences::sharedPreferences->examMode().isActive());
     return;
   }
+  assert(typeAtRow(row) == k_switchCellType);
   PressToTestSwitch *myCell = static_cast<PressToTestSwitch *>(cell);
   // A true params means the feature is disabled,
   bool featureIsDisabled = getParamAtIndex(row);
@@ -239,6 +246,7 @@ I18n::Message PressToTestController::LabelAtIndex(int i) {
       I18n::Message::PressToTestEquationSolver,
       I18n::Message::PressToTestInequalityGraphing,
       I18n::Message::PressToTestImplicitPlots,
+      I18n::Message::PressToTestGraphDetails,
       I18n::Message::PressToTestElements,
       I18n::Message::PressToTestStatDiagnostics,
       I18n::Message::PressToTestVectors,
@@ -253,8 +261,6 @@ I18n::Message PressToTestController::SubLabelAtIndex(int i) {
       return I18n::Message::PressToTestStatDiagnosticsDescription;
     case I18n::Message::PressToTestVectors:
       return I18n::Message::PressToTestVectorsDescription;
-    case I18n::Message::PressToTestImplicitPlots:
-      return I18n::Message::PressToTestImplicitPlotsDescription;
     default:
       return I18n::Message::Default;
   }

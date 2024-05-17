@@ -26,7 +26,7 @@ class FunctionParameterController : public Shared::ListParameterController,
   void setRecord(Ion::Storage::Record record) override;
   // MemoizedListViewDataSource
   Escher::HighlightCell* cell(int index) override;
-  void fillCellForRow(Escher::HighlightCell* cell, int row) override;
+  void viewWillAppear() override;
   bool handleEvent(Ion::Events::Event event) override;
   int numberOfRows() const override { return k_numberOfRows; }
   const char* title() override;
@@ -42,9 +42,10 @@ class FunctionParameterController : public Shared::ListParameterController,
   static constexpr int k_numberOfRows =
       Shared::ListParameterController::k_numberOfSharedCells + 3;
   bool displayDetails() const {
-    return !Poincare::Preferences::sharedPreferences->examMode()
-                .forbidImplicitPlots() &&
-           m_detailsParameterController.detailsNumberOfSections() > 0;
+    assert(!Poincare::Preferences::sharedPreferences->examMode()
+                .forbidGraphDetails() ||
+           m_detailsParameterController.detailsNumberOfSections() == 0);
+    return m_detailsParameterController.detailsNumberOfSections() > 0;
   }
   bool displayDomain() const {
     return m_domainParameterController.isVisible() > 0;
@@ -54,6 +55,10 @@ class FunctionParameterController : public Shared::ListParameterController,
   // ColumnParameters
   void initializeColumnParameters() override;
   Shared::ColumnNameHelper* columnNameHelper() override;
+
+  void updateDerivaticeCellSwitch() {
+    m_derivativeCell.accessory()->setState(function()->displayDerivative());
+  }
 
   Escher::MenuCell<Escher::MessageTextView, Escher::MessageTextView,
                    Escher::ChevronView>

@@ -14,34 +14,32 @@ using namespace Escher;
 
 namespace Shared {
 
-StoreController::StoreController(
-    Responder *parentResponder,
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
-    DoublePairStore *store, ButtonRowController *header, Context *parentContext)
+StoreController::StoreController(Responder *parentResponder,
+                                 DoublePairStore *store,
+                                 ButtonRowController *header,
+                                 Context *parentContext)
     : EditableCellTableViewController(parentResponder, &m_prefacedTableView),
       ButtonRowDelegate(header, nullptr),
       StoreColumnHelper(this, parentContext, this),
-      m_prefacedTableView(0, this, &m_selectableTableView, this, this),
-      m_store(store) {
+      m_prefacedTableView(0, this, &m_selectableTableView, this),
+      m_store(store),
+      m_widthManager(this) {
   m_prefacedTableView.setBackgroundColor(Palette::WallScreenDark);
   m_prefacedTableView.setCellOverlap(0, 0);
-  m_prefacedTableView.setMargins(k_margin, k_scrollBarMargin, k_scrollBarMargin,
-                                 k_margin);
+  m_prefacedTableView.setMargins(k_margins);
   for (int i = 0; i < k_maxNumberOfDisplayableCells; i++) {
     m_editableCells[i].setParentResponder(&m_selectableTableView);
-    m_editableCells[i].editableTextCell()->textField()->setDelegates(
-        inputEventHandlerDelegate, this);
+    m_editableCells[i].editableTextCell()->textField()->setDelegate(this);
   }
 }
 
 bool StoreController::textFieldDidFinishEditing(AbstractTextField *textField,
-                                                const char *text,
                                                 Ion::Events::Event event) {
   // First row is not editable.
   assert(selectedRow() != 0);
   int series = m_store->seriesAtColumn(selectedColumn());
   bool wasSeriesValid = m_store->seriesIsActive(series);
-  if (text[0] == 0) {  // If text = "", delete the cell
+  if (textField->draftText()[0] == 0) {  // If text = "", delete the cell
     bool didDeleteRow = false;
     handleDeleteEvent(true, &didDeleteRow);
     if (event == Ion::Events::Up || event == Ion::Events::Left ||
@@ -54,7 +52,7 @@ bool StoreController::textFieldDidFinishEditing(AbstractTextField *textField,
     return true;
   }
   bool result = EditableCellTableViewController::textFieldDidFinishEditing(
-      textField, text, event);
+      textField, event);
   if (wasSeriesValid != m_store->seriesIsActive(series)) {
     // Series changed validity, series' cells have changed color.
     reloadSeriesVisibleCells(series);
@@ -99,13 +97,13 @@ void StoreController::fillCellForLocation(HighlightCell *cell, int column,
     Escher::AbstractEvenOddEditableTextCell *myCell =
         static_cast<Escher::AbstractEvenOddEditableTextCell *>(cell);
     myCell->editableTextCell()->textField()->setText("");
-    myCell->hide();
+    myCell->setVisible(false);
     return;
   }
   if (typeAtLocation(column, row) == k_editableCellType) {
     Escher::AbstractEvenOddEditableTextCell *myCell =
         static_cast<Escher::AbstractEvenOddEditableTextCell *>(cell);
-    myCell->show();
+    myCell->setVisible(true);
     KDColor textColor =
         (m_store->seriesIsActive(m_store->seriesAtColumn(column)) ||
          m_store->numberOfPairsOfSeries(m_store->seriesAtColumn(column)) == 0)
@@ -114,13 +112,20 @@ void StoreController::fillCellForLocation(HighlightCell *cell, int column,
     myCell->editableTextCell()->textField()->setTextColor(textColor);
   }
   fillCellForLocationWithDisplayMode(
-      cell, column, row, Preferences::sharedPreferences->displayMode());
+      cell, column, row, Preferences::sharedPreferences->displayMode(),
+      AbstractEvenOddBufferTextCell::k_defaultPrecision);
 }
 
 KDCoordinate StoreController::separatorBeforeColumn(int column) {
   return column > 0 && m_store->relativeColumn(column) == 0
              ? Escher::Metric::TableSeparatorThickness
              : 0;
+}
+
+void StoreController::viewWillAppear() {
+  // Reset size memoization in case the number of columns changed
+  m_selectableTableView.resetSizeAndOffsetMemoization();
+  EditableCellTableViewController::viewWillAppear();
 }
 
 void StoreController::setTitleCellText(HighlightCell *cell, int column) {

@@ -1,9 +1,8 @@
 #ifndef INFERENCE_APP_H
 #define INFERENCE_APP_H
 
+#include <apps/shared/math_app.h>
 #include <apps/shared/menu_controller.h>
-#include <apps/shared/shared_app.h>
-#include <apps/shared/text_field_delegate_app.h>
 #include <escher/app.h>
 #include <escher/container.h>
 #include <escher/stack_view_controller.h>
@@ -11,11 +10,11 @@
 
 #include "models/statistic_buffer.h"
 #include "shared/dynamic_cells_data_source.h"
-#include "shared/layout_field_delegate_app.h"
 #include "statistic/chi_square_and_slope/categorical_type_controller.h"
 #include "statistic/chi_square_and_slope/input_goodness_controller.h"
 #include "statistic/chi_square_and_slope/input_homogeneity_controller.h"
 #include "statistic/chi_square_and_slope/input_slope_controller.h"
+#include "statistic/chi_square_and_slope/results_goodness_controller.h"
 #include "statistic/chi_square_and_slope/results_homogeneity_controller.h"
 #include "statistic/input_controller.h"
 #include "statistic/interval/interval_graph_controller.h"
@@ -27,8 +26,7 @@
 
 namespace Inference {
 
-class App : public Shared::LayoutFieldDelegateApp,
-            public Shared::MenuControllerDelegate {
+class App : public Shared::MathApp, public Shared::MenuControllerDelegate {
  public:
   // Descriptor
   class Descriptor : public Escher::App::Descriptor {
@@ -63,9 +61,7 @@ class App : public Shared::LayoutFieldDelegateApp,
     StatisticBuffer m_statisticBuffer;
   };
 
-  static App *app() {
-    return static_cast<App *>(Escher::Container::activeApp());
-  }
+  static App *app() { return static_cast<App *>(Escher::App::app()); }
   void didBecomeActive(Escher::Window *window) override;
   bool storageCanChangeForRecordName(
       const Ion::Storage::Record::Name recordName) const override;
@@ -117,6 +113,7 @@ class App : public Shared::LayoutFieldDelegateApp,
   IntervalGraphController m_intervalGraphController;
   ResultsHomogeneityTabController m_homogeneityResultsController;
   InputHomogeneityController m_inputHomogeneityController;
+  ResultsGoodnessTabController m_goodnessResultsController;
   InputGoodnessController m_inputGoodnessController;
   InputSlopeController m_inputSlopeController;
   ResultsController m_resultsController;

@@ -4,11 +4,19 @@ namespace Poincare {
 
 // Range1D
 
-Range1D Range1D::RangeBetween(float a, float b, float limit) {
+Range1D Range1D::ValidRangeBetween(float a, float b, float limit) {
   assert(!std::isnan(a) && !std::isnan(b));
-  a = std::clamp(a, -limit, limit);
-  Range1D res(a, a);
-  (res.*(b < a ? &Range1D::setMin : &Range1D::setMax))(b, limit);
+  float min = (a < b ? a : b);
+  float max = (a < b ? b : a);
+  min = std::clamp(min, -limit, limit);
+  max = std::clamp(max, -limit, limit);
+  Range1D res(min, max, limit);
+  res.stretchIfTooSmall(-1.f, limit);
+
+  assert(res.isValid());
+  assert(-limit <= res.min() && res.min() <= limit);
+  assert(-limit <= res.max() && res.max() <= limit);
+
   return res;
 }
 
@@ -52,31 +60,32 @@ void Range1D::stretchIfTooSmall(float shift, float limit) {
   assert(-limit <= m_max && m_max <= limit);
 }
 
-void Range1D::privateSet(float t, bool isMin, float limit) {
-  if (std::isnan(t)) {
-    m_min = t;
-    m_max = t;
-    return;
-  }
+void Range1D::privateSetKeepingValid(float t, bool isMin, float limit) {
+  assert(isValid());
+  assert(!std::isnan(t));
   float* bound = isMin ? &m_min : &m_max;
+  float* otherBound = isMin ? &m_max : &m_min;
   assert(limit > 0.0);
   *bound = std::clamp(t, -limit, limit);
-  if (std::isnan(length()) || length() < 0) {
-    (isMin ? m_max : m_min) = *bound;
+  if (length() < 0) {
+    *otherBound = *bound;
   }
-  assert(std::isnan(length()) || length() >= 0);
+  assert(length() >= 0);
   if (length() < k_minLength) {
-    float l = DefaultLengthAt(m_min);
-    assert(m_min - l >= -limit || m_max + l <= limit);
-    if ((isMin && m_max + l <= limit) || (!isMin && m_min - l < -limit)) {
-      m_max += l;
-    } else {
-      m_min -= l;
+    /* If the new bound is too close from the other one, set the other one to a
+     * distance DefaultLength.
+     * We don't call stretchIfTooSmall yet since we want to avoid to modify the
+     * bound that is being set.  */
+    float l = DefaultLengthAt(m_min) * (isMin ? 1 : -1);
+    *otherBound = std::clamp(*bound + l, -limit, limit);
+
+    if (length() < k_minLength) {
+      /* The bounds are still too close (the other bound is at the limit). This
+       * means the bound can't be set to t and needs to be shifted a bit. */
+      stretchIfTooSmall(-1.0f, limit);
     }
   }
   assert(isValid());
-  assert(!(isEmpty() && std::isfinite(m_max)));
-  assert(std::isnan(length()) || length() >= k_minLength);
   assert(-limit <= m_min && m_min <= limit);
   assert(-limit <= m_max && m_max <= limit);
 }
@@ -109,7 +118,7 @@ bool Range2D::ratioIs(float r) const {
    * the interval in which numbers are indistinguishable from ratio with this
    * level of precision. */
   float tolerance =
-      std::pow(2.f, IEEE754<float>::exponent(thisRatio) - significantBits);
+      std::pow(2.f, OMG::IEEE754<float>::exponent(thisRatio) - significantBits);
   return std::fabs(thisRatio - r) <= tolerance;
 }
 

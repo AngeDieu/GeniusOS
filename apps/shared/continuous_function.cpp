@@ -32,8 +32,8 @@ namespace Shared {
 /* ContinuousFunction - Public */
 
 ContinuousFunction ContinuousFunction::NewModel(
-    Ion::Storage::Record::ErrorStatus *error, const char *baseName) {
-  static int s_colorIndex = 0;
+    Ion::Storage::Record::ErrorStatus *error, const char *baseName,
+    KDColor color) {
   assert(baseName != nullptr);
   // Create the record
   /* WARNING: We create an empty record with the baseName and extension right
@@ -46,7 +46,7 @@ ContinuousFunction ContinuousFunction::NewModel(
    * calling the method "createRecordWithExtension". */
   Ion::Storage::Record record =
       Ion::Storage::Record(baseName, Ion::Storage::funcExtension);
-  RecordDataBuffer data(Escher::Palette::nextDataColor(&s_colorIndex));
+  RecordDataBuffer data(color);
   *error =
       Ion::Storage::FileSystem::sharedFileSystem->createRecordWithExtension(
           baseName, Ion::Storage::funcExtension, &data, sizeof(data));
@@ -180,9 +180,9 @@ bool ContinuousFunction::isNamed() const {
 bool ContinuousFunction::isDiscontinuousBetweenFloatValues(
     float x1, float x2, Poincare::Context *context) const {
   Expression equation = expressionReduced(context);
-  return equation.isDiscontinuousBetweenValuesForSymbol(
-      k_unknownName, x1, x2, context, complexFormat(context),
-      Poincare::Preferences::sharedPreferences->angleUnit());
+  ApproximationContext approximationContext(context, complexFormat(context));
+  return equation.isDiscontinuousBetweenValuesForSymbol(k_unknownName, x1, x2,
+                                                        approximationContext);
 }
 
 void ContinuousFunction::getLineParameters(double *slope, double *intercept,
@@ -204,15 +204,14 @@ void ContinuousFunction::getLineParameters(double *slope, double *intercept,
     *slope = NAN;
     *intercept = NAN;
   } else {
-    *intercept = coefficients[0].approximateToScalar<double>(
-        context, complexFormat(context),
-        Poincare::Preferences::sharedPreferences->angleUnit());
+    ApproximationContext approximationContext(context, complexFormat(context));
+    *intercept =
+        coefficients[0].approximateToScalar<double>(approximationContext);
     if (d == 0) {
       *slope = 0.0;
     } else {
-      *slope = coefficients[1].approximateToScalar<double>(
-          context, complexFormat(context),
-          Poincare::Preferences::sharedPreferences->angleUnit());
+      *slope =
+          coefficients[1].approximateToScalar<double>(approximationContext);
     }
   }
 }
@@ -287,10 +286,9 @@ double ContinuousFunction::approximateDerivative(double x, Context *context,
   // Derivative is simplified once and for all
   Expression derivate = expressionDerivateReduced(context);
   assert(subCurveIndex == 0);
-  Preferences preferences =
-      Preferences::ClonePreferencesWithNewComplexFormat(complexFormat(context));
-  return PoincareHelpers::ApproximateWithValueForSymbol(
-      derivate, k_unknownName, x, context, &preferences, false);
+  ApproximationContext approximationContext(context, complexFormat(context));
+  return derivate.approximateWithValueForSymbol(k_unknownName, x,
+                                                approximationContext);
 }
 
 Poincare::Layout ContinuousFunction::derivativeTitleLayout() {
@@ -348,11 +346,11 @@ float ContinuousFunction::autoTMin() const {
 bool ContinuousFunction::approximationBasedOnCostlyAlgorithms(
     Context *context) const {
   return expressionApproximated(context).recursivelyMatches(
-      [](const Expression e, Context *context) {
+      [](const Expression e) {
         return !e.isUninitialized() &&
-               (e.type() == ExpressionNode::Type::Sequence ||
-                e.type() == ExpressionNode::Type::Integral ||
-                e.type() == ExpressionNode::Type::Derivative);
+               e.isOfType({ExpressionNode::Type::Sequence,
+                           ExpressionNode::Type::Integral,
+                           ExpressionNode::Type::Derivative});
       });
 }
 
@@ -410,12 +408,11 @@ Coordinate2D<T> ContinuousFunction::templatedApproximateAtParameter(
     return Coordinate2D<T>(properties().isCartesian() ? t : NAN, NAN);
   }
   Expression e = expressionApproximated(context);
-  Preferences preferences =
-      Preferences::ClonePreferencesWithNewComplexFormat(complexFormat(context));
+  ApproximationContext approximationContext(context, complexFormat(context));
 
   if (properties().isScatterPlot()) {
     Expression point;
-    if (Expression::IsPoint(e, context)) {
+    if (Expression::IsPoint(e)) {
       if (t != static_cast<T>(0.)) {
         return Coordinate2D<T>();
       }
@@ -429,12 +426,11 @@ Coordinate2D<T> ContinuousFunction::templatedApproximateAtParameter(
       }
       point = point = e.childAtIndex(tInt);
     }
-    assert(!point.isUninitialized() && Expression::IsPoint(point, context));
+    assert(!point.isUninitialized() && Expression::IsPoint(point));
     if (point.isUndefined()) {
       return Coordinate2D<T>();
     }
-    return static_cast<Point &>(point).approximate2D<T>(
-        context, preferences.complexFormat(), preferences.angleUnit());
+    return static_cast<Point &>(point).approximate2D<T>(approximationContext);
   }
 
   if (!properties().isParametric()) {
@@ -444,16 +440,13 @@ Coordinate2D<T> ContinuousFunction::templatedApproximateAtParameter(
     } else {
       assert(subCurveIndex == 0);
     }
+    T value =
+        e.approximateWithValueForSymbol(k_unknownName, t, approximationContext);
     if (isAlongY()) {
       // Invert x and y with vertical lines so it can be scrolled vertically
-      return Coordinate2D<T>(
-          PoincareHelpers::ApproximateWithValueForSymbol(
-              e, k_unknownName, t, context, &preferences, false),
-          t);
+      return Coordinate2D<T>(value, t);
     }
-    return Coordinate2D<T>(
-        t, PoincareHelpers::ApproximateWithValueForSymbol(
-               e, k_unknownName, t, context, &preferences, false));
+    return Coordinate2D<T>(t, value);
   }
   if (e.type() == ExpressionNode::Type::Dependency) {
     e = e.childAtIndex(0);
@@ -465,11 +458,10 @@ Coordinate2D<T> ContinuousFunction::templatedApproximateAtParameter(
   assert(e.type() == ExpressionNode::Type::Matrix);
   assert(static_cast<Matrix &>(e).numberOfRows() == 2);
   assert(static_cast<Matrix &>(e).numberOfColumns() == 1);
-  return Coordinate2D<T>(
-      PoincareHelpers::ApproximateWithValueForSymbol(
-          e.childAtIndex(0), k_unknownName, t, context, &preferences, false),
-      PoincareHelpers::ApproximateWithValueForSymbol(
-          e.childAtIndex(1), k_unknownName, t, context, &preferences, false));
+  return Coordinate2D<T>(e.childAtIndex(0).approximateWithValueForSymbol(
+                             k_unknownName, t, approximationContext),
+                         e.childAtIndex(1).approximateWithValueForSymbol(
+                             k_unknownName, t, approximationContext));
 }
 
 /* ContinuousFunction::Model */
@@ -486,18 +478,33 @@ Expression ContinuousFunction::Model::expressionReduced(
       m_expression = Undefined::Builder();
       return m_expression;
     }
-    Preferences preferences = Preferences::ClonePreferencesWithNewComplexFormat(
-        complexFormat(record, context));
+    Preferences::ComplexFormat complexFormat =
+        this->complexFormat(record, context);
+    Preferences::AngleUnit angleUnit =
+        Preferences::sharedPreferences->angleUnit();
     if (thisProperties.isScatterPlot()) {
       /* Scatter plots do not depend on any variable, so they can be
        * approximated in advance.
        * In addition, they are sorted to be travelled from left to right (i.e.
        * in order of ascending x). */
-      m_expression = PoincareHelpers::Approximate<double>(
-          m_expression.type() == ExpressionNode::Type::List
-              ? ListSort::Builder(m_expression)
-              : m_expression,
-          context);
+      if (m_expression.type() == ExpressionNode::Type::List ||
+          (m_expression.type() == ExpressionNode::Type::Dependency &&
+           m_expression.childAtIndex(0).type() == ExpressionNode::Type::List)) {
+        Expression list = m_expression.type() == ExpressionNode::Type::List
+                              ? m_expression
+                              : m_expression.childAtIndex(0);
+        m_expression =
+            static_cast<List &>(list).approximateAndRemoveUndefAndSort<double>(
+                ApproximationContext(context, complexFormat));
+      } else {
+        assert(m_expression.type() == ExpressionNode::Type::Point ||
+               (m_expression.type() == ExpressionNode::Type::Dependency &&
+                m_expression.childAtIndex(0).type() ==
+                    ExpressionNode::Type::Point));
+        m_expression = PoincareHelpers::Approximate<double>(
+            m_expression, context,
+            {.complexFormat = complexFormat, .angleUnit = angleUnit});
+      }
     } else if (!thisProperties.isPolar() && !thisProperties.isInversePolar() &&
                !thisProperties.isScatterPlot() &&
                (record->fullName() == nullptr ||
@@ -525,14 +532,19 @@ Expression ContinuousFunction::Model::expressionReduced(
       int degree = m_expression.getPolynomialReducedCoefficients(
           willBeAlongX ? ContinuousFunctionProperties::k_ordinateName
                        : k_unknownName,
-          coefficients, context, preferences.complexFormat(),
-          preferences.angleUnit(),
+          coefficients, context, complexFormat, angleUnit,
           ContinuousFunctionProperties::k_defaultUnitFormat,
           SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition, true);
+
+      if (degree == -1) {
+        /* The reduction failed, so the expression is not reduced and
+         * getPolynomialReducedCoefficients returned -1. */
+        return m_expression;
+      }
       assert(!willBeAlongX || degree == yDegree);
-      ReductionContext reductionContext(
-          context, preferences.complexFormat(), preferences.angleUnit(),
-          Preferences::UnitFormat::Metric, ReductionTarget::SystemForAnalysis);
+      ReductionContext reductionContext(context, complexFormat, angleUnit,
+                                        Preferences::UnitFormat::Metric,
+                                        ReductionTarget::SystemForAnalysis);
       if (degree == 1) {
         Polynomial::LinearPolynomialRoots(coefficients[1], coefficients[0],
                                           &m_expression, reductionContext,
@@ -543,7 +555,7 @@ Expression ContinuousFunction::Model::expressionReduced(
         Expression root1, root2, delta;
         int solutions = Polynomial::QuadraticPolynomialRoots(
             coefficients[2], coefficients[1], coefficients[0], &root1, &root2,
-            &delta, reductionContext, false, false);
+            &delta, reductionContext, nullptr, false);
         if (solutions <= 1) {
           m_expression = root1;
         } else {
@@ -585,9 +597,11 @@ Expression ContinuousFunction::Model::expressionReduced(
       if (!resultForApproximation.isUninitialized()) {
         PoincareHelpers::CloneAndReduce(
             &resultForApproximation, context,
-            ReductionTarget::SystemForApproximation,
-            SymbolicComputation::DoNotReplaceAnySymbol,
-            PoincareHelpers::k_defaultUnitConversion, &preferences, false);
+            {.complexFormat = complexFormat,
+             .updateComplexFormatWithExpression = false,
+             .target = ReductionTarget::SystemForApproximation,
+             .symbolicComputation =
+                 SymbolicComputation::DoNotReplaceAnySymbol});
         if (resultForApproximation.numberOfDescendants(true) <
             m_expression.numberOfDescendants(true)) {
           m_expression = resultForApproximation;
@@ -602,12 +616,12 @@ Poincare::Expression ContinuousFunction::Model::expressionApproximated(
     const Ion::Storage::Record *record, Poincare::Context *context) const {
   if (m_expressionApproximated.isUninitialized()) {
     Expression e = expressionReduced(record, context);
-    Preferences preferences = Preferences::ClonePreferencesWithNewComplexFormat(
-        complexFormat(record, context));
     PoincareHelpers::CloneAndApproximateKeepingSymbols(
-        &e, context, ReductionTarget::SystemForApproximation,
-        SymbolicComputation::DoNotReplaceAnySymbol,
-        PoincareHelpers::k_defaultUnitConversion, &preferences, false);
+        &e, context,
+        {.complexFormat = complexFormat(record, context),
+         .updateComplexFormatWithExpression = false,
+         .target = ReductionTarget::SystemForApproximation,
+         .symbolicComputation = SymbolicComputation::DoNotReplaceAnySymbol});
     m_expressionApproximated = e;
   }
   return m_expressionApproximated;
@@ -623,21 +637,22 @@ Poincare::Expression ContinuousFunction::Model::expressionReducedForAnalysis(
   Expression result =
       expressionEquation(record, context, &computedEquationType,
                          &computedFunctionSymbol, &isCartesianEquation);
-  Preferences preferences = Preferences::ClonePreferencesWithNewComplexFormat(
-      complexFormat(record, context));
+  Preferences::ComplexFormat complexFormat =
+      this->complexFormat(record, context);
   if (!result.isUndefined()) {
     PoincareHelpers::CloneAndReduce(
-        &result, context, ReductionTarget::SystemForAnalysis,
-        // Symbols have already been replaced.
-        SymbolicComputation::DoNotReplaceAnySymbol,
-        PoincareHelpers::k_defaultUnitConversion, &preferences, false);
+        &result, context,
+        {.complexFormat = complexFormat,
+         .updateComplexFormatWithExpression = false,
+         .target = ReductionTarget::SystemForAnalysis,
+         // Symbols have already been replaced.
+         .symbolicComputation = SymbolicComputation::DoNotReplaceAnySymbol});
   }
   if (!m_properties.isInitialized()) {
     // Use the computed equation to update the plot type.
     m_properties.update(result, originalEquation(record, UCodePointUnknown),
-                        context, preferences.complexFormat(),
-                        computedEquationType, computedFunctionSymbol,
-                        isCartesianEquation);
+                        context, complexFormat, computedEquationType,
+                        computedFunctionSymbol, isCartesianEquation);
   }
   return result;
 }
@@ -769,7 +784,7 @@ Expression ContinuousFunction::Model::expressionEquation(
     /* Replace all y symbols with UCodePointTemporaryUnknown so that they are
      * not replaced if they had a predefined value. This will not replace the y
      * symbols nested in function, which is not a supported behavior anyway.
-     * TODO: Make a consistent behavior calculation/additional_outputs using a
+     * TODO: Make a consistent behavior calculation/additional_results using a
      *       VariableContext to temporary disable y's predefinition. */
     result = result.replaceSymbolWithExpression(
         Symbol::Builder(k_ordinateSymbol),
@@ -801,18 +816,15 @@ Expression ContinuousFunction::Model::expressionDerivateReduced(
     } else {
       m_expressionDerivate = Derivative::Builder(
           expression, Symbol::SystemSymbol(), Symbol::SystemSymbol());
-      Preferences preferences =
-          Preferences::ClonePreferencesWithNewComplexFormat(
-              complexFormat(record, context));
       /* On complex functions, this step can take a significant time.
        * A workaround could be to identify big functions to skip simplification
        * at the cost of possible inaccurate evaluations (such as
        * diff(abs(x),x,0) not being undefined). */
       PoincareHelpers::CloneAndSimplify(
           &m_expressionDerivate, context,
-          ReductionTarget::SystemForApproximation,
-          SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition,
-          PoincareHelpers::k_defaultUnitConversion, &preferences, false);
+          {.complexFormat = complexFormat(record, context),
+           .updateComplexFormatWithExpression = false,
+           .target = ReductionTarget::SystemForApproximation});
     }
   }
   return m_expressionDerivate;
@@ -909,12 +921,11 @@ Poincare::Expression ContinuousFunction::Model::buildExpressionFromText(
     ExpressionModel::ReplaceSymbolWithUnknown(expressionToStore.childAtIndex(1),
                                               symbol);
   } else {
-    if (expressionToStore.recursivelyMatches(
-            [](const Expression e, Context *context) {
-              return e.type() == ExpressionNode::Type::Symbol &&
-                     AliasesLists::k_thetaAliases.contains(
-                         static_cast<const Symbol &>(e).name());
-            })) {
+    if (expressionToStore.recursivelyMatches([](const Expression e) {
+          return e.type() == ExpressionNode::Type::Symbol &&
+                 AliasesLists::k_thetaAliases.contains(
+                     static_cast<const Symbol &>(e).name());
+        })) {
       symbol = expressionToStore.childAtIndex(0).isIdenticalTo(
                    Symbol::Builder(k_polarSymbol))
                    ? k_radiusSymbol

@@ -204,7 +204,7 @@ bool ButtonRowController::ContentView::setSelectedButton(int selectedButton) {
   if (m_selectedButton >= 0) {
     AbstractButtonCell *button = buttonAtIndex(selectedButton);
     button->setHighlighted(true);
-    Container::activeApp()->setFirstResponder(button);
+    App::app()->setFirstResponder(button);
     return true;
   }
   return false;
@@ -227,7 +227,7 @@ ViewController::TitlesDisplay ButtonRowController::titlesDisplay() {
 }
 
 void ButtonRowController::didBecomeFirstResponder() {
-  Container::activeApp()->setFirstResponder(m_contentView.mainViewController());
+  App::app()->setFirstResponder(m_contentView.mainViewController());
 }
 
 void ButtonRowController::willExitResponderChain(
@@ -265,10 +265,7 @@ bool ButtonRowController::handleEvent(Ion::Events::Event event) {
     }
     return true;
   }
-  if (event == Ion::Events::OK || event == Ion::Events::EXE) {
-    return true;
-  }
-  return false;
+  return event == Ion::Events::OK || event == Ion::Events::EXE;
 }
 
 void ButtonRowController::initView() {
@@ -292,7 +289,7 @@ void ButtonRowController::privateModalViewAltersFirstResponder(
     return;
   }
   int n = m_contentView.numberOfButtons();
-  Responder *firstResponder = Container::activeApp()->firstResponder();
+  Responder *firstResponder = App::app()->firstResponder();
   for (int i = 0; i < n; i++) {
     if (static_cast<Responder *>(m_contentView.buttonAtIndex(i)) ==
         firstResponder) {

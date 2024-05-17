@@ -14,7 +14,6 @@ void AbstractMenuCell::drawRect(KDContext *ctx, KDRect rect) const {
 }
 
 KDSize AbstractMenuCell::minimalSizeForOptimalDisplay() const {
-  assert(bounds().width() > 0);
   return KDSize(bounds().width(), minimalHeightForOptimalDisplay());
 }
 
@@ -58,6 +57,14 @@ void AbstractMenuCell::setHighlighted(bool highlight) {
   widget(CellWidget::Type::Label)->setHighlighted(highlight);
   widget(CellWidget::Type::SubLabel)->setHighlighted(highlight);
   widget(CellWidget::Type::Accessory)->setHighlighted(highlight);
+}
+
+void AbstractMenuCell::initSize(KDCoordinate width) {
+  // We need to know the width to compute the required height
+  if (bounds().width() == 0) {
+    assert(width > 0);
+    setSize(KDSize(width, Ion::Display::Height));
+  }
 }
 
 int AbstractMenuCell::numberOfSubviews() const {

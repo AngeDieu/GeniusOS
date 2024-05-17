@@ -6,27 +6,22 @@
 namespace Escher {
 
 InputViewController::ExpressionInputBarController::ExpressionInputBarController(
-    Responder* parentResponder,
-    InputEventHandlerDelegate* inputEventHandlerDelegate,
-    LayoutFieldDelegate* layoutFieldDelegate)
-    : ViewController(parentResponder),
-      m_expressionInputBar(this, inputEventHandlerDelegate,
-                           layoutFieldDelegate) {}
+    InputViewController* inputViewController)
+    : ViewController(inputViewController),
+      m_expressionInputBar(this, inputViewController) {}
 
 void InputViewController::ExpressionInputBarController::
     didBecomeFirstResponder() {
-  Container::activeApp()->setFirstResponder(m_expressionInputBar.layoutField());
+  App::app()->setFirstResponder(m_expressionInputBar.layoutField());
 }
 
 InputViewController::InputViewController(
     Responder* parentResponder, ViewController* child,
-    InputEventHandlerDelegate* inputEventHandlerDelegate,
     LayoutFieldDelegate* layoutFieldDelegate)
     : ModalViewController(parentResponder, child),
-      m_expressionInputBarController(this, this, this),
+      m_expressionInputBarController(this),
       m_successAction(Invocation(nullptr, nullptr)),
       m_failureAction(Invocation(nullptr, nullptr)),
-      m_inputEventHandlerDelegate(inputEventHandlerDelegate),
       m_layoutFieldDelegate(layoutFieldDelegate) {}
 
 void InputViewController::edit(Ion::Events::Event event, void* context,
@@ -47,29 +42,26 @@ void InputViewController::abortEditionAndDismiss() {
   dismissModal();
 }
 
-bool InputViewController::layoutFieldShouldFinishEditing(
-    LayoutField* layoutField, Ion::Events::Event event) {
-  return event == Ion::Events::OK || event == Ion::Events::EXE;
-}
-
 bool InputViewController::layoutFieldDidReceiveEvent(LayoutField* layoutField,
                                                      Ion::Events::Event event) {
   return m_layoutFieldDelegate->layoutFieldDidReceiveEvent(layoutField, event);
 }
 
 bool InputViewController::layoutFieldDidFinishEditing(
-    LayoutField* layoutField, Poincare::Layout layoutR,
-    Ion::Events::Event event) {
-  if (inputViewDidFinishEditing()) {
-    m_layoutFieldDelegate->layoutFieldDidFinishEditing(layoutField, layoutR,
-                                                       event);
+    LayoutField* layoutField, Ion::Events::Event event) {
+  assert(!layoutField->isEditing());
+  if (m_successAction.perform(this)) {
+    dismissModal();
+    m_layoutFieldDelegate->layoutFieldDidFinishEditing(layoutField, event);
+    layoutField->clearLayout();
     return true;
   }
   return false;
 }
 
 void InputViewController::layoutFieldDidAbortEditing(LayoutField* layoutField) {
-  inputViewDidAbortEditing();
+  m_failureAction.perform(this);
+  dismissModal();
   m_layoutFieldDelegate->layoutFieldDidAbortEditing(layoutField);
 }
 
@@ -87,27 +79,6 @@ void InputViewController::layoutFieldDidChangeSize(LayoutField* layoutField) {
      * propagate a relayout to the content of the field scroll view. */
     m_expressionInputBarController.layoutField()->layoutSubviews(true);
   }
-}
-
-PervasiveBox* InputViewController::toolbox() {
-  return m_inputEventHandlerDelegate->toolbox();
-}
-
-PervasiveBox* InputViewController::variableBox() {
-  return m_inputEventHandlerDelegate->variableBox();
-}
-
-bool InputViewController::inputViewDidFinishEditing() {
-  if (m_successAction.perform(this)) {
-    dismissModal();
-    return true;
-  }
-  return false;
-}
-
-void InputViewController::inputViewDidAbortEditing() {
-  m_failureAction.perform(this);
-  dismissModal();
 }
 
 }  // namespace Escher

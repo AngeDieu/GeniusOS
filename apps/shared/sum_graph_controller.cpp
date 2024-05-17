@@ -17,19 +17,19 @@ using namespace Escher;
 
 namespace Shared {
 
-SumGraphController::SumGraphController(
-    Responder *parentResponder,
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
-    FunctionGraphView *graphView, InteractiveCurveViewRange *range,
-    CurveViewCursor *cursor)
+SumGraphController::SumGraphController(Responder *parentResponder,
+                                       FunctionGraphView *graphView,
+                                       InteractiveCurveViewRange *range,
+                                       CurveViewCursor *cursor)
     : SimpleInteractiveCurveViewController(parentResponder, cursor),
       m_step(Step::FirstParameter),
+      m_startSum(NAN),
+      m_result(NAN),
       m_graphRange(range),
       m_graphView(graphView),
-      m_legendView(this, inputEventHandlerDelegate) {}
+      m_legendView(this) {}
 
 void SumGraphController::viewWillAppear() {
-  SimpleInteractiveCurveViewController::viewWillAppear();
   panToMakeCursorVisible();
   m_graphView->setBannerView(&m_legendView);
   m_graphView->setCursorView(&m_cursorView);
@@ -37,14 +37,15 @@ void SumGraphController::viewWillAppear() {
   m_graphView->setAreaHighlightColor(false);
   m_graphView->setAreaHighlight(NAN, NAN);
   m_step = Step::FirstParameter;
-  makeCursorVisibleAndReload();
+  makeCursorVisibleAndReloadBanner();
+  SimpleInteractiveCurveViewController::viewWillAppear();
 }
 
 void SumGraphController::didBecomeFirstResponder() {
   /* Do not set the textField as first responder when displaying the result
    * so that Copy and Sto apply on the result. */
   if (m_step != Step::Result) {
-    Container::activeApp()->setFirstResponder(m_legendView.textField());
+    App::app()->setFirstResponder(m_legendView.textField());
   }
 }
 
@@ -52,7 +53,7 @@ bool SumGraphController::handleEvent(Ion::Events::Event event) {
   if (event == Ion::Events::Back && m_step != Step::FirstParameter) {
     m_step = (Step)((int)m_step - 1);
     if (m_step == Step::SecondParameter) {
-      Container::activeApp()->setFirstResponder(m_legendView.textField());
+      App::app()->setFirstResponder(m_legendView.textField());
       m_graphView->setAreaHighlightColor(false);
       m_graphView->setCursorView(&m_cursorView);
     }
@@ -76,7 +77,7 @@ bool SumGraphController::handleEvent(Ion::Events::Event event) {
     PoincareHelpers::ConvertFloatToText<double>(m_result, buffer, bufferSize,
                                                 precision);
     if (event == Ion::Events::Sto || event == Ion::Events::Var) {
-      Container::activeApp()->storeValue(buffer);
+      App::app()->storeValue(buffer);
     } else {
       Escher::Clipboard::SharedClipboard()->store(buffer);
     }
@@ -100,18 +101,19 @@ bool SumGraphController::moveCursorHorizontallyToPosition(double x) {
                                   std::max(m_startSum, m_cursor->x()));
   }
   m_legendView.setEditableZone(m_cursor->x());
-  makeCursorVisibleAndReload();
+  makeCursorVisibleAndReloadBanner();
+  m_graphView->reload(true);
   return true;
 }
 
-void SumGraphController::makeCursorVisibleAndReload() {
+void SumGraphController::makeCursorVisibleAndReloadBanner() {
   makeCursorVisible();
   reloadBannerView();
-  m_graphView->reload();
 }
+
 void SumGraphController::makeCursorVisible() {
   float position = m_cursor->x();
-  if (std::isnan(position)) {
+  if (!std::isfinite(position)) {
     return;
   }
   ExpiringPointer<Function> function =
@@ -148,17 +150,15 @@ void SumGraphController::setRecord(Ion::Storage::Record record) {
 }
 
 bool SumGraphController::textFieldDidFinishEditing(AbstractTextField *textField,
-                                                   const char *text,
                                                    Ion::Events::Event event) {
-  double floatBody =
-      textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
-  if (textFieldDelegateApp()->hasUndefinedValue(floatBody)) {
+  double floatBody = ParseInputFloatValue<double>(textField->draftText());
+  if (HasUndefinedValue(floatBody)) {
     return false;
   }
   if ((!allowEndLowerThanStart() && m_step == Step::SecondParameter &&
        floatBody < m_startSum) ||
       !moveCursorHorizontallyToPosition(floatBody)) {
-    Container::activeApp()->displayWarning(I18n::Message::ForbiddenValue);
+    App::app()->displayWarning(I18n::Message::ForbiddenValue);
     return false;
   }
   return handleEnter();
@@ -192,7 +192,7 @@ bool SumGraphController::handleEnter() {
     } else {
       m_graphView->setAreaHighlightColor(true);
       m_graphView->setCursorView(nullptr);
-      Container::activeApp()->setFirstResponder(this);
+      App::app()->setFirstResponder(this);
     }
     reloadBannerView();
   }
@@ -229,13 +229,11 @@ Poincare::Expression SumGraphController::createSumExpression(
 
 /* Legend View */
 
-SumGraphController::LegendView::LegendView(
-    SumGraphController *controller,
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate)
+SumGraphController::LegendView::LegendView(SumGraphController *controller)
     : m_sum(k_glyphsFormat),
       m_legend(I18n::Message::Default, k_glyphsFormat),
       m_editableZone(controller, m_textBuffer, k_editableZoneBufferSize,
-                     inputEventHandlerDelegate, controller, k_glyphsFormat) {
+                     controller, k_glyphsFormat) {
   m_textBuffer[0] = 0;
 }
 
@@ -262,57 +260,66 @@ void SumGraphController::LegendView::setEditableZone(double d) {
   m_editableZone.setText(buffer);
 }
 
+static Layout emptyValueLayout() {
+  Layout layout = HorizontalLayout::Builder();
+  static_cast<HorizontalLayout &>(layout).setEmptyVisibility(
+      EmptyRectangle::State::Hidden);
+  return layout;
+}
+
+static Layout valueLayout(double value, int numberOfSignificantDigits,
+                          Preferences::PrintFloatMode displayMode) {
+  constexpr static int k_bufferSize = Poincare::PrintFloat::k_maxFloatCharSize;
+  char buffer[k_bufferSize];
+  PoincareHelpers::ConvertFloatToTextWithDisplayMode<double>(
+      value, buffer, k_bufferSize, numberOfSignificantDigits, displayMode);
+  Layout layout = LayoutHelper::String(buffer, strlen(buffer));
+  return layout;
+}
+
+static Layout areaMessageLayout() {
+  constexpr static int bufferSize = sizeof("Oppervlakte") + 1;
+  char buffer[bufferSize];
+  int length = Print::CustomPrintf(buffer, bufferSize, "%s",
+                                   I18n::translate(I18n::Message::Area));
+  return LayoutHelper::String(buffer, length);
+}
+
 void SumGraphController::LegendView::setSumLayout(Step step, double start,
                                                   double end, double result,
                                                   Layout functionLayout,
                                                   CodePoint sumSymbol) {
-  constexpr int sigmaLength = 2;
-  const CodePoint sigma[sigmaLength] = {' ', sumSymbol};
-  Layout sumLayout = LayoutHelper::CodePointsToLayout(sigma, sigmaLength);
-  if (step != Step::FirstParameter) {
-    static_assert(k_valuesBufferSize <= k_editableZoneBufferSize);
-    char buffer[k_editableZoneBufferSize];
-    Layout endLayout;
-    if (step == Step::SecondParameter) {
-      endLayout = HorizontalLayout::Builder();
-      static_cast<HorizontalLayout &>(endLayout).setEmptyVisibility(
-          EmptyRectangle::State::Hidden);
+  assert(!std::isnan(start) || step == Step::FirstParameter);
+  assert(!std::isnan(end) || step != Step::Result);
+  Layout startLayout =
+      valueLayout(start, k_valuesPrecision, k_valuesDisplayMode);
+  Layout endLayout =
+      step == Step::FirstParameter
+          ? emptyValueLayout()
+          : valueLayout(end, k_valuesPrecision, k_valuesDisplayMode);
+  Layout sumLayout = CondensedSumLayout::Builder(
+      CodePointLayout::Builder(sumSymbol), startLayout, endLayout);
+  if (step == Step::Result) {
+    Layout leftLayout;
+    Layout equalLayout = LayoutHelper::String(" = ", 3);
+    Preferences *preferences = Preferences::sharedPreferences;
+    Layout resultLayout =
+        valueLayout(result, preferences->numberOfSignificantDigits(),
+                    preferences->displayMode());
+    if (functionLayout.isUninitialized() ||
+        (sumLayout.layoutSize(k_font).width() +
+             functionLayout.layoutSize(k_font).width() +
+             equalLayout.layoutSize(k_font).width() +
+             resultLayout.layoutSize(k_font).width() >
+         bounds().width())) {
+      assert(sumSymbol == UCodePointIntegral);
+      leftLayout = areaMessageLayout();
     } else {
-      PoincareHelpers::ConvertFloatToTextWithDisplayMode<double>(
-          end, buffer, k_valuesBufferSize, k_valuesPrecision,
-          Preferences::PrintFloatMode::Decimal);
-      endLayout = LayoutHelper::String(buffer, strlen(buffer));
+      leftLayout = HorizontalLayout::Builder(sumLayout, functionLayout);
     }
-    PoincareHelpers::ConvertFloatToTextWithDisplayMode<double>(
-        start, buffer, k_valuesBufferSize, k_valuesPrecision,
-        Preferences::PrintFloatMode::Decimal);
-    sumLayout = CondensedSumLayout::Builder(
-        sumLayout, LayoutHelper::String(buffer, strlen(buffer)), endLayout);
-    if (step == Step::Result) {
-      int resultPrecision =
-          Poincare::Preferences::sharedPreferences->numberOfSignificantDigits();
-      PoincareHelpers::ConvertFloatToText<double>(
-          result, buffer, k_editableZoneBufferSize, resultPrecision);
-      if (functionLayout.isUninitialized()) {
-        /* If function is uninitialized, display "Area = "
-         * This case should not occur with a sum of terms of a sequence
-         * If it does, "Area = " should be replaced with "Sum = " */
-        assert(sumSymbol == UCodePointIntegral);
-        sumLayout = defaultSumResultLayout(buffer);
-      } else {
-        sumLayout = HorizontalLayout::Builder(
-            sumLayout, functionLayout, LayoutHelper::String(" = ", 3),
-            LayoutHelper::String(buffer, strlen(buffer)));
-        if (sumLayout.layoutSize(KDFont::Size::Small).width() >
-            bounds().width()) {
-          /* If layout is too large, display "Area = "
-           * This case should not occur with a sum of terms of a sequence
-           * If it does, "Area = " should be replaced with "Sum = " */
-          assert(sumSymbol == UCodePointIntegral);
-          sumLayout = defaultSumResultLayout(buffer);
-        }
-      }
-    }
+
+    sumLayout =
+        HorizontalLayout::Builder(leftLayout, equalLayout, resultLayout);
   }
   m_sum.setLayout(sumLayout);
   m_sum.setAlignment(
@@ -339,44 +346,32 @@ void SumGraphController::LegendView::layoutSubviews(bool force) {
 void SumGraphController::LegendView::layoutSubviews(Step step, bool force) {
   KDCoordinate width = bounds().width();
   KDCoordinate heigth = bounds().height();
-  KDSize legendSize = m_legend.minimalSizeForOptimalDisplay();
+  KDCoordinate legendWidth = m_legend.minimalSizeForOptimalDisplay().width();
+  constexpr static KDCoordinate horizontalMargin = 7;
 
-  if (legendSize.width() > 0) {
-    setChildFrame(&m_sum,
-                  KDRect(0, k_symbolHeightMargin, width - legendSize.width(),
-                         m_sum.minimalSizeForOptimalDisplay().height()),
-                  force);
-    setChildFrame(
-        &m_legend,
-        KDRect(width - legendSize.width(), 0, legendSize.width(), heigth),
-        force);
-  } else {
-    setChildFrame(&m_sum, bounds(), force);
-    setChildFrame(&m_legend, KDRectZero, force);
+  KDRect sumFrame = bounds();
+  KDRect legendFrame = KDRectZero;
+  if (legendWidth > 0) {
+    sumFrame = KDRect(horizontalMargin, 0, width - legendWidth, heigth);
+    legendFrame =
+        KDRect(width - legendWidth - horizontalMargin, 0, legendWidth, heigth);
   }
+  setChildFrame(&m_sum, sumFrame, force);
+  setChildFrame(&m_legend, legendFrame, force);
 
-  KDRect frame =
-      (step == Step::Result)
-          ? KDRectZero
-          : KDRect(2 * KDFont::GlyphWidth(KDFont::Size::Small),
-                   k_symbolHeightMargin + k_sigmaHeight / 2 -
-                       (step == Step::SecondParameter) * editableZoneHeight(),
-                   editableZoneWidth(), editableZoneHeight());
-  setChildFrame(&m_editableZone, frame, force);
-}
-
-Layout SumGraphController::LegendView::defaultSumResultLayout(
-    const char *resultBuffer) {
-  // Create layout of "Area = [result]"
-  const char *areaMessage = I18n::translate(I18n::Message::Area);
-  // strlen("Oppervlakte") + strlen(" = ") + 0;
-  constexpr static int bufferSize = 11 + 3 + 1;
-  char buffer[bufferSize];
-  int length = Print::CustomPrintf(buffer, bufferSize, "%s = ", areaMessage);
-  assert(length < bufferSize);
-  return HorizontalLayout::Builder(
-      LayoutHelper::String(buffer, length),
-      LayoutHelper::String(resultBuffer, strlen(resultBuffer)));
+  KDRect editableZoneFrame = KDRectZero;
+  if (step != Step::Result) {
+    constexpr static KDCoordinate sumSymbolWidth = KDFont::GlyphWidth(k_font);
+    constexpr static KDCoordinate editableZoneWidth =
+        12 * KDFont::GlyphWidth(k_font);
+    constexpr static KDCoordinate editableZoneHeight =
+        KDFont::GlyphHeight(k_font);
+    editableZoneFrame = KDRect(
+        horizontalMargin + sumSymbolWidth,
+        heigth / 2 - (step == Step::SecondParameter) * editableZoneHeight,
+        editableZoneWidth, editableZoneHeight);
+  }
+  setChildFrame(&m_editableZone, editableZoneFrame, force);
 }
 
 }  // namespace Shared

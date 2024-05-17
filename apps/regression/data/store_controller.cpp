@@ -10,12 +10,10 @@ using namespace Escher;
 
 namespace Regression {
 
-StoreController::StoreController(
-    Responder* parentResponder,
-    Escher::InputEventHandlerDelegate* inputEventHandlerDelegate, Store* store,
-    ButtonRowController* header, Context* parentContext)
-    : Shared::StoreController(parentResponder, inputEventHandlerDelegate, store,
-                              header, parentContext),
+StoreController::StoreController(Responder* parentResponder, Store* store,
+                                 ButtonRowController* header,
+                                 Context* parentContext)
+    : Shared::StoreController(parentResponder, store, header, parentContext),
       m_storeParameterController(this, this) {}
 
 void StoreController::clearSelectedColumn() {

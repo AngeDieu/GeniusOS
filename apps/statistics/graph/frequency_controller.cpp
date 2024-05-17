@@ -2,7 +2,7 @@
 
 #include <assert.h>
 #include <escher/container.h>
-#include <poincare/ieee754.h>
+#include <omg/ieee754.h>
 #include <poincare/print.h>
 
 #include "../app.h"
@@ -16,31 +16,30 @@ FrequencyController::FrequencyController(
     Escher::ViewController *typeViewController, Store *store)
     : PlotController(parentResponder, header, tabController,
                      stackViewController, typeViewController, store),
-      m_bannerViewWithEditableField(this, App::app(), this) {
+      m_bannerViewWithEditableField(this, this) {
   m_view.setBannerView(&m_bannerViewWithEditableField);
   m_curveView.setCursorView(&m_cursorView);
 }
 
 void FrequencyController::didBecomeFirstResponder() {
   if (m_curveView.hasFocus()) {
-    Escher::Container::activeApp()->setFirstResponder(
+    Escher::App::app()->setFirstResponder(
         m_bannerViewWithEditableField.value());
   }
   PlotController::didBecomeFirstResponder();
 }
 
 bool FrequencyController::textFieldDidFinishEditing(
-    Escher::AbstractTextField *textField, const char *text,
-    Ion::Events::Event event) {
-  double newX = textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
-  if (textFieldDelegateApp()->hasUndefinedValue(newX)) {
+    Escher::AbstractTextField *textField, Ion::Events::Event event) {
+  double newX = ParseInputFloatValue<double>(textField->draftText());
+  if (HasUndefinedValue(newX)) {
     return false;
   }
   // Check if x is out of bounds
   int n = totalValues(selectedSeries());
   if (newX < valueAtIndex(selectedSeries(), 0) ||
       newX > valueAtIndex(selectedSeries(), n - 1)) {
-    textFieldDelegateApp()->displayWarning(I18n::Message::UndefinedValue);
+    App::app()->displayWarning(I18n::Message::UndefinedValue);
     return false;
   }
   // Compute the new selected index
@@ -94,12 +93,9 @@ void FrequencyController::reloadValueInBanner(
   m_bannerViewWithEditableField.value()->setText(buffer);
 }
 
-void FrequencyController::moveCursorToSelectedIndex() {
+void FrequencyController::moveCursorToSelectedIndex(bool setColor) {
   m_cursorView.setIsRing(true);
-  m_cursorView.setColor(
-      Shared::DoublePairStore::colorOfSeriesAtIndex(selectedSeries()),
-      &m_curveView);
-  PlotController::moveCursorToSelectedIndex();
+  PlotController::moveCursorToSelectedIndex(setColor);
 }
 
 bool FrequencyController::moveSelectionHorizontally(
@@ -139,7 +135,8 @@ bool FrequencyController::moveSelectionHorizontally(
     assert((xTarget >= xNextIndex) == (step > 0.0));
     // Step is too big, snap on the next interesting value
     setSelectedIndex(index + (step > 0.0));
-    moveCursorToSelectedIndex();
+    // Skip setColor to prevent invalidating cursor buffer
+    moveCursorToSelectedIndex(false);
     return true;
   }
   m_cursorView.setIsRing(false);
@@ -159,9 +156,9 @@ bool FrequencyController::moveSelectionHorizontally(
   } else {
     /* Using pixelWidth(), simplify the cursor's position value while staying at
      * the same pixel. */
-    double magnitude = std::pow(10.0, Poincare::IEEE754<double>::exponentBase10(
-                                          m_curveView.pixelWidth()) -
-                                          1.0);
+    double magnitude = std::pow(
+        10.0,
+        OMG::IEEE754<double>::exponentBase10(m_curveView.pixelWidth()) - 1.0);
     double xSimplified = magnitude * std::round(x / magnitude);
     assert(std::fabs(xSimplified - x) <= std::fabs(step * simplifyFactor));
     x = xSimplified;
@@ -170,9 +167,6 @@ bool FrequencyController::moveSelectionHorizontally(
   // Compute the cursor's position
   double y =
       yValueForComputedXValues(selectedSeries(), index, x, xIndex, xNextIndex);
-  m_cursorView.setColor(
-      Shared::DoublePairStore::colorOfSeriesAtIndex(selectedSeries()),
-      &m_curveView);
   m_cursor.moveTo(x, x, y);
   m_curveView.reload();
   return true;
@@ -225,7 +219,8 @@ int FrequencyController::nextSubviewWhenMovingVertically(
     double y = yValueAtAbscissa(seriesIndex, cursorX);
     if (y == cursorY && seriesIndex * step > selectedSeries() * step) {
       // series is on the same spot and in the right direction in series list
-      return seriesIndex;
+      return m_store->activeSeriesIndexFromSeriesIndex(seriesIndex,
+                                                       activeSeriesMethod());
     }
     if (y * step < cursorY * step &&
         (std::isnan(closestYUpOrDown) || closestYUpOrDown * step < y * step)) {

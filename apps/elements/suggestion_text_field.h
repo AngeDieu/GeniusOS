@@ -7,10 +7,8 @@ namespace Elements {
 
 class SuggestionTextField : public Escher::AbstractTextField {
  public:
-  SuggestionTextField(
-      Escher::Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      Escher::TextFieldDelegate* delegate);
+  SuggestionTextField(Escher::Responder* parentResponder,
+                      Escher::TextFieldDelegate* delegate);
 
   // Escher::Responder
   bool handleEvent(Ion::Events::Event event) override;
@@ -31,7 +29,7 @@ class SuggestionTextField : public Escher::AbstractTextField {
 
     const char* suggestion() const { return m_suggestion; }
     const char* suggestionSuffix() const {
-      return UTF8Helper::SuffixCaseInsensitiveNoCombining(editedText(),
+      return UTF8Helper::SuffixCaseInsensitiveNoCombining(draftText(),
                                                           m_suggestion);
     }
     void setSuggestion(const char* suggestion);

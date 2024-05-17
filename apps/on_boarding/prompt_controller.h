@@ -2,10 +2,9 @@
 #define ON_PROMPT_CONTROLLER_H
 
 #include <apps/i18n.h>
+#include <apps/shared/ok_view.h>
+#include <escher/message_view.h>
 #include <escher/view_controller.h>
-
-#include "../shared/message_view.h"
-#include "../shared/ok_view.h"
 
 namespace OnBoarding {
 
@@ -17,7 +16,7 @@ class PromptController : public Escher::ViewController {
   bool handleEvent(Ion::Events::Event event) override;
 
  private:
-  class MessageViewWithSkip : public Shared::MessageView {
+  class MessageViewWithSkip : public Escher::MessageView {
    public:
     MessageViewWithSkip(const I18n::Message* messages, const KDColor* colors,
                         uint8_t numberOfMessages);

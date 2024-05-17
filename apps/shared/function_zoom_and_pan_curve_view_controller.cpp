@@ -20,17 +20,8 @@ const char* FunctionZoomAndPanCurveViewController::title() {
 }
 
 void FunctionZoomAndPanCurveViewController::viewWillAppear() {
-  ViewController::viewWillAppear();
-  /* We need to change the curve range to keep the same visual aspect of the
-   * view. */
-  adaptRangeForHeaders(true);
   setLegendVisible(true);
-  /* Force a reload in case some curves were interrupted. */
-  m_contentView.curveView()->reload(true);
-}
-
-void FunctionZoomAndPanCurveViewController::viewDidDisappear() {
-  setLegendVisible(false);
+  ZoomAndPanCurveViewController::viewWillAppear();
 }
 
 void FunctionZoomAndPanCurveViewController::didBecomeFirstResponder() {
@@ -39,45 +30,46 @@ void FunctionZoomAndPanCurveViewController::didBecomeFirstResponder() {
 
 bool FunctionZoomAndPanCurveViewController::handleEvent(
     Ion::Events::Event event) {
-  if (!event.isKeyPress()) {
+  if (!event.isKeyPress() || event == Ion::Events::OnOff) {
     return false;
   }
   if (event == Ion::Events::Back || event == Ion::Events::Home ||
       event == Ion::Events::OK || event == Ion::Events::EXE) {
     setLegendVisible(false);
-    adaptRangeForHeaders(false);
     return ZoomAndPanCurveViewController::handleEvent(event);
   }
 
   bool didHandleEvent = ZoomAndPanCurveViewController::handleEvent(event);
   bool didChangeLegend = setLegendVisible(!didHandleEvent);
-  /* If we intercept the OnOff event, the device will still be suspended by
-   * preemption, but when turning back on, we would prevent the AppsContainer
-   * from redrawing the whole frame, leaving the screen filled with noise, with
-   * only the legend visible.
-   * FIXME: We might want to simply not pass the OnOff event through
-   * handleEvent ? */
-  return (didHandleEvent || didChangeLegend) && (event != Ion::Events::OnOff);
+  return (didHandleEvent || didChangeLegend);
 }
 
-void FunctionZoomAndPanCurveViewController::adaptRangeForHeaders(
-    bool viewWillAppear) {
-  assert(!m_contentView.displayLegend());
+float FunctionZoomAndPanCurveViewController::offscreenYAxis() const {
+  /* We need to change the curve range to keep the same visual aspect of the
+   * view. */
   float yMin = m_interactiveRange->yMin(), yMax = m_interactiveRange->yMax();
-  if (viewWillAppear) {
-    assert(m_interactiveRange->offscreenYAxis() == 0.f);
-    /* We want the new graph to have the exact same pixel height as the old
-     * one, to avoid seeing some grid lines move when entering navigation. */
-    float oldPixelHeight = (yMax - yMin) / (k_standardViewHeight - 1);
-    float newYMax =
-        yMin + oldPixelHeight * (m_contentView.bounds().height() - 1);
-    float dY = newYMax - yMax;
-    m_interactiveRange->setOffscreenYAxis(-dY);
-    /* As we are adding space and the Y range that should not be taken into
-     * account for computing the grid, we count it as negative offscreen. */
-  } else {
-    m_interactiveRange->setOffscreenYAxis(0.f);
-  }
+  /* We want the new graph to have the exact same pixel height as the old
+   * one, to avoid seeing some grid lines move when entering navigation. */
+  float oldPixelHeight = (yMax - yMin) / (k_standardViewHeight - 1);
+  float newYMax = yMin + oldPixelHeight * (m_contentView.bounds().height() - 1);
+  float dY = newYMax - yMax;
+  /* As we are adding space and the Y range that should not be taken into
+   * account for computing the grid, we count it as negative offscreen. */
+  return -dY;
+}
+
+/* Moving of a whole number of pixels is cache-friendly and greatly enhances
+ * performances. */
+float FunctionZoomAndPanCurveViewController::xMove() {
+  return std::round(ZoomAndPanCurveViewController::xMove() /
+                    m_contentView.curveView()->pixelWidth()) *
+         m_contentView.curveView()->pixelWidth();
+}
+
+float FunctionZoomAndPanCurveViewController::yMove() {
+  return std::round(ZoomAndPanCurveViewController::yMove() /
+                    m_contentView.curveView()->pixelHeight()) *
+         m_contentView.curveView()->pixelHeight();
 }
 
 bool FunctionZoomAndPanCurveViewController::setLegendVisible(

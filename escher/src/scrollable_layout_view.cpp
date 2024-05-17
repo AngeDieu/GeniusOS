@@ -13,8 +13,8 @@ ScrollableLayoutView::ScrollableLayoutView(Responder* parentResponder,
     : ScrollableView(parentResponder, &m_layoutView, this),
       m_layoutView(format) {
   decorator()->setFont(format.style.font);
-  setMargins(topBottomMargin, leftRightMargin, topBottomMargin,
-             leftRightMargin);
+  setMargins(
+      {{leftRightMargin, leftRightMargin}, {topBottomMargin, topBottomMargin}});
   setBackgroundColor(format.style.backgroundColor);
 }
 

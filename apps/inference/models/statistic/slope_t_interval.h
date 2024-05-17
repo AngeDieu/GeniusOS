@@ -1,8 +1,6 @@
 #ifndef INFERENCE_MODELS_STATISTIC_SLOPE_T_INTERVAL_H
 #define INFERENCE_MODELS_STATISTIC_SLOPE_T_INTERVAL_H
 
-#include "interfaces/distributions.h"
-#include "interfaces/significance_tests.h"
 #include "interval.h"
 #include "slope_t_statistic.h"
 
@@ -12,7 +10,7 @@ class SlopeTInterval : public Interval, public SlopeTStatistic {
  public:
   SlopeTInterval(Shared::GlobalContext* context) : SlopeTStatistic(context) {}
   void init() override { DoublePairStore::initListsFromStorage(); }
-  void tidy() override { DoublePairStore::tidy(); }
+  void tidy() override;
   SignificanceTestType significanceTestType() const override {
     return SignificanceTestType::Slope;
   }
@@ -34,20 +32,10 @@ class SlopeTInterval : public Interval, public SlopeTStatistic {
   bool validateInputs() override { return SlopeTStatistic::validateInputs(); }
 
   // Distribution: t
-  const char* estimateSymbol() const override { return "x̅"; }
-  Poincare::Layout testCriticalValueSymbol() override {
-    return DistributionT::TestCriticalValueSymbol();
-  }
-  float canonicalDensityFunction(float x) const override {
-    return DistributionT::CanonicalDensityFunction(x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveFunctionAtAbscissa(double x) const override {
-    return DistributionT::CumulativeNormalizedDistributionFunction(
-        x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveInverseForProbability(double p) const override {
-    return DistributionT::CumulativeNormalizedInverseDistributionFunction(
-        p, m_degreesOfFreedom);
+  const char* estimateSymbol() const override { return "b"; }
+  Poincare::Layout estimateLayout() const override;
+  I18n::Message estimateDescription() override {
+    return I18n::Message::SampleSlope;
   }
 
  private:
@@ -65,11 +53,6 @@ class SlopeTInterval : public Interval, public SlopeTStatistic {
   double* parametersArray() override {
     assert(false);
     return nullptr;
-  }
-
-  // Distribution: t
-  float computeYMax() const override {
-    return DistributionT::YMax(m_degreesOfFreedom);
   }
 
   void privateCompute() override;

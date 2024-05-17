@@ -1,15 +1,15 @@
 #ifndef STATISTICS_FREQUENCY_CONTROLLER_H
 #define STATISTICS_FREQUENCY_CONTROLLER_H
 
+#include <apps/shared/math_field_delegate.h>
 #include <apps/shared/round_cursor_view.h>
-#include <apps/shared/text_field_delegate.h>
 
 #include "plot_controller.h"
 
 namespace Statistics {
 
 class FrequencyController : public PlotController,
-                            public Shared::TextFieldDelegate {
+                            public Shared::MathTextFieldDelegate {
  public:
   FrequencyController(Escher::Responder *parentResponder,
                       Escher::ButtonRowController *header,
@@ -22,7 +22,6 @@ class FrequencyController : public PlotController,
 
   // TextFieldDelegate
   bool textFieldDidFinishEditing(Escher::AbstractTextField *textField,
-                                 const char *text,
                                  Ion::Events::Event event) override;
 
   // PlotController
@@ -60,7 +59,7 @@ class FrequencyController : public PlotController,
   // PlotController
   void reloadValueInBanner(Poincare::Preferences::PrintFloatMode displayMode,
                            int precision) override;
-  void moveCursorToSelectedIndex() override;
+  void moveCursorToSelectedIndex(bool setColor) override;
   bool moveSelectionHorizontally(OMG::HorizontalDirection direction) override;
   void computeYBounds(float *yMin, float *yMax) const override;
   bool handleNullFrequencies() const override { return true; }
@@ -81,6 +80,7 @@ class FrequencyController : public PlotController,
   PlotBannerView *bannerView() override {
     return &m_bannerViewWithEditableField;
   }
+
   Shared::ToggleableRingRoundCursorView m_cursorView;
   PlotBannerViewWithEditableField m_bannerViewWithEditableField;
 };

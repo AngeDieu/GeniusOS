@@ -16,7 +16,7 @@ ResultsHomogeneityTableCell::ResultsHomogeneityTableCell(
       m_statistic(test),
       m_mode(Mode::ExpectedValue),
       m_resultsTableController(resultsTableController) {
-  m_selectableTableView.setBottomMargin(Metric::CellSeparatorThickness);
+  m_selectableTableView.margins()->setBottom(Metric::CellSeparatorThickness);
 }
 
 void ResultsHomogeneityTableCell::didBecomeFirstResponder() {
@@ -56,7 +56,7 @@ void ResultsHomogeneityTableCell::fillCellForLocation(
   }
 }
 
-void ResultsHomogeneityTableCell::willDisplayInnerCellAtLocation(
+void ResultsHomogeneityTableCell::fillInnerCellForLocation(
     Escher::HighlightCell *cell, int column, int row) {
   InferenceEvenOddBufferCell *myCell =
       static_cast<InferenceEvenOddBufferCell *>(cell);
@@ -92,10 +92,6 @@ void ResultsHomogeneityTableCell::createCells() {
                            k_homogeneityTableNumberOfReusableInnerCells>::
         createCellsWithOffset(k_homogeneityTableNumberOfReusableHeaderCells *
                               sizeof(InferenceEvenOddBufferCell));
-    DynamicCellsDataSource<
-        InferenceEvenOddBufferCell,
-        k_homogeneityTableNumberOfReusableHeaderCells>::m_delegate->tableView()
-        ->reloadData(false);
   }
 }
 

@@ -7,8 +7,8 @@
 #include <escher/scroll_view.h>
 #include <escher/selectable_table_view.h>
 #include <shared/column_helper.h>
+#include <shared/math_field_delegate.h>
 #include <shared/parameter_text_field_delegate.h>
-#include <shared/text_field_delegate.h>
 
 #include "inference/models/statistic/statistic.h"
 #include "inference/models/statistic/table.h"
@@ -49,10 +49,6 @@ class CategoricalTableCell : public Escher::HighlightCell,
       Escher::SelectableTableView *t, int previousSelectedCol,
       int previousSelectedRow, KDPoint previousOffset,
       bool withinTemporarySelection = false) override;
-  bool canStoreContentOfCellAtLocation(Escher::SelectableTableView *t, int col,
-                                       int row) const override {
-    return row > 0;
-  }
 
   void layoutSubviews(bool force = false) override;
 
@@ -71,7 +67,7 @@ class CategoricalTableCell : public Escher::HighlightCell,
 
 class InputCategoricalTableCell
     : public CategoricalTableCell,
-      public Shared::TextFieldDelegate,
+      public Shared::MathTextFieldDelegate,
       public DynamicCellsDataSourceDelegate<InferenceEvenOddEditableCell>,
       public Shared::ClearColumnHelper {
  public:
@@ -83,7 +79,6 @@ class InputCategoricalTableCell
   bool textFieldShouldFinishEditing(Escher::AbstractTextField *textField,
                                     Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField *textField,
-                                 const char *text,
                                  Ion::Events::Event event) override;
 
   // Responder
@@ -92,7 +87,8 @@ class InputCategoricalTableCell
   // DynamicCellsDataSourceDelegate<InferenceEvenOddEditableCell>
   void initCell(InferenceEvenOddEditableCell, void *cell, int index) override;
 
-  virtual bool recomputeDimensions();
+  virtual bool recomputeDimensionsAndReload(bool forceReloadTableCell = false,
+                                            bool forceReloadPage = false);
 
  protected:
   // ClearColumnHelper

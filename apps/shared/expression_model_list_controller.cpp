@@ -32,8 +32,8 @@ int ExpressionModelListController::numberOfExpressionRows() const {
   return modelsCount + (modelsCount == store->maxNumberOfModels() ? 0 : 1);
 }
 
-bool ExpressionModelListController::isAddEmptyRow(int j) const {
-  return j == numberOfExpressionRows() - 1 &&
+bool ExpressionModelListController::isAddEmptyRow(int row) const {
+  return row == numberOfExpressionRows() - 1 &&
          modelStore()->numberOfModels() != modelStore()->maxNumberOfModels();
 }
 
@@ -47,26 +47,33 @@ int ExpressionModelListController::typeAtRow(int row) const {
   return k_expressionCellType;
 }
 
-KDCoordinate ExpressionModelListController::ExpressionRowHeightFromLayoutHeight(
-    KDCoordinate modelHeight) {
-  KDCoordinate modelHeightWithMargins =
-      modelHeight + Metric::StoreRowHeight - KDFont::GlyphHeight(k_font);
-  return Metric::StoreRowHeight > modelHeightWithMargins
-             ? Metric::StoreRowHeight
-             : modelHeightWithMargins;
+KDCoordinate ExpressionModelListController::expressionRowHeight(int row) {
+  assert(typeAtRow(row) == k_expressionCellType);
+  ExpiringPointer<ExpressionModelHandle> m =
+      modelStore()->modelForRecord(modelStore()->recordAtIndex(row));
+  KDCoordinate expressionHeight = m->layout().isUninitialized()
+                                      ? 0
+                                      : m->layout().layoutSize(k_font).height();
+  return expressionHeight + 2 * k_defaultVerticalMargin;
 }
 
-KDCoordinate ExpressionModelListController::expressionRowHeight(int j) {
-  if (isAddEmptyRow(j)) {
-    return Metric::StoreRowHeight;
+KDCoordinate ExpressionModelListController::editableRowHeight() {
+  return editableExpressionModelCell()
+             ->minimalSizeForOptimalDisplay()
+             .height() +
+         2 * k_defaultVerticalMargin;
+}
+
+KDCoordinate ExpressionModelListController::nonMemoizedRowHeight(int row) {
+  KDCoordinate expressionHeight = k_defaultRowHeight;
+  if (typeAtRow(row) == k_editableCellType) {
+    // Do not exceed bounds so that the cursor is always visible
+    expressionHeight = std::min<KDCoordinate>(
+        editableRowHeight(), selectableListView()->bounds().height());
+  } else if (typeAtRow(row) == k_expressionCellType) {
+    expressionHeight = expressionRowHeight(row);
   }
-  ExpiringPointer<ExpressionModelHandle> m =
-      modelStore()->modelForRecord(modelStore()->recordAtIndex(j));
-  if (m->layout().isUninitialized()) {
-    return Metric::StoreRowHeight;
-  }
-  return ExpressionRowHeightFromLayoutHeight(
-      m->layout().layoutSize(k_font).height());
+  return std::max<KDCoordinate>(expressionHeight, k_defaultRowHeight);
 }
 
 void ExpressionModelListController::willDisplayExpressionCellAtIndex(
@@ -99,7 +106,7 @@ bool ExpressionModelListController::handleEventOnExpression(
       int newSelectedRow = selectedRow() >= numberOfExpressionRows()
                                ? numberOfExpressionRows() - 1
                                : selectedRow();
-      selectCell(newSelectedRow);
+      selectRow(newSelectedRow);
       selectableListView()->reloadData();
     }
     return true;
@@ -113,7 +120,7 @@ bool ExpressionModelListController::handleEventOnExpression(
       (!inTemplateMenu &&
        (event == Ion::Events::Toolbox || event == Ion::Events::Var))) {
     if (inTemplateMenu) {
-      Container::activeApp()->modalViewController()->dismissModal();
+      App::app()->modalViewController()->dismissModal();
     }
     // If empty row is selected, try adding an empty model
     if (isAddEmptyRow(selectedRow()) && !addEmptyModel()) {
@@ -155,7 +162,7 @@ void ExpressionModelListController::editExpression(Ion::Events::Event event) {
     layoutField()->setText(initialTextContent);
   }
   layoutField()->setEditing(true);
-  Container::activeApp()->setFirstResponder(layoutField());
+  App::app()->setFirstResponder(layoutField());
   if (!(event == Ion::Events::OK || event == Ion::Events::EXE)) {
     layoutField()->handleEvent(event);
   }
@@ -169,9 +176,8 @@ bool ExpressionModelListController::editSelectedRecordWithText(
       modelStore()->recordAtIndex(modelIndexForRow(selectedRow()));
   ExpiringPointer<ExpressionModelHandle> model =
       modelStore()->modelForRecord(record);
-  bool result =
-      (model->setContent(text, Container::activeApp()->localContext()) ==
-       Ion::Storage::Record::ErrorStatus::None);
+  bool result = (model->setContent(text, App::app()->localContext()) ==
+                 Ion::Storage::Record::ErrorStatus::None);
   didChangeModelsList();
   return result;
 }
@@ -192,21 +198,38 @@ bool ExpressionModelListController::removeModelRow(
 
 void ExpressionModelListController::layoutFieldDidChangeSize(
     LayoutField *layoutField) {
-  resetMemoization();
   selectableListView()->reloadData(false);
 }
 
 void ExpressionModelListController::finishEdition() {
   m_editedCellIndex = -1;
-  resetMemoization();
-  selectableListView()->reloadData(true);
+  selectableListView()->reloadData();
 }
 
 bool ExpressionModelListController::layoutFieldDidFinishEditing(
-    LayoutField *layoutField, Poincare::Layout layout,
-    Ion::Events::Event event) {
+    LayoutField *layoutField, Ion::Events::Event event) {
+  assert(!layoutField->isEditing());
+  char buffer[TextField::MaxBufferSize()];
+  layoutField->layout().serializeForParsing(buffer, TextField::MaxBufferSize());
+  Poincare::Expression parsedExpression =
+      Poincare::Expression::Parse(buffer, nullptr);
+  if (parsedExpression.isUninitialized()) {
+    App::app()->displayWarning(I18n::Message::SyntaxError);
+    return false;
+  }
+  if (shouldCompleteEquation(parsedExpression)) {
+    if (!completeEquation(layoutField)) {
+      App::app()->displayWarning(I18n::Message::RequireEquation);
+      return false;
+    }
+  }
+  if (!MathLayoutFieldDelegate::layoutFieldDidFinishEditing(layoutField,
+                                                            event)) {
+    return false;
+  }
   editSelectedRecordWithText(layoutField->text());
   finishEdition();
+  layoutField->clearLayout();
   return true;
 }
 

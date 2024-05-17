@@ -2,7 +2,6 @@
 #define ESCHER_INPUT_VIEW_CONTROLLER_H
 
 #include <escher/expression_input_bar.h>
-#include <escher/input_event_handler_delegate.h>
 #include <escher/invocation.h>
 #include <escher/layout_field_delegate.h>
 #include <escher/modal_view_controller.h>
@@ -12,12 +11,9 @@
 
 namespace Escher {
 
-class InputViewController : public ModalViewController,
-                            public InputEventHandlerDelegate,
-                            LayoutFieldDelegate {
+class InputViewController : public ModalViewController, LayoutFieldDelegate {
  public:
   InputViewController(Responder* parentResponder, ViewController* child,
-                      InputEventHandlerDelegate* inputEventHandlerDelegate,
                       LayoutFieldDelegate* layoutFieldDelegate);
   const char* textBody() {
     return m_expressionInputBarController.layoutField()->text();
@@ -31,27 +27,17 @@ class InputViewController : public ModalViewController,
   void abortEditionAndDismiss();
 
   /* LayoutFieldDelegate */
-  bool layoutFieldShouldFinishEditing(LayoutField* layoutField,
-                                      Ion::Events::Event event) override;
   bool layoutFieldDidReceiveEvent(LayoutField* layoutField,
                                   Ion::Events::Event event) override;
   bool layoutFieldDidFinishEditing(LayoutField* layoutField,
-                                   Poincare::Layout layoutR,
                                    Ion::Events::Event event) override;
   void layoutFieldDidAbortEditing(LayoutField* layoutField) override;
   void layoutFieldDidChangeSize(LayoutField* layoutField) override;
 
-  /* InputEventHandlerDelegate */
-  PervasiveBox* toolbox() override;
-  PervasiveBox* variableBox() override;
-
  private:
   class ExpressionInputBarController : public ViewController {
    public:
-    ExpressionInputBarController(
-        Responder* parentResponder,
-        InputEventHandlerDelegate* inputEventHandlerDelegate,
-        LayoutFieldDelegate* layoutFieldDelegate);
+    ExpressionInputBarController(InputViewController* inputViewController);
     ExpressionInputBarController(const ExpressionInputBarController& other) =
         delete;
     ExpressionInputBarController(ExpressionInputBarController&& other) = delete;
@@ -66,12 +52,9 @@ class InputViewController : public ModalViewController,
    private:
     ExpressionInputBar m_expressionInputBar;
   };
-  bool inputViewDidFinishEditing();
-  void inputViewDidAbortEditing();
   ExpressionInputBarController m_expressionInputBarController;
   Invocation m_successAction;
   Invocation m_failureAction;
-  InputEventHandlerDelegate* m_inputEventHandlerDelegate;
   LayoutFieldDelegate* m_layoutFieldDelegate;
 };
 

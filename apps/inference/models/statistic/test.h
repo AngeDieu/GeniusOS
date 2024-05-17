@@ -19,7 +19,9 @@ class Test : public Statistic {
 
   bool initializeSignificanceTest(SignificanceTestType type,
                                   Shared::GlobalContext* context) override;
-  I18n::Message statisticTitle() const override { return I18n::Message::Tests; }
+  I18n::Message statisticTitle() const override {
+    return I18n::Message::TestDescr;
+  }
   I18n::Message statisticBasicTitle() const override {
     return I18n::Message::Test;
   }
@@ -102,9 +104,7 @@ class Test : public Statistic {
  protected:
   float computeXMin() const override { return -k_displayWidthToSTDRatio; }
   float computeXMax() const override { return k_displayWidthToSTDRatio; }
-  virtual I18n::Message graphTitleFormat() const {
-    return I18n::Message::Default;
-  }
+  const char* criticalValueSymbol() const;
   // Hypothesis chosen
   HypothesisParams m_hypothesisParams;
   // Cached values

@@ -11,12 +11,12 @@ namespace Shared {
 
 class GoToParameterController : public FloatParameterController<double> {
  public:
-  GoToParameterController(
-      Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      InteractiveCurveViewRange* graphRange, CurveViewCursor* cursor);
+  GoToParameterController(Responder* parentResponder,
+                          InteractiveCurveViewRange* graphRange,
+                          CurveViewCursor* cursor);
   int numberOfRows() const override { return 2; }
   bool handleEvent(Ion::Events::Event event) override;
+  KDCoordinate nonMemoizedRowHeight(int row) override;
 
  protected:
   void setParameterName(I18n::Message message) {

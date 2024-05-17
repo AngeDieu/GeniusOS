@@ -15,22 +15,20 @@ namespace Sequence {
 
 constexpr KDCoordinate ListController::k_minTitleColumnWidth;
 
-ListController::ListController(
-    Responder *parentResponder,
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
-    ButtonRowController *header, ButtonRowController *footer)
+ListController::ListController(Responder *parentResponder,
+                               ButtonRowController *header,
+                               ButtonRowController *footer)
     : Shared::FunctionListController(parentResponder, header, footer,
                                      I18n::Message::AddSequence),
-      m_editableCell(this, this, this),
-      m_parameterController(inputEventHandlerDelegate, this),
+      m_editableCell(this, this),
+      m_parameterController(this),
       m_typeParameterController(this, this),
       m_typeStackController(nullptr, &m_typeParameterController,
                             StackViewController::Style::PurpleWhite),
       m_titlesColumnWidth(k_minTitleColumnWidth),
       m_parameterColumnSelected(false) {
   for (int i = 0; i < k_maxNumberOfRows; i++) {
-    m_sequenceCells[i].expressionCell()->setLeftMargin(k_expressionMargin);
-    m_sequenceCells[i].expressionCell()->setRightMargin(0);
+    m_sequenceCells[i].expressionCell()->setMargins({k_expressionMargin, 0});
   }
 }
 
@@ -45,62 +43,47 @@ int ListController::numberOfExpressionRows() const {
   return numberOfRows + (modelsCount == store->maxNumberOfModels() ? 0 : 1);
 };
 
-KDCoordinate ListController::expressionRowHeight(int j) {
-  KDCoordinate defaultHeight = Metric::StoreRowHeight;
+KDCoordinate ListController::expressionRowHeight(int row) {
+  assert(typeAtRow(row) == k_expressionCellType);
   KDCoordinate sequenceHeight;
-  if (j == m_editedCellIndex) {
-    sequenceHeight = m_editableCell.expressionCell()
-                         ->minimalSizeForOptimalDisplay()
-                         .height();
-  } else {
-    if (isAddEmptyRow(j)) {
-      return defaultHeight;
-    }
-    Shared::Sequence *sequence = modelStore()->modelForRecord(
-        modelStore()->recordAtIndex(modelIndexForRow(j)));
-    Layout layout = sequence->layout();
-    int sequenceDefinition = sequenceDefinitionForRow(j);
-    if (sequenceDefinition == k_firstInitialCondition) {
-      layout = sequence->firstInitialConditionLayout();
-    } else if (sequenceDefinition == k_secondInitialCondition) {
-      layout = sequence->secondInitialConditionLayout();
-    }
-    if (layout.isUninitialized()) {
-      return defaultHeight;
-    }
-    sequenceHeight = layout.layoutSize(k_font).height();
-  }
-  return std::max<KDCoordinate>(
-      defaultHeight, sequenceHeight + 2 * k_expressionCellVerticalMargin);
-}
-
-Toolbox *ListController::toolbox() {
-  // Set extra cells
-  int recurrenceDepth = -1;
-  int row = selectedRow();
   Shared::Sequence *sequence = modelStore()->modelForRecord(
       modelStore()->recordAtIndex(modelIndexForRow(row)));
-  if (sequenceDefinitionForRow(row) == k_sequenceDefinition) {
-    recurrenceDepth = sequence->numberOfElements() - 1;
+  Layout layout;
+  int sequenceDefinition = sequenceDefinitionForRow(row);
+  if (sequenceDefinition == k_firstInitialCondition) {
+    layout = sequence->firstInitialConditionLayout();
+  } else if (sequenceDefinition == k_secondInitialCondition) {
+    layout = sequence->secondInitialConditionLayout();
+  } else {
+    assert(sequenceDefinition == k_sequenceDefinition);
+    layout = sequence->layout();
   }
-  m_sequenceToolbox.buildExtraCellsLayouts(sequence->fullName(),
-                                           recurrenceDepth);
-  return &m_sequenceToolbox;
+  sequenceHeight =
+      layout.isUninitialized() ? 0 : layout.layoutSize(k_font).height();
+  return sequenceHeight + 2 * k_defaultVerticalMargin;
 }
 
 void ListController::selectPreviousNewSequenceCell() {
   int row = selectedRow();
   if (sequenceDefinitionForRow(row) >= 0) {
-    selectCell(row - sequenceDefinitionForRow(row));
+    selectRow(row - sequenceDefinitionForRow(row));
   }
 }
 
 /* ViewController */
 
 void ListController::viewWillAppear() {
-  resetMemoization();  // A sequence could have been deleted
+  // Reset memoization because a sequence could have been deleted
+  selectableListView()->resetSizeAndOffsetMemoization();
   ExpressionModelListController::viewWillAppear();
+  App::app()->defaultToolbox()->setExtraCellsDataSource(
+      &m_sequenceToolboxDataSource);
   computeTitlesColumnWidth();
+}
+
+void ListController::viewDidDisappear() {
+  ExpressionModelListController::viewDidDisappear();
+  App::app()->defaultToolbox()->setExtraCellsDataSource(nullptr);
 }
 
 HighlightCell *ListController::reusableCell(int index, int type) {
@@ -121,9 +104,9 @@ void ListController::fillCellForRow(HighlightCell *cell, int row) {
     AbstractSequenceCell *sequenceCell =
         static_cast<AbstractSequenceCell *>(cell);
     // Update the expression cell first since the title's baseline depends on it
-    willDisplayExpressionCellAtIndex(sequenceCell->expressionCell(), row);
+    willDisplayExpressionCellAtIndex(sequenceCell->mainCell(), row);
     willDisplayTitleCellAtIndex(sequenceCell->titleCell(), row,
-                                sequenceCell->expressionCell());
+                                sequenceCell->mainCell());
     sequenceCell->setParameterSelected(m_parameterColumnSelected);
   }
   EvenOddCell *myCell = static_cast<EvenOddCell *>(cell);
@@ -138,7 +121,7 @@ bool ListController::handleEvent(Ion::Events::Event event) {
     if (selectedRow() == -1) {
       footer()->setSelectedButton(-1);
       selectableListView()->selectCell(numberOfRows() - 1);
-      Container::activeApp()->setFirstResponder(selectableListView());
+      App::app()->setFirstResponder(selectableListView());
       return true;
     }
     selectableListView()->deselectTable();
@@ -157,12 +140,12 @@ bool ListController::handleEvent(Ion::Events::Event event) {
   if (event == Ion::Events::Right && m_parameterColumnSelected) {
     // Leave parameter column
     m_parameterColumnSelected = false;
-    selectableListView()->reloadData();
+    selectableListView()->reloadData(true, false);
     return true;
   } else if (event == Ion::Events::Left && !m_parameterColumnSelected) {
     // Enter parameter column
     m_parameterColumnSelected = true;
-    selectableListView()->reloadData();
+    selectableListView()->reloadData(true, false);
     return true;
   }
   if (selectedRow() < 0) {
@@ -175,7 +158,7 @@ bool ListController::handleEvent(Ion::Events::Event event) {
     if (removeModelRow(record)) {
       int newSelectedRow =
           selectedRow() >= numberOfRows() ? numberOfRows() - 1 : selectedRow();
-      selectCell(newSelectedRow);
+      selectRow(newSelectedRow);
       selectableListView()->reloadData();
     }
     return true;
@@ -192,16 +175,30 @@ bool ListController::handleEvent(Ion::Events::Event event) {
   ;
 }
 
-/* LayoutFieldDelegate */
+/* MathLayoutFieldDelegate */
+
 bool ListController::layoutFieldDidReceiveEvent(LayoutField *layoutField,
                                                 Ion::Events::Event event) {
-  // Do not accept empty input
-  if (layoutField->isEditing() && layoutField->shouldFinishEditing(event) &&
-      layoutField->isEmpty()) {
-    App::app()->displayWarning(I18n::Message::SyntaxError);
-    return true;
+  if (event == Ion::Events::Toolbox) {
+    // Set extra cells
+    int recurrenceDepth = -1;
+    int row = selectedRow();
+    Shared::Sequence *sequence = modelStore()->modelForRecord(
+        modelStore()->recordAtIndex(modelIndexForRow(row)));
+    if (sequenceDefinitionForRow(row) == k_sequenceDefinition) {
+      recurrenceDepth = sequence->numberOfElements() - 1;
+    }
+    m_sequenceToolboxDataSource.buildExtraCellsLayouts(sequence->fullName(),
+                                                       recurrenceDepth);
   }
-  return LayoutFieldDelegate::layoutFieldDidReceiveEvent(layoutField, event);
+  return ExpressionModelListController::layoutFieldDidReceiveEvent(layoutField,
+                                                                   event);
+}
+
+bool ListController::isAcceptableExpression(const Expression expression) {
+  // Do not accept any OperatorType.
+  return MathLayoutFieldDelegate::isAcceptableExpression(expression) &&
+         expression.type() != ExpressionNode::Type::Comparison;
 }
 
 void ListController::computeTitlesColumnWidth(bool forceMax) {
@@ -401,9 +398,8 @@ KDCoordinate ListController::baseline(int j, HighlightCell *cell) {
 }
 
 void ListController::addModel() {
-  Container::activeApp()->displayModalViewController(
-      &m_typeStackController, 0.f, 0.f, Metric::PopUpTopMargin,
-      Metric::PopUpRightMargin, 0, Metric::PopUpLeftMargin);
+  App::app()->displayModalViewController(&m_typeStackController, 0.f, 0.f,
+                                         Metric::PopUpMarginsNoBottom);
 }
 
 bool ListController::removeModelRow(Ion::Storage::Record record) {
@@ -423,7 +419,7 @@ KDCoordinate ListController::nameWidth(int nameLength) const {
 }
 
 void ListController::showLastSequence() {
-  resetMemoization();
+  selectableListView()->resetSizeAndOffsetMemoization();
   SequenceStore *store = const_cast<ListController *>(this)->modelStore();
   bool hasAddSequenceButton =
       store->numberOfModels() == store->maxNumberOfModels();

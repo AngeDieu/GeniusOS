@@ -1,30 +1,28 @@
 name: Screenshots
 on:
   pull_request:
-  workflow_dispatch:
-    inputs:
-      downloadArtifacts:
-        description: 'Download screenshots and executables'
-        required: true
-        default: 'yes'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  compare_screenshots:
-    runs-on: self-hosted
+  compare_crc:
+    runs-on: ${{ (github.repository == 'numworks/epsilon-internal') && 'self-hosted' || 'ubuntu-latest' }}
     steps:
       - name: Checkout PR head
         uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-      - run: build/setup.sh
+      - run: build/setup.sh --only-simulator
+      - name: Build PR head
+        run: make -j32 PLATFORM=simulator ASSERTIONS=1 epsilon.bin
       - name: Compare screenshot images
-        run: ./build/screenshots/compare.sh MAKEFLAGS="-j32 PLATFORM=simulator DEBUG=1" tests/screenshots_dataset/scenari/ tests/screenshots_dataset/reference_images/ ${{ github.event.pull_request.head.sha }}
-      - name: Gather screenshots
-        if: ${{ github.event.inputs.downloadArtifacts == 'yes' }}
-        uses: actions/upload-artifact@v2
+        run: python3 build/screenshots/compare_crc.py output/release/simulator/linux/epsilon.bin
+      - name: Upload output
+        if: failure()
+        uses: actions/upload-artifact@v3
         with:
-          name: screenshots
-          path: compare_output_*/
-      - name: Cleanup
-        if: always()
-        run: rm -rf compare_output_*
+          name: output_compare_crc
+          path: compare_crc_output/
+          retention-days: 7

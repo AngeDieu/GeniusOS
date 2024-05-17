@@ -34,27 +34,26 @@ class SimplificationHelper {
 
   enum class PointReduction : bool { UndefinedOnPoint = 0, DefinedOnPoint };
 
+  enum class UndefReduction : bool { BubbleUpUndef = 0, DoNotBubbleUpUndef };
+
   static void defaultDeepReduceChildren(
       Expression e, const ReductionContext& reductionContext);
   // DeepBeautify children and add parentheses if needed.
   static void deepBeautifyChildren(Expression e,
                                    const ReductionContext& reductionContext);
 
-  /* Apply the default reduction that almost all nodes do.
-   * Step 1. shallowReduceUndefined
-   * Step 2. bubble up dependencies
-   * Step 3. Apply the unit reduction depending on parameter
-   * Step 4. Apply the matrix reduction depending on parameter
-   * Step 5. Apply the list reduction depending on parameter
-   * Step 6. Apply the boolean reduction depending on parameter
-   * (Steps 3, 4, 5 and 6 do nothing if parameter = 0) */
+  /* This method applies the default reduction that almost all nodes need:
+   * - It bubbles up dependencies
+   * - Depending on its parameters, it applies different default reductions
+   *   on expressions containing Undef, Boolean, Unit, Matrix, List and Point */
   static Expression defaultShallowReduce(
       Expression e, ReductionContext* reductionContext,
       BooleanReduction booleanParameter = BooleanReduction::DefinedOnBooleans,
       UnitReduction unitParameter = UnitReduction::KeepUnits,
       MatrixReduction matrixParameter = MatrixReduction::DefinedOnMatrix,
       ListReduction listParameter = ListReduction::DoNotDistributeOverLists,
-      PointReduction pointParameter = PointReduction::UndefinedOnPoint);
+      PointReduction pointParameter = PointReduction::UndefinedOnPoint,
+      UndefReduction undefParameter = UndefReduction::BubbleUpUndef);
 
   // This will shallowReduce the resulting expression.
   static Expression bubbleUpDependencies(

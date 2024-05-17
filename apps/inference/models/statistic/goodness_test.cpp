@@ -1,8 +1,9 @@
 #include "goodness_test.h"
 
 #include <float.h>
-#include <inference/models/statistic/interfaces/significance_tests.h>
+#include <inference/statistic/chi_square_and_slope/results_goodness_table_cell.h>
 #include <poincare/print.h>
+#include <string.h>
 
 #include "homogeneity_test.h"
 
@@ -18,29 +19,24 @@ GoodnessTest::GoodnessTest() {
 }
 
 void GoodnessTest::setGraphTitle(char* buffer, size_t bufferSize) const {
-  const char* format = I18n::translate(
-      I18n::Message::StatisticGraphControllerTestTitleFormatGoodnessTest);
   Poincare::Print::CustomPrintf(
-      buffer, bufferSize, format, degreeOfFreedom(),
-      Poincare::Preferences::PrintFloatMode::Decimal,
-      Poincare::Preferences::ShortNumberOfSignificantDigits, threshold(),
+      buffer, bufferSize, "df=%*.*ed %s=%*.*ed %s=%*.*ed %s=%*.*ed",
+      degreeOfFreedom(), Poincare::Preferences::PrintFloatMode::Decimal,
+      Poincare::Preferences::ShortNumberOfSignificantDigits,
+      I18n::translate(I18n::Message::GreekAlpha), threshold(),
       Poincare::Preferences::PrintFloatMode::Decimal,
       Poincare::Preferences::ShortNumberOfSignificantDigits,
-      testCriticalValue(), Poincare::Preferences::PrintFloatMode::Decimal,
-      Poincare::Preferences::ShortNumberOfSignificantDigits, pValue(),
+      criticalValueSymbol(), testCriticalValue(),
+      Poincare::Preferences::PrintFloatMode::Decimal,
+      Poincare::Preferences::ShortNumberOfSignificantDigits,
+      I18n::translate(I18n::Message::PValue), pValue(),
       Poincare::Preferences::PrintFloatMode::Decimal,
       Poincare::Preferences::ShortNumberOfSignificantDigits);
 }
 
 void GoodnessTest::setResultTitle(char* buffer, size_t bufferSize,
                                   bool resultIsTopPage) const {
-  Poincare::Print::CustomPrintf(
-      buffer, bufferSize, "df=%*.*ed %s=%*.*ed", degreeOfFreedom(),
-      Poincare::Preferences::PrintFloatMode::Decimal,
-      Poincare::Preferences::ShortNumberOfSignificantDigits,
-      I18n::translate(I18n::Message::GreekAlpha), threshold(),
-      Poincare::Preferences::PrintFloatMode::Decimal,
-      Poincare::Preferences::ShortNumberOfSignificantDigits);
+  strlcpy(buffer, I18n::translate(I18n::Message::CalculatedValues), bufferSize);
 }
 
 void GoodnessTest::compute() {
@@ -101,6 +97,15 @@ bool GoodnessTest::authorizedParameterAtIndex(double p, int i) const {
     return false;
   }
   return Chi2Test::authorizedParameterAtIndex(p, i);
+}
+
+double GoodnessTest::parameterAtPosition(int row, int column) const {
+  if (column == ResultGoodnessContributionsTable::ContributionColumnIndex) {
+    // Contribution column
+    return computeContribution(row);
+  }
+
+  return Chi2Test::parameterAtPosition(row, column);
 }
 
 int GoodnessTest::numberOfValuePairs() const {

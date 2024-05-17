@@ -15,42 +15,32 @@
 
 namespace Inference {
 
-class TypeController : public Escher::SelectableListViewController<
-                           Escher::StandardMemoizedListViewDataSource> {
+class TypeController
+    : public Escher::UniformSelectableListController<
+          Escher::MenuCell<Escher::MessageTextView, Escher::EmptyCellWidget,
+                           Escher::ChevronView>,
+          3> {
  public:
   TypeController(Escher::StackViewController* parent,
                  HypothesisController* hypothesisController,
                  InputController* intervalInputController,
                  Statistic* statistic);
-  Escher::View* view() override { return &m_selectableListView; }
   const char* title() override;
   ViewController::TitlesDisplay titlesDisplay() override {
     return ViewController::TitlesDisplay::DisplayLastTitle;
   }
   void stackOpenPage(Escher::ViewController* nextPage) override;
   void didBecomeFirstResponder() override;
-  // ListViewDataSource
-  int numberOfRows() const override;
-  Escher::HighlightCell* reusableCell(int i, int type) override {
-    return &m_cells[i];
-  }
   bool handleEvent(Ion::Events::Event event) override;
-  void fillCellForRow(Escher::HighlightCell* cell, int row) override;
+  void viewWillAppear() override;
 
   constexpr static int k_indexOfTTest = 0;
   constexpr static int k_indexOfPooledTest = 1;
+  constexpr static int k_indexOfZTest = 2;
 
  private:
-  constexpr static int k_numberOfRows = 3;
-
-  int indexOfZTest() const { return numberOfRows() - 1; }
-
   HypothesisController* m_hypothesisController;
   InputController* m_inputController;
-
-  Escher::MenuCell<Escher::MessageTextView, Escher::EmptyCellWidget,
-                   Escher::ChevronView>
-      m_cells[k_numberOfRows];
 
   constexpr static int k_titleBufferSize =
       sizeof("intervalle pour une moyenne à deux échantillons");

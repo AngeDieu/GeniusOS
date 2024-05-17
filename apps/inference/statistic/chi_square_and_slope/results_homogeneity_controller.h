@@ -35,6 +35,7 @@ class ResultsHomogeneityController : public CategoricalController {
   CategoricalTableCell *categoricalTableCell() override {
     return &m_resultsHomogeneityTable;
   }
+  void createDynamicCells() override;
   ResultsHomogeneityTableCell m_resultsHomogeneityTable;
 };
 
@@ -48,10 +49,6 @@ class ResultsHomogeneityTabController : public Escher::TabViewController,
   ViewController::TitlesDisplay titlesDisplay() override {
     return ViewController::TitlesDisplay::DisplayLastTwoTitles;
   }
-  /* TabViewController::initView() will create new tabs every time it's called,
-   * without ever destroying them. As such, we make sure to call it only once
-   * in the constructor. */
-  void initView() override {}
   KDColor tabBackgroundColor() const override {
     return Escher::Palette::GrayDark;
   }
@@ -67,6 +64,7 @@ class ResultsHomogeneityTabController : public Escher::TabViewController,
     void didBecomeFirstResponder() override {
       m_tableController->didBecomeFirstResponder();
     }
+    void initView() override { m_tableController->initView(); }
     void viewWillAppear() override { m_tableController->viewWillAppear(); }
 
    protected:
@@ -91,8 +89,7 @@ class ResultsHomogeneityTabController : public Escher::TabViewController,
    public:
     using SingleModeController::SingleModeController;
     const char *title() override {
-      return I18n::translate(
-          I18n::Message::HomogeneityResultsContributionsTitle);
+      return I18n::translate(I18n::Message::Contributions);
     }
     void viewWillAppear() override {
       switchToTableWithMode(ResultsHomogeneityTableCell::Mode::Contribution);

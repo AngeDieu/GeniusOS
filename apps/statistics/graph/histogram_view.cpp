@@ -28,6 +28,7 @@ static bool barIsHighlighted(float x, void *model, void *context) {
 
 void HistogramPlotPolicy::drawPlot(const Shared::AbstractPlotView *plotView,
                                    KDContext *ctx, KDRect rect) const {
+  // WARNING/TODO: Dangerous cast from double to float
   float context[] = {static_cast<float>(m_store->maxHeightOfBar(m_series)),
                      static_cast<float>(m_series), m_highlightedBarStart,
                      m_highlightedBarEnd};
@@ -58,6 +59,8 @@ HistogramView::HistogramView(Store *store, int series,
   // HistogramPlotPolicy
   m_store = store;
   m_series = series;
+  m_highlightedBarStart = NAN;
+  m_highlightedBarEnd = NAN;
 }
 
 void HistogramView::reload(bool resetInterruption, bool force) {

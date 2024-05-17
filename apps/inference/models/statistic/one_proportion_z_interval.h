@@ -1,8 +1,6 @@
 #ifndef INFERENCE_MODELS_STATISTIC_ONE_PROPORTION_Z_INTERVAL_H
 #define INFERENCE_MODELS_STATISTIC_ONE_PROPORTION_Z_INTERVAL_H
 
-#include "interfaces/distributions.h"
-#include "interfaces/significance_tests.h"
 #include "interval.h"
 
 namespace Inference {
@@ -34,27 +32,11 @@ class OneProportionZInterval : public Interval {
   const char* estimateSymbol() const override {
     return OneProportion::EstimateSymbol();
   }
-  Poincare::Layout testCriticalValueSymbol() override {
-    return DistributionZ::TestCriticalValueSymbol();
-  }
   Poincare::Layout estimateLayout() const override {
     return OneProportion::EstimateLayout(&m_estimateLayout);
   }
   I18n::Message estimateDescription() override {
     return OneProportion::EstimateDescription();
-  };
-
-  // Distribution: z
-  float canonicalDensityFunction(float x) const override {
-    return DistributionZ::CanonicalDensityFunction(x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveFunctionAtAbscissa(double x) const override {
-    return DistributionZ::CumulativeNormalizedDistributionFunction(
-        x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveInverseForProbability(double p) const override {
-    return DistributionZ::CumulativeNormalizedInverseDistributionFunction(
-        p, m_degreesOfFreedom);
   }
 
  private:
@@ -70,11 +52,6 @@ class OneProportionZInterval : public Interval {
     return OneProportion::ParameterRepresentationAtIndex(i);
   }
   double* parametersArray() override { return m_params; }
-
-  // Distribution: z
-  float computeYMax() const override {
-    return DistributionZ::YMax(m_degreesOfFreedom);
-  }
 
   void privateCompute() override { OneProportion::ComputeInterval(this); }
 

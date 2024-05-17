@@ -9,15 +9,14 @@ namespace Inference {
 
 class InputGoodnessController : public InputCategoricalController {
  public:
-  InputGoodnessController(
-      Escher::StackViewController* parent,
-      Escher::ViewController* resultsController, GoodnessTest* statistic,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate);
+  InputGoodnessController(Escher::StackViewController* parent,
+                          Escher::ViewController* resultsController,
+                          GoodnessTest* statistic);
 
   void updateDegreeOfFreedomCell();
 
   // Responder
-  void didBecomeFirstResponder() override;
+  void viewWillAppear() override;
 
   // ViewController
   const char* title() override {
@@ -26,6 +25,7 @@ class InputGoodnessController : public InputCategoricalController {
 
   // ListViewDataSource
   Escher::HighlightCell* reusableCell(int index, int type) override;
+  KDCoordinate nonMemoizedRowHeight(int row) override;
 
  private:
   constexpr static int k_indexOfDegreeOfFreedom = 1;
@@ -33,6 +33,7 @@ class InputGoodnessController : public InputCategoricalController {
   InputCategoricalTableCell* categoricalTableCell() override {
     return &m_goodnessTableCell;
   }
+  void createDynamicCells() override;
   int indexOfSignificanceCell() const override {
     return k_indexOfDegreeOfFreedom + 1;
   }

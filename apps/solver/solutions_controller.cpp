@@ -24,9 +24,8 @@ namespace Solver {
 constexpr KDColor SolutionsController::ContentView::k_backgroundColor;
 
 SolutionsController::ContentView::ContentView(SolutionsController *controller)
-    : m_warningMessageView0(I18n::Message::Default, k_warningFormat),
-      m_warningMessageView1(I18n::Message::Default, k_warningFormat),
-      m_selectableTableView(controller, controller, controller, controller),
+    : m_warningMessageView(I18n::Message::Default, k_warningFormat),
+      m_selectableTableView(controller, controller, controller),
       m_displayWarningMoreSolutions(false) {
   m_selectableTableView.setBackgroundColor(k_backgroundColor);
   m_selectableTableView.setVerticalCellOverlap(0);
@@ -47,59 +46,49 @@ void SolutionsController::ContentView::drawRect(KDContext *ctx,
 void SolutionsController::ContentView::setWarning(bool warning) {
   m_displayWarningMoreSolutions = warning;
   KDCoordinate topMargin =
-      m_displayWarningMoreSolutions ? 0 : Metric::CommonTopMargin;
-  m_selectableTableView.setTopMargin(topMargin);
+      m_displayWarningMoreSolutions ? 0 : Metric::CommonMargins.top();
+  m_selectableTableView.margins()->setTop(topMargin);
   // Fit m_selectableTableView scroll to content size
   m_selectableTableView.decorator()->setVerticalMargins(
-      topMargin, Metric::CommonBottomMargin);
+      {topMargin, Metric::CommonMargins.bottom()});
   /* m_displayWarningMoreSolutions might stay the same, but number of rows and
    * messages have changed. */
   layoutSubviews();
 }
 
-void SolutionsController::ContentView::setWarningMessages(
-    I18n::Message message0, I18n::Message message1) {
-  m_warningMessageView0.setMessage(message0);
-  m_warningMessageView1.setMessage(message1);
+void SolutionsController::ContentView::setWarningMessage(
+    I18n::Message message) {
+  m_warningMessageView.setMessage(message);
 }
 
 int SolutionsController::ContentView::numberOfSubviews() const {
   // Exclude selectableTableView if there are no rows to display
-  return (hideTableView() ? 0 : 1) + 2 * m_displayWarningMoreSolutions;
+  return (hideTableView() ? 0 : 1) + m_displayWarningMoreSolutions;
 }
 
 View *SolutionsController::ContentView::subviewAtIndex(int index) {
   assert(index >= 0 && index < numberOfSubviews());
-  if (m_displayWarningMoreSolutions) {
-    if (index == 0) {
-      return &m_warningMessageView0;
-    }
-    if (index == 1) {
-      return &m_warningMessageView1;
-    }
+  if (m_displayWarningMoreSolutions && index == 0) {
+    return &m_warningMessageView;
   }
   return &m_selectableTableView;
 }
 
 void SolutionsController::ContentView::layoutSubviews(bool force) {
   if (m_displayWarningMoreSolutions) {
-    KDCoordinate textHeight = KDFont::GlyphHeight(k_warningMessageFont);
     KDCoordinate topMargin;
     // Empty warning messages are handled to center both single or double lines
-    KDCoordinate warningMessage0Height =
-        m_warningMessageView0.text()[0] == 0 ? 0 : textHeight;
-    KDCoordinate warningMessage1Height =
-        m_warningMessageView1.text()[0] == 0 ? 0 : textHeight;
+    KDCoordinate warningMessageHeight =
+        m_warningMessageView.text()[0] == 0
+            ? 0
+            : m_warningMessageView.minimalSizeForOptimalDisplay().height();
     // Warning messages are vertically centered.
     if (hideTableView()) {
       // Warning messages must fit into the entire bound height
-      topMargin =
-          (bounds().height() - warningMessage0Height - warningMessage1Height) /
-          2;
+      topMargin = (bounds().height() - warningMessageHeight) / 2;
     } else {
       // Warning messages must fit into a k_topMargin height bound
-      topMargin =
-          (k_topMargin - warningMessage0Height - warningMessage1Height) / 2;
+      topMargin = (k_topMargin - warningMessageHeight) / 2;
       // Set table frame
       setChildFrame(&m_selectableTableView,
                     KDRect(0, k_topMargin, bounds().width(),
@@ -107,12 +96,8 @@ void SolutionsController::ContentView::layoutSubviews(bool force) {
                     force);
     }
     assert(topMargin >= 0);
-    setChildFrame(&m_warningMessageView0,
-                  KDRect(0, topMargin, bounds().width(), warningMessage0Height),
-                  force);
-    setChildFrame(&m_warningMessageView1,
-                  KDRect(0, topMargin + warningMessage0Height, bounds().width(),
-                         warningMessage1Height),
+    setChildFrame(&m_warningMessageView,
+                  KDRect(0, topMargin, bounds().width(), warningMessageHeight),
                   force);
   } else {
     // Table frame occupy the entire view
@@ -150,7 +135,8 @@ SolutionsController::SolutionsController(Responder *parentResponder)
     m_symbolCells[i].setFont(k_solutionsFont);
   }
   for (int i = 0; i < k_numberOfEmptyCells; ++i) {
-    m_emptyCell[i].hide();
+    m_emptyCell[i].setColor(
+        SolutionsController::ContentView::k_backgroundColor);
   }
 }
 
@@ -163,42 +149,42 @@ const char *SolutionsController::title() {
   return I18n::translate(I18n::Message::Solution);
 }
 
+void SolutionsController::initView() {
+  ViewController::initView();
+  m_contentView.selectableTableView()->resetSizeAndOffsetMemoization();
+}
+
 void SolutionsController::viewWillAppear() {
   ViewController::viewWillAppear();
   bool requireWarning = true;
   SystemOfEquations *system = App::app()->system();
   if (system->numberOfSolutions() == 0) {
     // There are no solutions
-    m_contentView.setWarningMessages(noSolutionMessage(),
-                                     I18n::Message::Default);
+    m_contentView.setWarningMessage(noSolutionMessage());
   } else if (system->type() == SystemOfEquations::Type::GeneralMonovariable &&
              system->hasMoreSolutions()) {
     // There are more approximate solutions
-    m_contentView.setWarningMessages(
-        I18n::Message::OnlyFirstSolutionsDisplayed0,
-        I18n::Message::OnlyFirstSolutionsDisplayed1);
+    m_contentView.setWarningMessage(I18n::Message::OnlyFirstSolutionsDisplayed);
   } else if (system->type() ==
                  SystemOfEquations::Type::PolynomialMonovariable &&
              system->numberOfSolutions() == 1) {
-    // There are no real solutions
     if (system->degree() == 2) {
-      assert(Preferences::sharedPreferences->complexFormat() ==
-             Preferences::ComplexFormat::Real);
-      m_contentView.setWarningMessages(
-          I18n::Message::PolynomeHasNoRealSolution0,
-          I18n::Message::PolynomeHasNoRealSolution1);
+      /* For quadratic polynoms, if only delta is displayed, it means that the
+       * solutions are not real. */
+      m_contentView.setWarningMessage(I18n::Message::PolynomeHasNoRealSolution);
+      /* TODO: Incorrect message! Sometimes we just can't compute the solutions
+       * because it overflows (ex: try to solve x^2sin(10^-900)=0). */
     } else {
       // TODO : Message could be updated. The user did not input any interval.
-      m_contentView.setWarningMessages(I18n::Message::NoSolutionInterval,
-                                       I18n::Message::Default);
+      m_contentView.setWarningMessage(I18n::Message::NoSolutionInterval);
     }
   } else if (system->type() == SystemOfEquations::Type::LinearSystem &&
              system->hasMoreSolutions()) {
-    m_contentView.setWarningMessages(I18n::Message::InfiniteNumberOfSolutions,
-                                     I18n::Message::Default);
+    m_contentView.setWarningMessage(I18n::Message::InfiniteNumberOfSolutions);
   } else {
     requireWarning = false;
   }
+  setOffset(KDPointZero);
   m_contentView.setWarning(requireWarning);
   m_contentView.selectableTableView()->reloadData();
   selectCellAtLocation(0, 0);
@@ -220,11 +206,6 @@ void SolutionsController::didEnterResponderChain(
   }
 }
 
-Responder *SolutionsController::responderWhenEmpty() {
-  tabController()->selectTab();
-  return tabController();
-}
-
 /* TableViewDataSource */
 
 int SolutionsController::numberOfRows() const {
@@ -242,10 +223,11 @@ void SolutionsController::fillCellForLocation(HighlightCell *cell, int column,
                                               int row) {
   SystemOfEquations *system = App::app()->system();
   const int rowOfUserVariablesMessage = userVariablesMessageRow();
-  if (row == rowOfUserVariablesMessage - 1) {
-    return;  // Empty row
+  int type = typeAtLocation(column, row);
+  if (type == k_emptyCellType) {
+    return;
   }
-  if (row == rowOfUserVariablesMessage) {
+  if (type == k_messageCellType) {
     // Predefined variable used/ignored message
     assert(column >= 0);
     MessageCell *messageCell = static_cast<MessageCell *>(cell);
@@ -262,108 +244,97 @@ void SolutionsController::fillCellForLocation(HighlightCell *cell, int column,
     }
     return;
   }
-  if (column == 0) {
-    if (system->type() == SystemOfEquations::Type::PolynomialMonovariable &&
-        row == static_cast<int>(system->numberOfSolutions()) - 1) {
-      // Formula of the discriminant
-      assert(system->degree() == 2 || system->degree() == 3);
-      EvenOddExpressionCell *deltaCell =
-          static_cast<EvenOddExpressionCell *>(cell);
-      deltaCell->setLayout(system->degree() == 2 ? m_delta2Layout
-                                                 : m_delta3Layout);
-    } else {
-      AbstractEvenOddBufferTextCell *symbolCell =
-          static_cast<AbstractEvenOddBufferTextCell *>(cell);
-      /* Holds at maximum the variable name + 2 digits (for 10)
-       * Quotation marks are removed to make the cell thinner.
-       * (A variable name is either always inferior to 7 chars, except
-       * if it has quotation marks, in which case it can have up to 9
-       * chars, including the quotation marks). */
-      constexpr size_t k_maxSize =
-          SymbolAbstractNode::k_maxNameLengthWithoutQuotationMarks + 1;
-      char bufferSymbol[k_maxSize + 2];
-      if (rowOfUserVariablesMessage < 0 ||
-          row < rowOfUserVariablesMessage - 1) {
-        // It's a solution row, get symbol name
-        if (system->type() == SystemOfEquations::Type::LinearSystem) {
-          /* The system has more than one variable: the cell text is the
-           * variable name */
-          const char *varName = system->variable(row);
-          SymbolAbstractNode::NameWithoutQuotationMarks(
-              bufferSymbol, k_maxSize, varName, strlen(varName));
-        } else {
-          /* The system has one variable but might have many solutions: the cell
-           * text is variableX, with X the row index + 1 (e.g. x1, x2,...) */
-          const char *varName = system->variable(0);
-          int length = SymbolAbstractNode::NameWithoutQuotationMarks(
-              bufferSymbol, k_maxSize, varName, strlen(varName));
-          if (row < 9) {
-            bufferSymbol[length++] = row + '1';
-          } else {
-            assert(row == 9);
-            bufferSymbol[length++] = '1';
-            bufferSymbol[length++] = '0';
-          }
-          bufferSymbol[length] = 0;
-        }
-      } else {
-        // It's a user variable row, get variable name
-        assert(rowOfUserVariablesMessage >= 0);
-        const char *varName =
-            system->userVariable(row - rowOfUserVariablesMessage - 1);
+  if (type == k_deltaCellType) {
+    // Formula of the discriminant
+    assert(system->degree() == 2 || system->degree() == 3);
+    static_cast<EvenOddExpressionCell *>(cell)->setLayout(
+        system->degree() == 2 ? m_delta2Layout : m_delta3Layout);
+  }
+  if (type == k_symbolCellType) {
+    /* Holds at maximum the variable name + 2 digits (for 10)
+     * Quotation marks are removed to make the cell thinner.
+     * (A variable name is either always inferior to 7 chars, except
+     * if it has quotation marks, in which case it can have up to 9
+     * chars, including the quotation marks). */
+    constexpr size_t k_maxSize =
+        SymbolAbstractNode::k_maxNameLengthWithoutQuotationMarks + 1;
+    char bufferSymbol[k_maxSize + 2];
+    if (rowOfUserVariablesMessage < 0 || row < rowOfUserVariablesMessage - 1) {
+      // It's a solution row, get symbol name
+      if (system->type() == SystemOfEquations::Type::LinearSystem) {
+        /* The system has more than one variable: the cell text is the
+         * variable name */
+        const char *varName = system->variable(row);
         SymbolAbstractNode::NameWithoutQuotationMarks(bufferSymbol, k_maxSize,
                                                       varName, strlen(varName));
+      } else {
+        /* The system has one variable but might have many solutions: the cell
+         * text is variableX, with X the row index + 1 (e.g. x1, x2,...) */
+        const char *varName = system->variable(0);
+        int length = SymbolAbstractNode::NameWithoutQuotationMarks(
+            bufferSymbol, k_maxSize, varName, strlen(varName));
+        if (row < 9) {
+          bufferSymbol[length++] = row + '1';
+        } else {
+          assert(row == 9);
+          bufferSymbol[length++] = '1';
+          bufferSymbol[length++] = '0';
+        }
+        bufferSymbol[length] = 0;
       }
-      symbolCell->setText(bufferSymbol);
+    } else {
+      // It's a user variable row, get variable name
+      assert(rowOfUserVariablesMessage >= 0);
+      const char *varName =
+          system->userVariable(row - rowOfUserVariablesMessage - 1);
+      SymbolAbstractNode::NameWithoutQuotationMarks(bufferSymbol, k_maxSize,
+                                                    varName, strlen(varName));
     }
-  } else {
+    static_cast<AbstractEvenOddBufferTextCell *>(cell)->setText(bufferSymbol);
+  }
+  if (type == k_approximateValueCellType) {
+    assert(system->numberOfSolutions() > 0);
+    // Get values of the solutions
+    constexpr int bufferSize = PrintFloat::charSizeForFloatsWithPrecision(
+        AbstractEvenOddBufferTextCell::k_defaultPrecision);
+    char bufferValue[bufferSize];
+    PoincareHelpers::ConvertFloatToText<double>(
+        system->solution(row)->approximate(), bufferValue, bufferSize,
+        AbstractEvenOddBufferTextCell::k_defaultPrecision);
+    static_cast<AbstractEvenOddBufferTextCell *>(cell)->setText(bufferValue);
+  }
+  if (type == k_exactValueCellType) {
     if (rowOfUserVariablesMessage < 0 || row < rowOfUserVariablesMessage - 1) {
       // It's a solution row
       assert(system->numberOfSolutions() > 0);
-      if (system->type() == SystemOfEquations::Type::GeneralMonovariable) {
-        // Get values of the solutions
-        AbstractEvenOddBufferTextCell *valueCell =
-            static_cast<AbstractEvenOddBufferTextCell *>(cell);
-
-        constexpr int bufferSize = PrintFloat::charSizeForFloatsWithPrecision(
-            AbstractEvenOddBufferTextCell::k_defaultPrecision);
-        char bufferValue[bufferSize];
-        PoincareHelpers::ConvertFloatToText<double>(
-            system->solution(row)->approximate(), bufferValue, bufferSize,
-            AbstractEvenOddBufferTextCell::k_defaultPrecision);
-        valueCell->setText(bufferValue);
-      } else {
-        const Solution *solution = system->solution(row);
-        ScrollableTwoLayoutsCell *valueCell =
-            static_cast<ScrollableTwoLayoutsCell *>(cell);
-        /* ScrollableTwoLayoutsCell will always try to display its
-         * approximate layout. If the only layout is the exact one, they need to
-         * be swapped.
-         * FIXME This is quirky and could be changed. */
-        if (solution->approximateLayout().isUninitialized()) {
-          valueCell->setLayouts(Layout(), solution->exactLayout());
-        } else {
-          valueCell->setLayouts(solution->exactLayout(),
-                                solution->approximateLayout());
-        }
-        valueCell->setExactAndApproximateAreStriclyEqual(
-            solution->exactAndApproximateAreEqual());
-      }
-    } else {
-      // It's a user variable row, get values of the solutions or discriminant
+      const Solution *solution = system->solution(row);
       ScrollableTwoLayoutsCell *valueCell =
           static_cast<ScrollableTwoLayoutsCell *>(cell);
+      /* ScrollableTwoLayoutsCell will always try to display its
+       * approximate layout. If the only layout is the exact one, they need to
+       * be swapped.
+       * FIXME This is quirky and could be changed. */
+      if (solution->approximateLayout().isUninitialized()) {
+        valueCell->setLayouts(Layout(), solution->exactLayout());
+      } else {
+        valueCell->setLayouts(solution->exactLayout(),
+                              solution->approximateLayout());
+      }
+      valueCell->setExactAndApproximateAreStriclyEqual(
+          solution->exactAndApproximateAreEqual());
+    } else {
+      // It's a user variable row, get values of the solutions or discriminant
       const char *symbol =
           system->userVariable(row - rowOfUserVariablesMessage - 1);
       Layout layout = PoincareHelpers::CreateLayout(
           App::app()->localContext()->expressionForSymbolAbstract(
               Symbol::Builder(symbol, strlen(symbol)), false),
           App::app()->localContext());
-      valueCell->setLayouts(Layout(), layout);
+      static_cast<ScrollableTwoLayoutsCell *>(cell)->setLayouts(Layout(),
+                                                                layout);
     }
   }
-  EvenOddCell *evenOddCell = static_cast<EvenOddCell *>(cell);
-  evenOddCell->setEven(row % 2 == 0);
+  static_cast<EvenOddCell *>(cell)->setEven(row % 2 == 0);
 }
 
 KDCoordinate SolutionsController::nonMemoizedRowHeight(int row) {
@@ -475,8 +446,7 @@ int SolutionsController::typeAtLocation(int column, int row) {
 void SolutionsController::didBecomeFirstResponder() {
   SystemOfEquations *system = App::app()->system();
   if (system->numberOfSolutions() > 0) {
-    Container::activeApp()->setFirstResponder(
-        m_contentView.selectableTableView());
+    App::app()->setFirstResponder(m_contentView.selectableTableView());
   }
 }
 

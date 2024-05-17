@@ -20,7 +20,6 @@ namespace Regression {
 class GraphController : public Shared::InteractiveCurveViewController {
  public:
   GraphController(Escher::Responder *parentResponder,
-                  Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
                   Escher::ButtonRowController *header,
                   Shared::InteractiveCurveViewRange *interactiveRange,
                   Shared::CurveViewCursor *cursor, int *selectedDotIndex,
@@ -43,8 +42,8 @@ class GraphController : public Shared::InteractiveCurveViewController {
   bool moveCursorVertically(OMG::VerticalDirection direction) override;
 
   // InteractiveCurveViewRangeDelegate
-  uint32_t autoZoomChecksum() const override {
-    return m_store->storeChecksum();
+  uint64_t autoZoomChecksum() const override {
+    return static_cast<uint64_t>(m_store->storeChecksum());
   }
   Poincare::Range2D optimalRange(
       bool computeX, bool computeY,

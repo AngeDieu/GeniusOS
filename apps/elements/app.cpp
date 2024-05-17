@@ -20,16 +20,10 @@ I18n::Message App::Descriptor::upperName() const {
 }
 
 const Escher::Image* App::Descriptor::icon() const {
-  // TODO
   return ImageStore::ElementsIcon;
 }
 
 // App::Snapshot
-
-App::Snapshot::Snapshot()
-    : m_field(&ElementsDataBase::GroupField),
-      m_selectedElement(1),
-      m_previousElement(ElementsDataBase::k_noElement) {}
 
 App* App::Snapshot::unpack(Escher::Container* container) {
   return new (container->currentAppBuffer()) App(this);
@@ -40,9 +34,20 @@ const App::Descriptor* App::Snapshot::descriptor() const {
   return &s_descriptor;
 }
 
+void App::Snapshot::reset() {
+  Shared::SharedApp::Snapshot::reset();
+  init();
+}
+
+void App::Snapshot::init() {
+  m_field = &ElementsDataBase::GroupField;
+  m_selectedElement = 1;
+  m_previousElement = ElementsDataBase::k_noElement;
+}
+
 // App
 App::App(Snapshot* snapshot)
-    : Shared::LayoutFieldDelegateApp(snapshot, &m_stackController),
+    : Shared::AppWithStoreMenu(snapshot, &m_stackController),
       m_stackController(&m_modalViewController, &m_mainController,
                         Escher::StackViewController::Style::WhiteUniform),
       m_mainController(&m_stackController),

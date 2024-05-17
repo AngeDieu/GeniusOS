@@ -14,7 +14,6 @@ FunctionListController::FunctionListController(Responder *parentResponder,
                                                I18n::Message text)
     : ExpressionModelListController(parentResponder, text),
       ButtonRowDelegate(header, footer),
-      InputEventHandlerDelegate(),
       m_selectableListView(this, this, this, this),
       m_plotButton(this, I18n::Message::Plot,
                    Invocation::Builder<FunctionListController>(
@@ -36,7 +35,7 @@ FunctionListController::FunctionListController(Responder *parentResponder,
                          },
                          this),
                      KDFont::Size::Small, Palette::PurpleBright) {
-  m_selectableListView.setMargins(0);
+  m_selectableListView.resetMargins();
   m_selectableListView.setVerticalCellOverlap(0);
 }
 
@@ -77,19 +76,19 @@ void FunctionListController::willExitResponderChain(
 
 void FunctionListController::didBecomeFirstResponder() {
   if (selectedRow() == -1) {
-    selectCell(0);
+    selectRow(0);
   } else {
-    selectCell(selectedRow());
+    selectRow(selectedRow());
   }
   if (selectedRow() >= numberOfExpressionRows()) {
-    selectCell(numberOfExpressionRows() - 1);
+    selectRow(numberOfExpressionRows() - 1);
   }
   footer()->setSelectedButton(-1);
   if (m_editedCellIndex != -1) {
     // Resume edition if it was interrupted by a store
-    Container::activeApp()->setFirstResponder(layoutField());
+    App::app()->setFirstResponder(layoutField());
   } else {
-    Container::activeApp()->setFirstResponder(selectableListView());
+    App::app()->setFirstResponder(selectableListView());
   }
 }
 

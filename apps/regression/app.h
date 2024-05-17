@@ -46,9 +46,7 @@ class App : public Shared::StoreApp {
     Shared::DoublePairStorePreferences m_storePreferences;
   };
 
-  static App *app() {
-    return static_cast<App *>(Escher::Container::activeApp());
-  }
+  static App *app() { return static_cast<App *>(Escher::App::app()); }
 
   TELEMETRY_ID("Regression");
 
@@ -62,7 +60,7 @@ class App : public Shared::StoreApp {
     return &m_inputViewController;
   }
   Snapshot *snapshot() const {
-    return static_cast<Snapshot *>(Shared::LayoutFieldDelegateApp::snapshot());
+    return static_cast<Snapshot *>(Shared::SharedApp::snapshot());
   }
   Shared::InteractiveCurveViewRange *graphRange() const {
     return snapshot()->graphRange();

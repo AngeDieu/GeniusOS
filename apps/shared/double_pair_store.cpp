@@ -31,7 +31,7 @@ void DoublePairStore::initListsInPool() {
   }
 }
 
-void DoublePairStore::initListsFromStorage(bool seriesShouldUpdate) {
+void DoublePairStore::initListsFromStorage(bool delayUpdate) {
   initListsInPool();
   char listName[k_columnNamesLength + 1];
   for (int s = 0; s < k_numberOfSeries; s++) {
@@ -50,9 +50,7 @@ void DoublePairStore::initListsFromStorage(bool seriesShouldUpdate) {
       }
       setList(static_cast<List &>(e), s, i, true);
     }
-    if (seriesShouldUpdate) {
-      updateSeries(s);
-    }
+    updateSeries(s, delayUpdate);
   }
 }
 
@@ -120,7 +118,7 @@ bool DoublePairStore::set(double f, int series, int i, int j, bool delayUpdate,
   return updateSeries(series, delayUpdate);
 }
 
-bool DoublePairStore::setList(List list, int series, int i, bool delayUpdate,
+bool DoublePairStore::setList(List &list, int series, int i, bool delayUpdate,
                               bool setOtherColumnToDefaultIfEmpty) {
   /* Approximate the list to turn it into list of doubles since we do not
    * want to work with exact expressions in Regression and Statistics.*/
@@ -213,8 +211,7 @@ bool DoublePairStore::seriesIsValid(int series) const {
   return m_storePreferences->seriesIsValid(series);
 }
 
-void DoublePairStore::updateSeriesValidity(int series,
-                                           bool updateDisplayAdditionalColumn) {
+void DoublePairStore::updateSeriesValidity(int series) {
   assert(series >= 0 && series < k_numberOfSeries);
   int numberOfPairs = numberOfPairsOfSeries(series);
   if (numberOfPairs == 0 ||
@@ -363,7 +360,7 @@ uint32_t DoublePairStore::storeChecksum() const {
   for (int i = 0; i < k_numberOfSeries; i++) {
     checkSumPerSeries[i] = storeChecksumForSeries(i);
   }
-  return Ion::crc32Word(checkSumPerSeries, k_numberOfSeries);
+  return Ion::crc32DoubleWord(checkSumPerSeries, k_numberOfSeries);
 }
 
 /* TODO: This function is temporary. We want to create a function with a
@@ -405,8 +402,7 @@ double DoublePairStore::defaultValue(int series, int i, int j) const {
                            : defaultValueForColumn1();
 }
 
-bool DoublePairStore::updateSeries(int series, bool delayUpdate,
-                                   bool updateDisplayAdditionalColumn) {
+bool DoublePairStore::updateSeries(int series, bool delayUpdate) {
   assert(series >= 0 && series < k_numberOfSeries);
   if (delayUpdate) {
     return true;
@@ -419,9 +415,9 @@ bool DoublePairStore::updateSeries(int series, bool delayUpdate,
   if (!success) {
     /* Column couldn't be updated in the store. Revert lists from storage state
      * and make sure updateSeries isn't called again. */
-    initListsFromStorage(false);
+    initListsFromStorage(true);
   } else {
-    updateSeriesValidity(series, updateDisplayAdditionalColumn);
+    updateSeriesValidity(series);
   }
   return success;
 }

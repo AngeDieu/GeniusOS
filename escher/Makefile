@@ -3,6 +3,7 @@ SFLAGS += -Iescher/include
 escher_src += $(addprefix escher/src/,\
   abstract_button_cell.cpp \
   abstract_text_field.cpp \
+  alternate_empty_nested_menu_controller.cpp \
   alternate_empty_view_controller.cpp \
   alternate_view_controller.cpp \
   app.cpp \
@@ -34,12 +35,13 @@ escher_src += $(addprefix escher/src/,\
   layout_view.cpp \
   gauge_view.cpp \
   glyphs_view.cpp \
+  heavy_table_size_manager.cpp \
   highlight_cell.cpp \
   highlight_image_cell.cpp \
   horizontal_or_vertical_layout.cpp \
   image_view.cpp \
   init.cpp \
-  input_event_handler.cpp \
+  editable_field.cpp \
   invocation.cpp \
   input_view_controller.cpp \
   key_view.cpp \
@@ -48,12 +50,15 @@ escher_src += $(addprefix escher/src/,\
   menu_cell.cpp \
   menu_cell_with_editable_text.cpp \
   message_text_view.cpp \
+  message_view.cpp \
   modal_view_controller.cpp \
   modal_view_empty_controller.cpp \
   nested_menu_controller.cpp \
   palette.cpp \
   pointer_text_view.cpp \
   pop_up_controller.cpp \
+  prefaced_table_view.cpp \
+  prefaced_twice_table_view.cpp \
   responder.cpp \
   run_loop.cpp \
   scroll_view.cpp \
@@ -65,7 +70,10 @@ escher_src += $(addprefix escher/src/,\
   selectable_list_view_controller.cpp \
   selectable_list_view_delegate.cpp \
   list_with_top_and_bottom_controller.cpp \
+  scrollable_multiple_layouts_view.cpp \
+  scrollable_two_layouts_cell.cpp \
   selectable_table_view.cpp \
+  selectable_table_view_delegate.cpp \
   solid_color_view.cpp \
   stack_view.cpp \
   stack_view_controller.cpp \

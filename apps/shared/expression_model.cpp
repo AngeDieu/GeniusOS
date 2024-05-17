@@ -60,20 +60,10 @@ Preferences::ComplexFormat ExpressionModel::complexFormat(
     const Storage::Record* record, Context* context) const {
   if (m_expressionComplexFormat == MemoizedComplexFormat::NotMemoized) {
     Expression e = ExpressionModel::expressionClone(record);
-    if (e.isUninitialized()) {
-      m_expressionComplexFormat = MemoizedComplexFormat::Any;
-    } else {
-      Preferences::ComplexFormat expressionUpdatedComplexFormat =
-          Preferences::UpdatedComplexFormatWithExpressionInput(
-              Preferences::ComplexFormat::Real, e, context);
-      m_expressionComplexFormat =
-          expressionUpdatedComplexFormat ==
-                  Preferences::k_defautComplexFormatIfNotReal
-              ? MemoizedComplexFormat::Complex
-              : MemoizedComplexFormat::Any;
-    }
+    m_expressionComplexFormat = !e.isUninitialized() && e.hasComplexI(context)
+                                    ? MemoizedComplexFormat::Complex
+                                    : MemoizedComplexFormat::Any;
   }
-
   assert(m_expressionComplexFormat != MemoizedComplexFormat::NotMemoized);
   Preferences::ComplexFormat userComplexFormat =
       Preferences::sharedPreferences->complexFormat();
@@ -114,13 +104,11 @@ Expression ExpressionModel::expressionReduced(
       /* 'Simplify' routine might need to call expressionReduced on the very
        * same function. So we need to keep a valid m_expression while executing
        * 'Simplify'. Thus, we use a temporary expression. */
-      Preferences preferences =
-          Preferences::ClonePreferencesWithNewComplexFormat(
-              complexFormat(record, context));
       PoincareHelpers::CloneAndSimplify(
-          &m_expression, context, ReductionTarget::SystemForApproximation,
-          SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition,
-          PoincareHelpers::k_defaultUnitConversion, &preferences, false);
+          &m_expression, context,
+          {.complexFormat = complexFormat(record, context),
+           .updateComplexFormatWithExpression = false,
+           .target = ReductionTarget::SystemForApproximation});
     }
   }
   return m_expression;
@@ -152,7 +140,7 @@ Layout ExpressionModel::layout(const Storage::Record* record,
                                                 Symbol::Builder(symbol));
     }
     m_layout = PoincareHelpers::CreateLayout(
-        clone, AppsContainer::activeApp()->localContext());
+        clone, Escher::App::app()->localContext());
     if (m_layout.isUninitialized()) {
       m_layout = HorizontalLayout::Builder();
     }

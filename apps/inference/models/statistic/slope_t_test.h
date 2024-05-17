@@ -1,7 +1,6 @@
 #ifndef INFERENCE_MODELS_STATISTIC_SLOPE_T_TEST_H
 #define INFERENCE_MODELS_STATISTIC_SLOPE_T_TEST_H
 
-#include "interfaces/distributions.h"
 #include "slope_t_statistic.h"
 #include "test.h"
 
@@ -19,9 +18,6 @@ class SlopeTTest : public Test, public SlopeTStatistic {
     return DistributionType::T;
   }
   I18n::Message title() const override { return SlopeTStatistic::title(); }
-  I18n::Message graphTitleFormat() const override {
-    return DistributionT::GraphTitleFormat();
-  }
 
   // Inference
   bool authorizedParameterAtPosition(double p, int row,
@@ -40,22 +36,6 @@ class SlopeTTest : public Test, public SlopeTStatistic {
 
   void compute() override;
 
-  // Distribution: t
-  Poincare::Layout testCriticalValueSymbol() override {
-    return DistributionT::TestCriticalValueSymbol();
-  }
-  float canonicalDensityFunction(float x) const override {
-    return DistributionT::CanonicalDensityFunction(x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveFunctionAtAbscissa(double x) const override {
-    return DistributionT::CumulativeNormalizedDistributionFunction(
-        x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveInverseForProbability(double p) const override {
-    return DistributionT::CumulativeNormalizedInverseDistributionFunction(
-        p, m_degreesOfFreedom);
-  }
-
  private:
   // Significance Test: Slope
   int numberOfStatisticParameters() const override {
@@ -71,11 +51,6 @@ class SlopeTTest : public Test, public SlopeTStatistic {
   double* parametersArray() override {
     assert(false);
     return nullptr;
-  }
-
-  // Distribution: t
-  float computeYMax() const override {
-    return DistributionT::YMax(m_degreesOfFreedom);
   }
 };
 

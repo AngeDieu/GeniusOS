@@ -28,7 +28,7 @@ Store::Store(GlobalContext* context, UserPreferences* userPreferences)
       m_graphViewInvalidated(true) {
   /* Update series after having set the datasets, which are needed in
    * updateSeries */
-  initListsFromStorage(false);
+  initListsFromStorage(true);
   for (int s = 0; s < k_numberOfSeries; s++) {
     m_datasets[s] = Poincare::StatisticsDataset<double>(&m_dataLists[s][0],
                                                         &m_dataLists[s][1]);
@@ -89,14 +89,18 @@ double Store::heightOfBarAtValue(int series, double value) const {
 
 double Store::startOfBarAtIndex(int series, int index) const {
   double minimalValue = minValue(series);
-  /* Because of floating point approximation, firstBarAbscissa could be lesser
-   * than the minimal value. As a result, we would compute a height of zero for
-   * all bars. */
-  double firstBarAbscissa = std::min(
-      minimalValue,
+  double firstBarAbscissa =
       firstDrawnBarAbscissa() +
-          barWidth() * std::floor((minimalValue - firstDrawnBarAbscissa()) /
-                                  barWidth()));
+      barWidth() *
+          std::floor((minimalValue - firstDrawnBarAbscissa()) / barWidth());
+  /* Because of floating point approximation, firstBarAbscissa could be above
+   * the minimal value, or too much below. As a result, we would compute a
+   * height of zero for all bars. */
+  if (firstBarAbscissa > minimalValue) {
+    firstBarAbscissa -= barWidth();
+  } else if (firstBarAbscissa + barWidth() <= minimalValue) {
+    firstBarAbscissa += barWidth();
+  }
   return firstBarAbscissa + index * barWidth();
 }
 
@@ -106,8 +110,16 @@ double Store::endOfBarAtIndex(int series, int index) const {
 
 int Store::numberOfBars(int series) const {
   double firstBarAbscissa = startOfBarAtIndex(series, 0);
-  return static_cast<int>(
-      std::ceil((maxValue(series) - firstBarAbscissa) / barWidth()) + 1);
+  double maxVal = maxValue(series);
+  int nBars = static_cast<int>(
+      std::floor((maxVal - firstBarAbscissa) / barWidth()) + 1);
+  if (Poincare::Helpers::RelativelyEqual<double>(
+          maxVal, firstBarAbscissa + nBars * barWidth(), k_precision)) {
+    /* If the maxValue is on the upper bound of the last bar, we need to add
+     * one bar to be consistent with sumOfValuesBetween. */
+    nBars++;
+  }
+  return nBars;
 }
 
 I18n::Message Store::boxPlotCalculationMessageAtIndex(int series,
@@ -160,18 +172,16 @@ int Store::numberOfBoxPlotCalculations(int series) const {
          numberOfUpperOutliers(series);
 }
 
-void Store::updateSeriesValidity(int series,
-                                 bool updateDisplayAdditionalColumn) {
+void Store::updateSeriesValidity(int series) {
   assert(series >= 0 && series < k_numberOfSeries);
   bool oldValidity = seriesIsValid(series);
-  DoublePairStore::updateSeriesValidity(series, updateDisplayAdditionalColumn);
+  DoublePairStore::updateSeriesValidity(series);
   userPreferences()->setSeriesValid(
       series, seriesIsValid(series) && frequenciesAreValid(series));
   // Reset the graph view any time one of the series gets invalidated
   m_graphViewInvalidated =
       m_graphViewInvalidated || (oldValidity && !seriesIsValid(series));
-  if (updateDisplayAdditionalColumn && m_graphViewInvalidated &&
-      numberOfPairsOfSeries(series) == 0) {
+  if (m_graphViewInvalidated && numberOfPairsOfSeries(series) == 0) {
     // Hide the cumulated frequencies if series is invalidated and empty
     userPreferences()->setDisplayCumulatedFrequencies(series, false);
   }
@@ -494,12 +504,10 @@ int Store::computeRelativeColumnAndSeries(int* i) const {
   return seriesIndex;
 }
 
-bool Store::updateSeries(int series, bool delayUpdate,
-                         bool updateDisplayAdditionalColumn) {
+bool Store::updateSeries(int series, bool delayUpdate) {
   m_datasets[series].setHasBeenModified();
   m_memoizedMaxNumberOfModes = -1;
-  return DoublePairStore::updateSeries(series, delayUpdate,
-                                       updateDisplayAdditionalColumn);
+  return DoublePairStore::updateSeries(series, delayUpdate);
 }
 
 double Store::sumOfValuesBetween(int series, double x1, double x2,
@@ -507,18 +515,17 @@ double Store::sumOfValuesBetween(int series, double x1, double x2,
   if (!seriesIsValid(series)) {
     return NAN;
   }
-  /* Use roughly_equal to handle impossible double representations such as
-   * 12.11 being 12.109999999999999 or 12.110000000000001. The precision we use
-   * must be higher than 1e-14 (max number of significant digits) but having it
-   * higher than DBL_EPSILON wouldn't be effective. */
-  constexpr static double k_precision = 1e-15;
+  if (x1 == INFINITY || x2 == -INFINITY) {
+    return 0;
+  }
+  bool stopIfEqual = strictUpperBound && x2 != INFINITY;
   double result = 0;
   int numberOfPairs = numberOfPairsOfSeries(series);
   for (int k = 0; k < numberOfPairs; k++) {
     int sortedIndex = valueIndexAtSortedIndex(series, k);
     double value = get(series, 0, sortedIndex);
     if (value > x2 ||
-        (strictUpperBound &&
+        (stopIfEqual &&
          Poincare::Helpers::RelativelyEqual<double>(value, x2, k_precision))) {
       break;
     }

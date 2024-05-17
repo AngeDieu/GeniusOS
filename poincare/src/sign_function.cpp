@@ -16,6 +16,9 @@
 #include <cmath>
 #include <utility>
 
+#include "poincare/comparison.h"
+#include "poincare/piecewise_operator.h"
+
 namespace Poincare {
 
 int SignFunctionNode::numberOfChildren() const {
@@ -49,19 +52,19 @@ bool SignFunctionNode::derivate(const ReductionContext& reductionContext,
 }
 
 template <typename T>
-Complex<T> SignFunctionNode::computeOnComplex(
+std::complex<T> SignFunctionNode::computeOnComplex(
     const std::complex<T> c, Preferences::ComplexFormat,
     Preferences::AngleUnit angleUnit) {
   if (c.imag() != 0 || std::isnan(c.real())) {
-    return Complex<T>::RealUndefined();
+    return complexRealNAN<T>();
   }
   if (c.real() == 0) {
-    return Complex<T>::Builder(0.0);
+    return 0.0;
   }
   if (c.real() < 0) {
-    return Complex<T>::Builder(-1.0);
+    return -1.0;
   }
-  return Complex<T>::Builder(1.0);
+  return 1.0;
 }
 
 Expression SignFunction::shallowReduce(ReductionContext reductionContext) {
@@ -131,20 +134,17 @@ bool SignFunction::derivate(const ReductionContext& reductionContext,
 
   /* This function derivate is equal to 0 everywhere but in 0 where
    * it's not defined.
-   * We approximate it's child to know if it is equal to 0
-   * The approximation of the child might not be precise that's why it is
-   * compared with EpsilonLax.
-   * This derivative is used in the derivative of arccot(x)
+   * We use a piecewise function instead of a dependency as derivate will strip
+   * all dependencies that arise during the derivation process.
+   * This derivative is used in the derivative of arccot(x) and abs(x).
    */
-  Expression child = childAtIndex(0).clone();
-  child = child.replaceSymbolWithExpression(symbol, symbolValue);
-  float childValue = child.approximateToScalar<float>(
-      reductionContext.context(), reductionContext.complexFormat(),
-      reductionContext.angleUnit());
-  if (std::fabs(childValue) < Float<float>::EpsilonLax()) {
-    return false;
-  }
-  replaceWithInPlace(Rational::Builder(0));
+  Comparison condition = Comparison::Builder(
+      childAtIndex(0), ComparisonNode::OperatorType::NotEqual,
+      Rational::Builder(0));
+  List arguments = List::Builder();
+  arguments.addChildAtIndexInPlace(Rational::Builder(0), 0, 0);
+  arguments.addChildAtIndexInPlace(condition, 1, 1);
+  replaceWithInPlace(PiecewiseOperator::UntypedBuilder(arguments));
   return true;
 }
 

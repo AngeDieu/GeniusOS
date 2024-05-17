@@ -32,13 +32,13 @@ void assert_expression_simplify_to_with_dependencies(
 
   quiz_assert_print_if_failure(d.type() == ExpressionNode::Type::Dependency,
                                expression);
-  assert_expression_serialize_to(d.childAtIndex(0), simplifiedExpression);
+  assert_expression_serializes_to(d.childAtIndex(0), simplifiedExpression);
   Expression m = d.childAtIndex(1);
   quiz_assert_print_if_failure(m.type() == ExpressionNode::Type::List,
                                expression);
   quiz_assert_print_if_failure(m.numberOfChildren() == N, expression);
   for (size_t i = 0; i < N; i++) {
-    assert_expression_serialize_to(m.childAtIndex(i), dependencies[i]);
+    assert_expression_serializes_to(m.childAtIndex(i), dependencies[i]);
   }
 }
 
@@ -135,8 +135,11 @@ QUIZ_CASE(poincare_dependency_sequence) {
           "u.seq", reinterpret_cast<const void **>(&emptyString), 0, 0);
   assert_reduce_and_store("3→f(x)");
   // Sequence are kept in dependency
-  assert_expression_simplify_to_with_dependencies("f(u(2))", "3",
-                                                  {"u\u0014{2\u0014}"});
+  assert_expression_simplify_to_with_dependencies("f(u(n))", "3",
+                                                  {"u\u0014{n\u0014}"});
+  // Except if the sequence can already be approximated.
+  assert_expression_simplify_to_with_dependencies("f(u(2))", Undefined::Name(),
+                                                  {""});
   Ion::Storage::FileSystem::sharedFileSystem->recordNamed("f.func").destroy();
   Ion::Storage::FileSystem::sharedFileSystem->recordNamed("u.seq").destroy();
 }
@@ -153,8 +156,15 @@ QUIZ_CASE(poincare_dependency_power) {
 QUIZ_CASE(poincare_dependency_multiplication) {
   assert_expression_simplify_to_with_dependencies("ln(x)-ln(x)", "0",
                                                   {"ln(x)"});
-  assert_expression_simplify_to_with_dependencies("0*randint(1,0)",
-                                                  Undefined::Name(), {""});
+  assert_expression_simplify_to_with_dependencies("0*random()", "0",
+                                                  {"random()"});
+  assert_expression_simplify_to_with_dependencies("0*randint(1,0)", "0",
+                                                  {"randint(1,0)"});
+  // Dependency is properly reduced even when containing symbols
+  assert_expression_simplify_to_with_dependencies("0x^arcsin(π)", "0", {"x"});
+  assert_expression_simplify_to_with_dependencies(
+      "0x^arcsin(π)", Undefined::Name(), {""}, SystemForAnalysis, Radian,
+      MetricUnitFormat, Real);
 }
 
 QUIZ_CASE(poincare_dependency_trigonometry) {

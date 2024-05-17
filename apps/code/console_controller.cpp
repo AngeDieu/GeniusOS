@@ -11,8 +11,8 @@
 #include <algorithm>
 
 #include "app.h"
+#include "python_variable_box_controller.h"
 #include "script.h"
-#include "variable_box_controller.h"
 
 extern "C" {
 #include <stdlib.h>
@@ -25,8 +25,7 @@ namespace Code {
 constexpr static const char *sStandardPromptText = ">>> ";
 
 ConsoleController::ConsoleController(Responder *parentResponder,
-                                     App *pythonDelegate,
-                                     ScriptStore *scriptStore
+                                     App *pythonDelegate
 #if EPSILON_GETOPT
                                      ,
                                      bool lockOnConsole
@@ -39,8 +38,7 @@ ConsoleController::ConsoleController(Responder *parentResponder,
       m_pythonDelegate(pythonDelegate),
       m_importScriptsWhenViewAppears(false),
       m_selectableTableView(this, this, this, this),
-      m_editCell(this, this, this),
-      m_scriptStore(scriptStore),
+      m_editCell(this, this),
       m_sandboxController(this),
       m_inputRunLoopActive(false)
 #if EPSILON_GETOPT
@@ -48,8 +46,8 @@ ConsoleController::ConsoleController(Responder *parentResponder,
       m_locked(lockOnConsole)
 #endif
 {
-  m_selectableTableView.setMargins(0, Metric::CommonRightMargin, 0,
-                                   Metric::TitleBarExternHorizontalMargin);
+  m_selectableTableView.setMargins({Metric::TitleBarExternHorizontalMargin,
+                                    Metric::CommonMargins.right(), 0, 0});
   m_selectableTableView.setBackgroundColor(KDColorWhite);
   m_editCell.setPrompt(sStandardPromptText);
   for (int i = 0; i < k_numberOfLineCells; i++) {
@@ -59,10 +57,10 @@ ConsoleController::ConsoleController(Responder *parentResponder,
 
 bool ConsoleController::loadPythonEnvironment() {
   if (!m_pythonDelegate->isPythonUser(this)) {
-    m_scriptStore->clearConsoleFetchInformation();
+    ScriptStore::ClearConsoleFetchInformation();
     emptyOutputAccumulationBuffer();
     m_pythonDelegate->initPythonWithUser(this);
-    MicroPython::registerScriptProvider(m_scriptStore);
+    MicroPython::registerScriptProvider(&m_scriptStore);
     m_importScriptsWhenViewAppears = m_autoImportScripts;
   }
   return true;
@@ -76,9 +74,9 @@ void ConsoleController::unloadPythonEnvironment() {
 }
 
 void ConsoleController::autoImport() {
-  int numberOfScripts = m_scriptStore->numberOfScripts();
+  int numberOfScripts = ScriptStore::NumberOfScripts();
   for (int i = 0; i < numberOfScripts; i++) {
-    autoImportScript(m_scriptStore->scriptAtIndex(i));
+    autoImportScript(ScriptStore::ScriptAtIndex(i));
   }
 }
 
@@ -93,6 +91,7 @@ void ConsoleController::runAndPrintForCommand(const char *command) {
 
   runCode(storedCommand);
 
+  m_editCell.setText("");
   m_editCell.setPrompt(sStandardPromptText);
   m_editCell.setEditing(true);
 
@@ -137,7 +136,7 @@ const char *ConsoleController::inputText(const char *prompt) {
   m_editCell.setText("");
 
   // Reload the history
-  reloadData(true);
+  reloadData();
   appsContainer->redrawWindow();
 
   // Launch a new input loop
@@ -168,33 +167,30 @@ void ConsoleController::viewWillAppear() {
     autoImport();
   }
 
-  reloadData(true);
+  reloadData();
 }
 
 void ConsoleController::didBecomeFirstResponder() {
   if (!isDisplayingViewController()) {
-    Container::activeApp()->setFirstResponder(&m_editCell);
+    App::app()->setFirstResponder(&m_editCell);
   } else {
     /* A view controller might be displayed: for example, when pushing the
      * console on the stack controller, we auto-import scripts during the
      * 'viewWillAppear' and then we set the console as first responder. The
      * sandbox or the matplotlib controller might have been pushed in the
      * auto-import. */
-    Container::activeApp()->setFirstResponder(
-        stackViewController()->topViewController());
+    App::app()->setFirstResponder(stackViewController()->topViewController());
   }
 }
 
 bool ConsoleController::handleEvent(Ion::Events::Event event) {
   if (event == Ion::Events::OK || event == Ion::Events::EXE) {
     if (m_consoleStore.numberOfLines() > 0 &&
-        m_selectableTableView.selectedRow() < m_consoleStore.numberOfLines()) {
-      const char *text =
-          m_consoleStore.lineAtIndex(m_selectableTableView.selectedRow())
-              .text();
+        typeAtRow(selectedRow()) == k_lineCellType) {
+      const char *text = m_consoleStore.lineAtIndex(selectedRow()).text();
       m_editCell.setEditing(true);
       m_selectableTableView.selectCell(m_consoleStore.numberOfLines());
-      Container::activeApp()->setFirstResponder(&m_editCell);
+      App::app()->setFirstResponder(&m_editCell);
       return m_editCell.insertText(text);
     }
   } else if (event == Ion::Events::Clear) {
@@ -204,16 +200,17 @@ bool ConsoleController::handleEvent(Ion::Events::Event event) {
     m_selectableTableView.selectCell(m_consoleStore.numberOfLines());
     return true;
   } else if (event == Ion::Events::Backspace) {
-    int selectedRow = m_selectableTableView.selectedRow();
-    assert(selectedRow >= 0 && selectedRow < m_consoleStore.numberOfLines());
+    int rowToDelete = selectedRow();
+    assert(typeAtRow(rowToDelete) == k_lineCellType);
     m_selectableTableView.deselectTable();
     int firstDeletedLineIndex =
-        m_consoleStore.deleteCommandAndResultsAtIndex(selectedRow);
+        m_consoleStore.deleteCommandAndResultsAtIndex(rowToDelete);
     m_selectableTableView.reloadData();
     m_selectableTableView.selectCell(firstDeletedLineIndex);
     return true;
   }
 #if EPSILON_GETOPT
+
   if (m_locked && (event == Ion::Events::USBEnumeration ||
                    event == Ion::Events::Home || event == Ion::Events::Back)) {
     if (m_inputRunLoopActive) {
@@ -225,9 +222,7 @@ bool ConsoleController::handleEvent(Ion::Events::Event event) {
   return false;
 }
 
-int ConsoleController::numberOfRows() const {
-  return m_consoleStore.numberOfLines() + 1;
-}
+int ConsoleController::numberOfRows() const { return editableCellRow() + 1; }
 
 KDCoordinate ConsoleController::defaultRowHeight() {
   return KDFont::GlyphHeight(
@@ -256,16 +251,15 @@ int ConsoleController::reusableCellCount(int type) {
 
 int ConsoleController::typeAtRow(int row) const {
   assert(row >= 0);
-  if (row < m_consoleStore.numberOfLines()) {
+  if (row < editableCellRow()) {
     return k_lineCellType;
-  } else {
-    assert(row == m_consoleStore.numberOfLines());
-    return k_editCellType;
   }
+  assert(row == editableCellRow());
+  return k_editCellType;
 }
 
 void ConsoleController::fillCellForRow(HighlightCell *cell, int row) {
-  if (row < m_consoleStore.numberOfLines()) {
+  if (typeAtRow(row) == k_lineCellType) {
     static_cast<ConsoleLineCell *>(cell)->setLine(
         m_consoleStore.lineAtIndex(row));
   }
@@ -278,13 +272,13 @@ void ConsoleController::listViewDidChangeSelectionAndDidScroll(
   if (withinTemporarySelection) {
     return;
   }
-  if (l->selectedRow() == m_consoleStore.numberOfLines()) {
+  if (selectedRow() == editableCellRow()) {
     m_editCell.setEditing(true);
     return;
   }
-  if (l->selectedRow() > -1) {
+  if (selectedRow() > -1) {
     if (previousSelectedRow > -1 &&
-        previousSelectedRow < m_consoleStore.numberOfLines()) {
+        typeAtRow(previousSelectedRow) == k_lineCellType) {
       // Reset the scroll of the previous cell
       ConsoleLineCell *previousCell =
           (ConsoleLineCell *)(l->cell(previousSelectedRow));
@@ -302,12 +296,15 @@ void ConsoleController::listViewDidChangeSelectionAndDidScroll(
 bool ConsoleController::textFieldShouldFinishEditing(
     AbstractTextField *textField, Ion::Events::Event event) {
   assert(textField->isEditing());
-  return (textField->draftTextLength() > 0 &&
-          (event == Ion::Events::OK || event == Ion::Events::EXE));
+  return textField->draftTextLength() > 0 &&
+         TextFieldDelegate::textFieldShouldFinishEditing(textField, event);
 }
 
 bool ConsoleController::textFieldDidReceiveEvent(AbstractTextField *textField,
                                                  Ion::Events::Event event) {
+  if (event == Ion::Events::Var) {
+    prepareVariableBox();
+  }
   if (m_inputRunLoopActive &&
       (event == Ion::Events::Up || event == Ion::Events::OK ||
        event == Ion::Events::EXE)) {
@@ -318,7 +315,7 @@ bool ConsoleController::textFieldDidReceiveEvent(AbstractTextField *textField,
   }
   if (event == Ion::Events::Up) {
     if (m_consoleStore.numberOfLines() > 0 &&
-        m_selectableTableView.selectedRow() == m_consoleStore.numberOfLines()) {
+        typeAtRow(selectedRow()) == k_editCellType) {
       m_editCell.setEditing(false);
       m_selectableTableView.selectCell(m_consoleStore.numberOfLines() - 1);
       return true;
@@ -328,21 +325,21 @@ bool ConsoleController::textFieldDidReceiveEvent(AbstractTextField *textField,
 }
 
 bool ConsoleController::textFieldDidFinishEditing(AbstractTextField *textField,
-                                                  const char *text,
                                                   Ion::Events::Event event) {
   if (m_inputRunLoopActive) {
     m_inputRunLoopActive = false;
     return false;
   }
+  char *text = textField->draftText();
   telemetryReportEvent("Console", text);
   runAndPrintForCommand(text);
   if (!isDisplayingViewController()) {
-    reloadData(true);
+    reloadData();
   }
   return true;
 }
 
-bool ConsoleController::textFieldDidAbortEditing(AbstractTextField *textField) {
+void ConsoleController::textFieldDidAbortEditing(AbstractTextField *textField) {
   if (m_inputRunLoopActive) {
     m_inputRunLoopActive = false;
   } else {
@@ -361,16 +358,14 @@ bool ConsoleController::textFieldDidAbortEditing(AbstractTextField *textField) {
     }
 #endif
   }
-  return true;
 }
 
-VariableBoxController *ConsoleController::variableBox() {
-  VariableBoxController *varBox = App::app()->variableBox();
+void ConsoleController::prepareVariableBox() {
+  PythonVariableBoxController *varBox = App::app()->variableBox();
   // Subtitle display status must be set before as it alter loaded node order
   varBox->setDisplaySubtitles(false);
   varBox->loadVariablesImportedFromScripts();
   varBox->setTitle(I18n::Message::FunctionsAndVariables);
-  return varBox;
 }
 
 void ConsoleController::resetSandbox() {
@@ -406,20 +401,14 @@ bool ConsoleController::isDisplayingViewController() {
 
 void ConsoleController::refreshPrintOutput() {
   if (!isDisplayingViewController()) {
-    reloadData(false);
+    reloadData();
     AppsContainer::sharedAppsContainer()->redrawWindow();
   }
 }
 
-void ConsoleController::reloadData(bool isEditing) {
+void ConsoleController::reloadData() {
   m_selectableTableView.reloadData();
   m_selectableTableView.selectCell(m_consoleStore.numberOfLines());
-  if (isEditing) {
-    m_editCell.setEditing(true);
-    m_editCell.setText("");
-  } else {
-    m_editCell.setEditing(false);
-  }
 }
 
 /* printText is called by the Python machine.
@@ -486,7 +475,7 @@ void ConsoleController::autoImportScript(Script script, bool force) {
     runAndPrintForCommand(command);
   }
   if (!isDisplayingViewController() && force) {
-    reloadData(true);
+    reloadData();
   }
 }
 

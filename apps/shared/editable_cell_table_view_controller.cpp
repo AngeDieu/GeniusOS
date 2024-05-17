@@ -1,5 +1,6 @@
 #include "editable_cell_table_view_controller.h"
 
+#include <apps/constant.h>
 #include <assert.h>
 #include <escher/even_odd_cell.h>
 #include <escher/even_odd_editable_text_cell.h>
@@ -9,10 +10,8 @@
 #include <algorithm>
 #include <cmath>
 
-#include "../constant.h"
 #include "column_parameter_controller.h"
 #include "poincare_helpers.h"
-#include "text_field_delegate_app.h"
 
 using namespace Escher;
 using namespace Poincare;
@@ -26,32 +25,29 @@ EditableCellTableViewController::EditableCellTableViewController(
 
 bool EditableCellTableViewController::textFieldShouldFinishEditing(
     AbstractTextField *textField, Ion::Events::Event event) {
-  return TextFieldDelegate::textFieldShouldFinishEditing(textField, event) ||
+  return MathTextFieldDelegate::textFieldShouldFinishEditing(textField,
+                                                             event) ||
          (event == Ion::Events::Down && selectedRow() < numberOfRows()) ||
          (event == Ion::Events::Up && selectedRow() > 0) ||
-         (event == Ion::Events::Right &&
-          (textField->cursorLocation() ==
-           textField->draftTextBuffer() + textField->draftTextLength()) &&
+         (event == Ion::Events::Right && textField->cursorAtEndOfText() &&
           selectedColumn() < numberOfColumns() - 1) ||
          (event == Ion::Events::Left &&
-          textField->cursorLocation() == textField->draftTextBuffer() &&
+          textField->cursorLocation() == textField->draftText() &&
           selectedColumn() > 0);
 }
 
 bool EditableCellTableViewController::textFieldDidFinishEditing(
-    AbstractTextField *textField, const char *text, Ion::Events::Event event) {
-  double floatBody =
-      textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
-  if (textFieldDelegateApp()->hasUndefinedValue(floatBody)) {
+    AbstractTextField *textField, Ion::Events::Event event) {
+  double floatBody = ParseInputFloatValue<double>(textField->draftText());
+  if (HasUndefinedValue(floatBody)) {
     return false;
   }
   // Save attributes for later use
   int column = selectedColumn();
   int row = selectedRow();
-  KDCoordinate rwHeight = rowHeight(row);
   int previousNumberOfElementsInColumn = numberOfElementsInColumn(column);
   if (!checkDataAtLocation(floatBody, column, row)) {
-    Container::activeApp()->displayWarning(I18n::Message::ForbiddenValue);
+    App::app()->displayWarning(I18n::Message::ForbiddenValue);
     return false;
   }
   if (!setDataAtLocation(floatBody, column, row)) {
@@ -60,12 +56,12 @@ bool EditableCellTableViewController::textFieldDidFinishEditing(
   }
 
   didChangeCell(column, row);
-  updateSizeMemoizationForRow(row, rwHeight);
+  updateSizeMemoizationForRow(row);
   // Reload other cells
   if (previousNumberOfElementsInColumn < numberOfElementsInColumn(column)) {
     // Reload the whole table, if a value was appended.
-    updateSizeMemoizationForRow(row + 1, 0);  // update total height
-    selectableTableView()->reloadData();
+    updateSizeMemoizationForRow(row + 1);
+    selectableTableView()->reloadData(true, false);
   } else {
     assert(previousNumberOfElementsInColumn ==
            numberOfElementsInColumn(column));
@@ -92,7 +88,8 @@ int EditableCellTableViewController::numberOfRows() const {
 
 void EditableCellTableViewController::fillCellForLocationWithDisplayMode(
     HighlightCell *cell, int column, int row,
-    Preferences::PrintFloatMode floatDisplayMode) {
+    Preferences::PrintFloatMode floatDisplayMode,
+    uint8_t numberOfSignificantDigits) {
   static_cast<EvenOddCell *>(cell)->setEven(row % 2 == 0);
   if (row == 0) {
     setTitleCellText(cell, column);
@@ -101,21 +98,22 @@ void EditableCellTableViewController::fillCellForLocationWithDisplayMode(
   }
   // The cell is editable
   if (cellAtLocationIsEditable(column, row)) {
-    AbstractEvenOddEditableTextCell *myEditableValueCell =
-        static_cast<AbstractEvenOddEditableTextCell *>(cell);
-    constexpr int bufferSize = PrintFloat::charSizeForFloatsWithPrecision(
-        AbstractEvenOddBufferTextCell::k_defaultPrecision);
-    char buffer[bufferSize];
+    constexpr int k_bufferSize = PrintFloat::charSizeForFloatsWithPrecision(
+        PrintFloat::k_maxNumberOfSignificantDigits);
+    char buffer[k_bufferSize];
     // Special case 1: last row and NaN
     if (row == numberOfElementsInColumn(column) + 1 ||
         std::isnan(dataAtLocation(column, row))) {
       buffer[0] = 0;
     } else {
       PoincareHelpers::ConvertFloatToTextWithDisplayMode<double>(
-          dataAtLocation(column, row), buffer, bufferSize,
-          AbstractEvenOddBufferTextCell::k_defaultPrecision, floatDisplayMode);
+          dataAtLocation(column, row), buffer, k_bufferSize,
+          numberOfSignificantDigits, floatDisplayMode);
     }
-    myEditableValueCell->editableTextCell()->textField()->setText(buffer);
+    static_cast<AbstractEvenOddEditableTextCell *>(cell)
+        ->editableTextCell()
+        ->textField()
+        ->setText(buffer);
   }
 }
 

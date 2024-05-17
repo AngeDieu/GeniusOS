@@ -12,9 +12,21 @@ DoublePairTableController::DoublePairTableController(
       m_selectableTableView(this, this, this, &m_prefacedTwiceTableView) {
   m_prefacedTwiceTableView.setCellOverlap(0, 0);
   m_prefacedTwiceTableView.setBackgroundColor(Palette::WallScreenDark);
-  m_prefacedTwiceTableView.setMargins(k_margin, k_scrollBarMargin,
-                                      k_scrollBarMargin, k_margin);
-  m_prefacedTwiceTableView.setMarginDelegate(this);
+  m_prefacedTwiceTableView.setMargins(k_margins);
+  for (int i = 0; i < k_numberOfHeaderColumns; i++) {
+    m_hideableCell[i].setColor(m_selectableTableView.backgroundColor());
+  }
+  for (int i = 0; i < k_maxNumberOfDisplayableRows; i++) {
+    m_calculationTitleCells[i].setAlignment(KDGlyph::k_alignRight,
+                                            KDGlyph::k_alignCenter);
+    m_calculationSymbolCells[i].setAlignment(KDGlyph::k_alignCenter,
+                                             KDGlyph::k_alignCenter);
+  }
+}
+
+void DoublePairTableController::viewWillAppear() {
+  m_selectableTableView.resetSizeAndOffsetMemoization();
+  TabTableController::viewWillAppear();
 }
 
 Responder* DoublePairTableController::responderWhenEmpty() {
@@ -39,26 +51,57 @@ void DoublePairTableController::didBecomeFirstResponder() {
   TabTableController::didBecomeFirstResponder();
 }
 
-KDCoordinate DoublePairTableController::columnPrefaceRightMargin() {
-  KDCoordinate actualOffset =
-      offset().x() +
-      (m_prefacedTwiceTableView.columnPrefaceView()->bounds().isEmpty()
-           ? m_prefacedTwiceTableView.columnPrefaceView()
-                 ->minimalSizeForOptimalDisplay()
-                 .width()
-           : 0);
-
-  for (int i = 0; i < numberOfColumns(); i++) {
-    constexpr KDCoordinate maxMargin = Escher::Metric::TableSeparatorThickness;
-    KDCoordinate delta = actualOffset - cumulatedWidthBeforeColumn(i);
-    if (delta < 0) {
-      return maxMargin;
-    } else if (delta <= maxMargin) {
-      return delta;
-    }
+HighlightCell* DoublePairTableController::reusableCell(int index, int type) {
+  assert(0 <= index && index < reusableCellCount(type));
+  switch (type) {
+    case k_hideableCellType:
+      return &m_hideableCell[index];
+    case k_calculationTitleCellType:
+      return &m_calculationTitleCells[index];
+    default:
+      assert(k_calculationSymbolCellType);
+      return &m_calculationSymbolCells[index];
   }
-  assert(false);
-  return 0;
+}
+
+int DoublePairTableController::reusableCellCount(int type) {
+  switch (type) {
+    case k_hideableCellType:
+      return k_numberOfHeaderColumns;
+    case k_seriesTitleCellType:
+      return k_numberOfSeriesTitleCells;
+    case k_calculationTitleCellType:
+      return k_maxNumberOfDisplayableRows;
+    case k_calculationSymbolCellType:
+      return k_maxNumberOfDisplayableRows;
+    default:
+      assert(type == k_calculationCellType);
+      return k_numberOfCalculationCells;
+  }
+}
+
+int DoublePairTableController::typeAtLocation(int column, int row) {
+  assert(0 <= column && column < numberOfColumns());
+  assert(0 <= row && row < numberOfRows());
+  if (column <= 1 && row == 0) {
+    return k_hideableCellType;
+  }
+  if (row == 0) {
+    return k_seriesTitleCellType;
+  }
+  if (column == 0) {
+    return k_calculationTitleCellType;
+  }
+  if (column == 1) {
+    return k_calculationSymbolCellType;
+  }
+  return k_calculationCellType;
+}
+
+KDCoordinate DoublePairTableController::separatorBeforeColumn(int index) {
+  return typeAtLocation(index, 0) == k_seriesTitleCellType
+             ? Metric::TableSeparatorThickness
+             : 0;
 }
 
 }  // namespace Shared

@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <ion/unicode/utf8_helper.h>
 #include <poincare/print.h>
 #include <poincare/print_float.h>
 #include <poincare/print_int.h>
@@ -128,19 +129,23 @@ int Print::UnsafeCustomPrintf(char *buffer, size_t bufferSize,
   return length;
 }
 
-int Print::CustomPrintfWithMaxNumberOfSignificantDigits(
-    char *buffer, size_t bufferSize, int maxNumberOfSignificantDigits,
-    const char *format, ...) {
+int Print::CustomPrintfWithMaxNumberOfGlyphs(char *buffer, size_t bufferSize,
+                                             int maxNumberOfSignificantDigits,
+                                             int maxNumberOfGlyphs,
+                                             const char *format, ...) {
   assert(maxNumberOfSignificantDigits > 0);
   int length = bufferSize;
-  while (length >= static_cast<int>(bufferSize) &&
-         maxNumberOfSignificantDigits > 0) {
+  int nbGlyph = maxNumberOfGlyphs + 1;
+  while (
+      (length >= static_cast<int>(bufferSize) || nbGlyph > maxNumberOfGlyphs) &&
+      maxNumberOfSignificantDigits > 0) {
     va_list args;
     va_start(args, format);
     length = PrivateCustomPrintf(buffer, bufferSize,
                                  maxNumberOfSignificantDigits, format, args);
     maxNumberOfSignificantDigits--;
     va_end(args);
+    nbGlyph = UTF8Helper::StringGlyphLength(buffer);
   }
   assert(length < static_cast<int>(bufferSize));
   return length;

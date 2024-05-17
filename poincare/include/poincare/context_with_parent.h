@@ -9,17 +9,17 @@ namespace Poincare {
 
 class ContextWithParent : public Context {
  public:
-  ContextWithParent(Context* parentContext) : m_parentContext(parentContext) {
-    assert(parentContext);
-  }
+  ContextWithParent(Context* parentContext) : m_parentContext(parentContext) {}
 
   // Context
   SymbolAbstractType expressionTypeForIdentifier(const char* identifier,
                                                  int length) override {
+    assert(m_parentContext);
     return m_parentContext->expressionTypeForIdentifier(identifier, length);
   }
   bool setExpressionForSymbolAbstract(const Expression& expression,
                                       const SymbolAbstract& symbol) override {
+    assert(m_parentContext);
     return m_parentContext->setExpressionForSymbolAbstract(expression, symbol);
   }
 
@@ -27,6 +27,7 @@ class ContextWithParent : public Context {
   const Expression protectedExpressionForSymbolAbstract(
       const SymbolAbstract& symbol, bool clone,
       ContextWithParent* lastDescendantContext) override {
+    assert(m_parentContext);
     return m_parentContext->protectedExpressionForSymbolAbstract(
         symbol, clone,
         lastDescendantContext == nullptr ? this : lastDescendantContext);

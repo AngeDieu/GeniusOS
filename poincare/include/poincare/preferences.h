@@ -49,19 +49,11 @@ class Preferences final {
     TopLeft,
   };
   // This is in Poincare and not in Apps because it's used in Escher
-  enum class LogarithmKeyEvent : uint8_t {
-    Default,
-    WithBaseTen,
-    WithEmptyBase
-  };
+  enum class LogarithmKeyEvent : uint8_t { Default, WithBaseTen };
   enum class ParabolaParameter : uint8_t { Default, FocalLength };
 
   Preferences();
   static OMG::GlobalBox<Preferences> sharedPreferences;
-
-  static Preferences ClonePreferencesWithNewComplexFormat(
-      ComplexFormat complexFormat,
-      Preferences* preferences = sharedPreferences);
 
   static ComplexFormat UpdatedComplexFormatWithExpressionInput(
       ComplexFormat complexFormat, const Expression& e, Context* context);
@@ -109,6 +101,11 @@ class Preferences final {
 
   ExamMode examMode() const;
   void setExamMode(ExamMode examMode);
+
+  uint32_t mathPreferencesCheckSum() const {
+    return (static_cast<uint32_t>(m_complexFormat) << 8) +
+           static_cast<uint32_t>(m_angleUnit);
+  }
 
  private:
   AngleUnit m_angleUnit;

@@ -22,6 +22,7 @@ class Sequence : public Function {
   friend class SequenceStore;
 
  public:
+  constexpr static CodePoint k_sequenceSymbol = 'n';
   enum class Type : uint8_t {
     Explicit = 0,
     SingleRecurrence = 1,
@@ -29,7 +30,7 @@ class Sequence : public Function {
   };
   Sequence(Ion::Storage::Record record = Record()) : Function(record) {}
   I18n::Message parameterMessageName() const override;
-  CodePoint symbol() const override { return 'n'; }
+  CodePoint symbol() const override { return k_sequenceSymbol; }
   int nameWithArgumentAndType(char *buffer, size_t bufferSize);
 
   // MetaData getters
@@ -106,14 +107,15 @@ class Sequence : public Function {
    * - simple recurrence: any term of u other than u(i)
    * - double recurrence: any term of u other than u(i+1), u(i) */
   bool canBeHandledAsExplicit(Poincare::Context *context) const {
-    return !mainExpressionContainsForbiddenTerms(context, false, false);
+    return !mainExpressionContainsForbiddenTerms(context, false, true, false);
   }
-  /* Sequence u is not computable if main expression contains forbidden terms:
+  /* Sequence u (with initial rank i) is not computable if main expression
+   * contains another sequence or forbidden terms:
    * - explicit: any term of u
-   * - simple recurrence: any term of u other than u(n), u(0)
-   * - double recurrence: any term of u other than u(n+1), u(n), u(1), u(0) */
+   * - simple recurrence: any term of u other than u(n), u(i)
+   * - double recurrence: any term of u other than u(n+1), u(n), u(i+1), u(i) */
   bool mainExpressionIsNotComputable(Poincare::Context *context) const {
-    return mainExpressionContainsForbiddenTerms(context, true, false);
+    return mainExpressionContainsForbiddenTerms(context, true, true, true);
   }
   int order() const { return static_cast<int>(type()); }
   int firstNonInitialRank() const { return initialRank() + order(); }
@@ -129,11 +131,9 @@ class Sequence : public Function {
       int subCurveIndex = 0) const override {
     return Poincare::Coordinate2D<double>(x, privateEvaluateYAtX(x, context));
   }
-  template <typename T>
-  T approximateAtContextRank(SequenceContext *sqctx,
-                             bool intermediateComputation) const;
-  template <typename T>
-  T approximateAtRank(int rank, SequenceContext *sqctx) const;
+  double approximateAtContextRank(SequenceContext *sqctx,
+                                  bool intermediateComputation) const;
+  double approximateAtRank(int rank, SequenceContext *sqctx) const;
 
   Poincare::Expression sumBetweenBounds(
       double start, double end, Poincare::Context *context) const override;
@@ -250,9 +250,9 @@ class Sequence : public Function {
   const ExpressionModel *model() const override { return &m_definition; }
   RecordDataBuffer *recordData() const;
 
-  bool mainExpressionContainsForbiddenTerms(Poincare::Context *context,
-                                            bool allowRecursion,
-                                            bool forCobweb) const;
+  bool mainExpressionContainsForbiddenTerms(
+      Poincare::Context *context, bool recursionIsAllowed,
+      bool systemSymbolIsAllowed, bool otherSequencesAreAllowed) const;
 
   DefinitionModel m_definition;
   FirstInitialConditionModel m_firstInitialCondition;

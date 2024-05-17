@@ -2,12 +2,12 @@
 #define SEQUENCE_APP_H
 
 #include <apps/apps_container_helper.h>
+#include <apps/shared/function_app.h>
+#include <apps/shared/global_context.h>
+#include <apps/shared/interval.h>
+#include <apps/shared/sequence_context.h>
+#include <apps/shared/sequence_store.h>
 
-#include "../shared/function_app.h"
-#include "../shared/global_context.h"
-#include "../shared/interval.h"
-#include "../shared/sequence_context.h"
-#include "../shared/sequence_store.h"
 #include "graph/curve_view_range.h"
 #include "graph/graph_controller.h"
 #include "list/list_controller.h"
@@ -44,22 +44,18 @@ class App : public Shared::FunctionApp {
     }
 
    private:
-    void tidy() override;
     CurveViewRange m_graphRange;
     Shared::Interval m_interval;
     bool m_intervalModifiedByUser;
   };
-  static App *app() {
-    return static_cast<App *>(Escher::Container::activeApp());
-  }
+  static App *app() { return static_cast<App *>(Escher::App::app()); }
   Snapshot *snapshot() const {
     return static_cast<Snapshot *>(Escher::App::snapshot());
   }
   TELEMETRY_ID("Sequence");
   /* TODO: override variableBox to lock sequence in the variable box once they
-   * appear there NestedMenuController * variableBox(InputEventHandler *
+   * appear there NestedMenuController * variableBox(EditableField *
    * textInput) override; */
-  CodePoint XNT() override { return 'n'; }
   Shared::SequenceContext *localContext() override {
     return static_cast<Shared::GlobalContext *>(
                AppsContainerHelper::sharedAppsContainerGlobalContext())
@@ -74,14 +70,12 @@ class App : public Shared::FunctionApp {
   ValuesController *valuesController() override {
     return &m_tabs.tab<ValuesTab>()->m_valuesController;
   }
-  bool isAcceptableExpression(Escher::EditableField *field,
-                              const Poincare::Expression expression) override;
 
  private:
   App(Snapshot *snapshot) : FunctionApp(snapshot, &m_tabs, ListTab::k_title) {}
 
   struct ListTab : public Shared::FunctionApp::ListTab {
-    static constexpr I18n::Message k_title = I18n::Message::SequenceTab;
+    static constexpr I18n::Message k_title = I18n::Message::Sequences;
     ListTab();
     ListController m_listController;
   };

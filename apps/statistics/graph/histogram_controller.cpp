@@ -4,7 +4,7 @@
 #include <apps/shared/poincare_helpers.h>
 #include <assert.h>
 #include <float.h>
-#include <poincare/ieee754.h>
+#include <omg/ieee754.h>
 #include <poincare/preferences.h>
 #include <poincare/print.h>
 
@@ -20,9 +20,8 @@ using namespace Escher;
 namespace Statistics {
 
 HistogramController::HistogramController(
-    Responder *parentResponder,
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
-    ButtonRowController *header, TabViewController *tabController,
+    Responder *parentResponder, ButtonRowController *header,
+    TabViewController *tabController,
     Escher::StackViewController *stackViewController,
     Escher::ViewController *typeViewController, Store *store,
     uint32_t *storeVersion)
@@ -32,7 +31,7 @@ HistogramController::HistogramController(
       m_view(store, &m_histogramRange),
       m_histogramRange(store),
       m_storeVersion(storeVersion),
-      m_histogramParameterController(nullptr, inputEventHandlerDelegate, store),
+      m_histogramParameterController(nullptr, store),
       m_parameterButton(
           this, I18n::Message::StatisticsGraphSettings,
           Invocation::Builder<HistogramController>(
@@ -94,7 +93,9 @@ bool HistogramController::reloadBannerView() {
   Poincare::Preferences::PrintFloatMode displayMode =
       Poincare::Preferences::sharedPreferences->displayMode();
   constexpr static int k_bufferSize =
-      1 + Ion::Display::Width / KDFont::GlyphWidth(KDFont::Size::Small);
+      sizeof("Intervalle : [-1.2345ᴇ-123;-1.2345ᴇ-123[");  // longest case
+  constexpr static int k_maxNumberOfGlyphs =
+      Poincare::Print::k_maxNumberOfSmallGlyphsInScreenWidth;
   char buffer[k_bufferSize] = "";
 
   // Display series name
@@ -106,15 +107,9 @@ bool HistogramController::reloadBannerView() {
       m_store->startOfBarAtIndex(selectedSeries(), selectedIndex());
   double upperBound =
       m_store->endOfBarAtIndex(selectedSeries(), selectedIndex());
-  /* In a worst case scenario, the bounds of the interval can be displayed
-   * with 5 significant digits:
-   * "Intervalle : [-1.2345ᴇ-123;-1.2345ᴇ-123[\0" is 45 chars, compared to
-   * k_bufferSize 46 (remembering ᴇ is 3 chars).
-   * We add 1 to account for the fact that both calls to sizeof count the null
-   * character. */
-  Poincare::Print::CustomPrintfWithMaxNumberOfSignificantDigits(
-      buffer, k_bufferSize, precision, "%s%s[%*.*ed,%*.*ed%s",
-      I18n::translate(I18n::Message::Interval),
+  Poincare::Print::CustomPrintfWithMaxNumberOfGlyphs(
+      buffer, k_bufferSize, precision, k_maxNumberOfGlyphs,
+      "%s%s[%*.*ed,%*.*ed%s", I18n::translate(I18n::Message::Interval),
       I18n::translate(I18n::Message::ColonConvention), lowerBound, displayMode,
       upperBound, displayMode,
       GlobalPreferences::sharedGlobalPreferences->openIntervalChar(false));
@@ -148,9 +143,9 @@ bool HistogramController::moveSelectionHorizontally(
   int newSelectedBarIndex = selectedIndex();
   do {
     newSelectedBarIndex += direction.isRight() ? 1 : -1;
-  } while (m_store->heightOfBarAtIndex(selectedSeries(), newSelectedBarIndex) ==
-               0 &&
-           newSelectedBarIndex >= 0 && newSelectedBarIndex < numberOfBars);
+  } while (newSelectedBarIndex >= 0 && newSelectedBarIndex < numberOfBars &&
+           m_store->heightOfBarAtIndex(selectedSeries(), newSelectedBarIndex) ==
+               0);
 
   if (newSelectedBarIndex >= 0 && newSelectedBarIndex < numberOfBars &&
       selectedIndex() != newSelectedBarIndex) {
@@ -181,8 +176,7 @@ void HistogramController::preinitXRangeParameters(double *xMin, double *xMax) {
   if (xMax != nullptr) {
     *xMax = maxValue;
   }
-  m_histogramRange.setHistogramXMin(minValue, false);
-  m_histogramRange.setHistogramXMax(maxValue, true);
+  m_histogramRange.setHistogramRange(minValue, maxValue);
 }
 
 void HistogramController::initRangeParameters() {
@@ -195,10 +189,16 @@ void HistogramController::initRangeParameters() {
   if ((xMax - xMin) / barWidth > k_maxNumberOfBarsPerWindow) {
     xMax = xMin + k_maxNumberOfBarsPerWindow * barWidth;
   }
-  m_histogramRange.setHistogramXMin(
-      xMin - HistogramRange::k_displayLeftMarginRatio * (xMax - xMin), false);
-  m_histogramRange.setHistogramXMax(
-      xMax + HistogramRange::k_displayRightMarginRatio * (xMax - xMin), true);
+
+  // TODO: Set the histogram range to double.
+  float min = std::clamp(static_cast<float>(xMin), -Range1D::k_maxFloat,
+                         Range1D::k_maxFloat);
+  float max = std::clamp(static_cast<float>(xMax), -Range1D::k_maxFloat,
+                         Range1D::k_maxFloat);
+
+  m_histogramRange.setHistogramRange(
+      min - HistogramRange::k_displayLeftMarginRatio * (max - min),
+      max + HistogramRange::k_displayRightMarginRatio * (max - min));
 
   initYRangeParameters(selectedSeries());
 }
@@ -207,7 +207,7 @@ void HistogramController::initYRangeParameters(int series) {
   assert(activeSeriesMethod()(m_store, series));
   /* Height of drawn bar are relative to the maximal bar of the series, so all
    * displayed series need the same range of [0,1]. */
-  m_histogramRange.setYMax(1.0f + HistogramRange::k_displayTopMarginRatio);
+  float yMax = 1.0f + HistogramRange::k_displayTopMarginRatio;
 
   /* Compute YMin:
    *    ratioFloatPixel*(0-yMin) = bottomMargin
@@ -222,8 +222,9 @@ void HistogramController::initYRangeParameters(int series) {
    * */
   float bottomMargin = static_cast<float>(HistogramRange::k_bottomMargin);
   float viewHeight = static_cast<float>(m_view.subviewHeight());
-  m_histogramRange.setYMin(m_histogramRange.yMax() * bottomMargin /
-                           (bottomMargin - viewHeight));
+  float yMin = yMax * bottomMargin / (bottomMargin - viewHeight);
+
+  m_histogramRange.setYRange(yMin, yMax);
 }
 
 void HistogramController::initBarParameters() {
@@ -238,7 +239,7 @@ void HistogramController::initBarParameters() {
   } else {
     // Round the bar width, as we convert from float to double
     const double precision = 7.0;  // FLT_EPS ~= 1e-7
-    const double logBarWidth = IEEE754<double>::exponentBase10(barWidth);
+    const double logBarWidth = OMG::IEEE754<double>::exponentBase10(barWidth);
     const double truncateFactor = std::pow(10.0, precision - logBarWidth);
     barWidth = std::round(barWidth * truncateFactor) / truncateFactor;
   }
@@ -260,8 +261,8 @@ void HistogramController::initBarParameters() {
       // Bars are offsetted right to center the bars around the labels.
       xMin -= barWidth / 2.0;
       m_store->setFirstDrawnBarAbscissa(xMin);
-      m_histogramRange.setHistogramXMin(
-          m_histogramRange.xMin() - barWidth / 2.0, true);
+      m_histogramRange.setHistogramRange(
+          m_histogramRange.xMin() - barWidth / 2.0, m_histogramRange.xMax());
     }
   }
   assert(barWidth > 0.0 && std::ceil((xMax - xMin) / barWidth) <=

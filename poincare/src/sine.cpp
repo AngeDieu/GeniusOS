@@ -16,14 +16,13 @@ int SineNode::numberOfChildren() const {
 }
 
 template <typename T>
-Complex<T> SineNode::computeOnComplex(const std::complex<T> c,
-                                      Preferences::ComplexFormat,
-                                      Preferences::AngleUnit angleUnit) {
+std::complex<T> SineNode::computeOnComplex(const std::complex<T> c,
+                                           Preferences::ComplexFormat,
+                                           Preferences::AngleUnit angleUnit) {
   std::complex<T> angleInput = Trigonometry::ConvertToRadian(c, angleUnit);
   std::complex<T> res = std::sin(angleInput);
-  return Complex<T>::Builder(
-      ApproximationHelper::NeglectRealOrImaginaryPartIfNeglectable(res,
-                                                                   angleInput));
+  return ApproximationHelper::NeglectRealOrImaginaryPartIfNeglectable(
+      res, angleInput);
 }
 
 Layout SineNode::createLayout(Preferences::PrintFloatMode floatDisplayMode,
@@ -44,7 +43,7 @@ int SineNode::serialize(char* buffer, int bufferSize,
 
 Expression SineNode::shallowReduce(const ReductionContext& reductionContext) {
   Sine e = Sine(this);
-  return Trigonometry::shallowReduceDirectFunction(e, reductionContext);
+  return Trigonometry::ShallowReduceDirectFunction(e, reductionContext);
 }
 
 bool SineNode::derivate(const ReductionContext& reductionContext, Symbol symbol,

@@ -1,5 +1,7 @@
 #include "main_controller.h"
 
+#include <escher/clipboard.h>
+
 #include "app.h"
 #include "table_layout.h"
 
@@ -38,7 +40,7 @@ MainController::MainController(Escher::StackViewController* parentResponder)
 void MainController::selectedElementHasChanged() {
   m_view.bannerView()->reload();
   m_view.elementsView()->cursorMoved();
-  m_detailsController.resetMemoization();
+  m_detailsController.selectableListView()->resetSizeAndOffsetMemoization();
 }
 
 void MainController::activeDataFieldHasChanged() {
@@ -100,17 +102,12 @@ void MainController::textFieldDidStartEditing(
   }
 }
 
-bool MainController::textFieldShouldFinishEditing(
-    Escher::AbstractTextField* textField, Ion::Events::Event event) {
-  return event == Ion::Events::OK || event == Ion::Events::EXE;
-}
-
 bool MainController::textFieldDidReceiveEvent(
     Escher::AbstractTextField* textField, Ion::Events::Event event) {
   // Sto event needs to be handled here before AbstractTextField handles it.
   if (event == Ion::Events::Sto || event == Ion::Events::Var) {
-    /* ElementsView only redraws its background when appearing to avoid blinking
-     * It needs to be redrawn after the store menu */
+    /* ElementsView only redraws its background when appearing to avoid
+     * blinking It needs to be redrawn after the store menu */
     m_view.elementsView()->dirtyBackground();
   }
   if (textField->isEditing()) {
@@ -133,12 +130,40 @@ bool MainController::textFieldDidReceiveEvent(
     /* OK should not start the edition */
     return handleEvent(event);
   }
+
+  // Handle Copy / store / varbox.
+
+  ElementsViewDataSource* dataSource = App::app()->elementsViewDataSource();
+  AtomicNumber z = dataSource->selectedElement();
+  if (z == ElementsDataBase::k_noElement) {
+    return false;
+  }
+
+  if (event == Ion::Events::Copy || event == Ion::Events::Cut ||
+      event == Ion::Events::Var || event == Ion::Events::Sto) {
+    constexpr int bufferSize = Escher::TextField::MaxBufferSize();
+    char buffer[bufferSize];
+    buffer[0] = 0;
+
+    if (dataSource->field()->canBeStored(z)) {
+      dataSource->field()->getLayout(z).serializeForParsing(buffer, bufferSize);
+    }
+
+    if (event == Ion::Events::Var || event == Ion::Events::Sto) {
+      App::app()->storeValue(buffer);
+    } else if (strlen(buffer) > 0) {
+      assert(event == Ion::Events::Copy || event == Ion::Events::Cut);
+      Escher::Clipboard::SharedClipboard()->store(buffer, bufferSize);
+    }
+
+    return true;
+  }
+
   return false;
 }
 
 bool MainController::textFieldDidFinishEditing(
-    Escher::AbstractTextField* textField, const char* text,
-    Ion::Events::Event event) {
+    Escher::AbstractTextField* textField, Ion::Events::Event event) {
   m_view.bannerView()->textField()->commitSuggestion();
   AtomicNumber match =
       App::app()->elementsViewDataSource()->elementSearchResult();
@@ -149,34 +174,27 @@ bool MainController::textFieldDidFinishEditing(
   return true;
 }
 
-bool MainController::textFieldDidAbortEditing(
+void MainController::textFieldDidAbortEditing(
     Escher::AbstractTextField* textField) {
   endElementSearch(App::app()->elementsViewDataSource()->previousElement());
-  return false;
 }
 
-bool MainController::textFieldDidHandleEvent(
-    Escher::AbstractTextField* textField, bool returnValue,
-    bool textDidChange) {
-  if (textDidChange) {
-    if (textField->isEditing()) {
-      if (textField->draftTextLength() == 0) {
-        textField->setEditing(false);
-        endElementSearch(
-            App::app()->elementsViewDataSource()->previousElement());
-      } else if (textField->cursorAtEndOfText()) {
-        /* Update suggestion text */
-        ElementsViewDataSource* dataSource =
-            App::app()->elementsViewDataSource();
-        m_view.bannerView()->textField()->setSuggestion(
-            dataSource->suggestedElementName());
-      } else {
-        m_view.bannerView()->textField()->setSuggestion(nullptr);
-      }
+void MainController::textFieldDidHandleEvent(
+    Escher::AbstractTextField* textField) {
+  if (textField->isEditing()) {
+    if (textField->draftTextLength() == 0) {
+      textField->setEditing(false);
+      endElementSearch(App::app()->elementsViewDataSource()->previousElement());
+    } else if (textField->cursorAtEndOfText()) {
+      /* Update suggestion text */
+      ElementsViewDataSource* dataSource = App::app()->elementsViewDataSource();
+      m_view.bannerView()->textField()->setSuggestion(
+          dataSource->suggestedElementName());
+    } else {
+      m_view.bannerView()->textField()->setSuggestion(nullptr);
     }
-    m_view.elementsView()->reload();
   }
-  return returnValue;
+  m_view.elementsView()->reload();
 }
 
 void MainController::endElementSearch(AtomicNumber z) {

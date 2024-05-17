@@ -1,5 +1,6 @@
 #include <poincare/bracket_pair_layout.h>
 #include <poincare/layout_cursor.h>
+#include <poincare/serialization_helper.h>
 
 namespace Poincare {
 
@@ -12,21 +13,22 @@ BracketPairLayoutNode::deletionMethodForCursorLeftOfChild(
 KDSize BracketPairLayoutNode::computeSize(KDFont::Size font) {
   KDSize childSize = childLayout()->layoutSize(font);
   KDCoordinate width = 2 * bracketWidth() + childSize.width();
-  KDCoordinate height =
-      HeightGivenChildHeight(childSize.height(), verticalMargin());
+  KDCoordinate height = Height(childSize.height(), minVerticalMargin());
   return KDSize(width, height);
 }
 
 KDCoordinate BracketPairLayoutNode::computeBaseline(KDFont::Size font) {
-  return BaselineGivenChildHeightAndBaseline(
-      childLayout()->layoutSize(font).height(), childLayout()->baseline(font),
-      verticalMargin());
+  KDCoordinate childHeight = childLayout()->layoutSize(font).height();
+  KDCoordinate childBaseLine = childLayout()->baseline(font);
+  return Baseline(childHeight, childBaseLine, minVerticalMargin());
 }
 
 KDPoint BracketPairLayoutNode::positionOfChild(LayoutNode* child,
                                                KDFont::Size font) {
   assert(childLayout() == child);
-  return ChildOffset(verticalMargin(), bracketWidth());
+  KDCoordinate childHeight = childLayout()->layoutSize(font).height();
+
+  return ChildOffset(minVerticalMargin(), bracketWidth(), childHeight);
 }
 
 void BracketPairLayoutNode::render(KDContext* ctx, KDPoint p,
@@ -42,11 +44,9 @@ int BracketPairLayoutNode::serializeWithSymbol(
     char symbolOpen, char symbolClose, char* buffer, int bufferSize,
     Preferences::PrintFloatMode floatDisplayMode,
     int numberOfSignificantDigits) const {
-  int length = 0;
-  buffer[length++] = symbolOpen;
-  if (length >= bufferSize) {
-    buffer[bufferSize - 1] = '\0';
-    return bufferSize;
+  int length = SerializationHelper::CodePoint(buffer, bufferSize, symbolOpen);
+  if (length >= bufferSize - 1) {
+    return bufferSize - 1;
   }
   length +=
       childLayout()->serialize(buffer + length, bufferSize - length,
@@ -55,13 +55,9 @@ int BracketPairLayoutNode::serializeWithSymbol(
     buffer[bufferSize - 1] = '\0';
     return bufferSize;
   }
-  buffer[length++] = symbolClose;
-  if (length >= bufferSize) {
-    buffer[bufferSize - 1] = '\0';
-    return bufferSize;
-  }
-  buffer[length] = '\0';
-  return length;
+  length += SerializationHelper::CodePoint(buffer + length, bufferSize - length,
+                                           symbolClose);
+  return std::min(length, bufferSize - 1);
 }
 
 }  // namespace Poincare

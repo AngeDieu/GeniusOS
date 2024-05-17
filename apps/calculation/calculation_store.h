@@ -1,6 +1,7 @@
 #ifndef CALCULATION_CALCULATION_STORE_H
 #define CALCULATION_CALCULATION_STORE_H
 
+#include <apps/constant.h>
 #include <apps/shared/expiring_pointer.h>
 #include <poincare/preferences.h>
 #include <stddef.h>
@@ -35,9 +36,6 @@ a = pointerArea()
 
 class CalculationStore {
  public:
-  using HeightComputer = KDCoordinate (*)(Calculation *, Poincare::Context *,
-                                          bool);
-
   CalculationStore(char *buffer, size_t bufferSize);
 
   /* A Calculation does not count toward the number while it is being built and
@@ -46,29 +44,28 @@ class CalculationStore {
   Shared::ExpiringPointer<Calculation> calculationAtIndex(int index) const;
   Poincare::Expression ansExpression(Poincare::Context *context) const;
   size_t bufferSize() const { return m_bufferSize; }
-  int remainingBufferSize() const {
+  size_t remainingBufferSize() const {
     return spaceForNewCalculations(endOfCalculations()) + sizeof(Calculation *);
   }
 
   Shared::ExpiringPointer<Calculation> push(const char *text,
-                                            Poincare::Context *context,
-                                            HeightComputer heightComputer);
+                                            Poincare::Context *context);
   void deleteCalculationAtIndex(int index) {
     privateDeleteCalculationAtIndex(index, endOfCalculations());
   }
   void deleteAll() { m_numberOfCalculations = 0; }
-  void recomputeHeightsIfPreferencesHaveChanged(
-      Poincare::Preferences *preferences, HeightComputer heightComputer);
+  bool preferencesHaveChanged();
+
+  /* It is not really the minimal size, but it clears enough space for most
+   * calculations instead of clearing less space, then fail to serialize, clear
+   * more space, fail to serialize, clear more space, etc., until reaching
+   * sufficient free space. */
+  static constexpr size_t k_calculationMinimalSize =
+      sizeof(Calculation) + Calculation::k_numberOfExpressions *
+                                ::Constant::MaxSerializedExpressionSize;
 
  private:
   static constexpr char *k_pushError = nullptr;
-
-  static void SetCalculationHeights(Calculation *calculation,
-                                    HeightComputer heightComputer,
-                                    Poincare::Context *context) {
-    calculation->setHeights(heightComputer(calculation, context, false),
-                            heightComputer(calculation, context, true));
-  }
 
   char *pointerArea() const {
     return m_buffer + m_bufferSize -
@@ -82,7 +79,7 @@ class CalculationStore {
   }
   char *endOfCalculationAtIndex(int index) const;
   /* Account for the size of an additional pointer at the end of the buffer. */
-  int spaceForNewCalculations(char *currentEndOfCalculations) const {
+  size_t spaceForNewCalculations(char *currentEndOfCalculations) const {
     return (pointerArea() - currentEndOfCalculations) - sizeof(Calculation *);
   }
 
@@ -91,12 +88,13 @@ class CalculationStore {
     return privateDeleteCalculationAtIndex(numberOfCalculations() - 1,
                                            endOfTemporaryData);
   }
-  Shared::ExpiringPointer<Calculation> errorPushUndefined(
-      HeightComputer heightComputer);
+  Shared::ExpiringPointer<Calculation> errorPushUndefined();
 
   /* Push helper methods return a pointer to the end of the pushed content, or
    * k_pushError if the content was not pushed. */
-  char *pushEmptyCalculation(char *location);
+  char *pushEmptyCalculation(char *location,
+                             Poincare::Preferences::ComplexFormat complexFormat,
+                             Poincare::Preferences::AngleUnit angleUnit);
   char *pushSerializedExpression(char *location, Poincare::Expression e,
                                  int numberOfSignificantDigits);
   char *pushUndefined(char *location);

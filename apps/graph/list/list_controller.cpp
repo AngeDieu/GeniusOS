@@ -21,15 +21,12 @@ ListController::ListController(
     FunctionParameterController *functionParameterController)
     : Shared::FunctionListController(parentResponder, header, footer,
                                      I18n::Message::AddFunction),
-      m_editableCell(this, this, this),
+      m_editableCell(this, this),
       m_parameterController(functionParameterController),
       m_modelsParameterController(this, this),
       m_modelsStackController(nullptr, &m_modelsParameterController,
                               StackViewController::Style::PurpleWhite),
-      m_parameterColumnSelected(false) {
-  static_assert(k_newModelMargin == FunctionCell::k_colorIndicatorThickness +
-                                        Metric::BigCellMargin);
-}
+      m_parameterColumnSelected(false) {}
 
 /* TableViewDataSource */
 
@@ -55,13 +52,17 @@ int ListController::reusableCellCount(int type) {
 /* ViewController */
 
 void ListController::viewWillAppear() {
-  // A function could have been deleted from the option menu of the Graph tab.
-  resetMemoization();
   Shared::FunctionListController::viewWillAppear();
   /* FunctionListcontroller::didEnterResponderChain might not be called,
    * (if the list tab is displayed but not selected using Back-Back)
    * therefore we also need to manually reload the table here. */
   selectableListView()->reloadData(false);
+  App::app()->defaultToolbox()->setExtraCellsDataSource(this);
+}
+
+void ListController::viewDidDisappear() {
+  Shared::FunctionListController::viewDidDisappear();
+  App::app()->defaultToolbox()->setExtraCellsDataSource(nullptr);
 }
 
 // Fills buffer with a default function equation, such as "f(x)=", "y=" or "r="
@@ -119,67 +120,66 @@ bool ListController::layoutRepresentsParametricFunction(Layout l) const {
   return m.numberOfColumns() == 1 && m.numberOfRows() == 2;
 }
 
-bool ListController::completeEquation(InputEventHandler *equationField,
-                                      CodePoint symbol) {
+bool ListController::shouldCompleteEquation(Poincare::Expression expression) {
+  /* We do not want to complete equation if expression is already an
+   * (in)equation, a point or a list (of points). */
+  return expression.type() != ExpressionNode::Type::Comparison &&
+         expression.type() != ExpressionNode::Type::Point &&
+         !expression.deepIsList(nullptr);
+}
+
+bool ListController::completeEquation(LayoutField *equationField) {
+  equationField->putCursorOnOneSide(OMG::Direction::Left());
   // Retrieve the edited function
   ExpiringPointer<ContinuousFunction> f =
       modelStore()->modelForRecord(modelStore()->recordAtIndex(selectedRow()));
+  constexpr size_t k_bufferSize =
+      SymbolAbstractNode::k_maxNameSize + sizeof("(x)≥") - 1;
+  static_assert(k_bufferSize >= sizeof("r=") &&
+                    k_bufferSize >= ContinuousFunction::k_maxDefaultNameSize +
+                                        sizeof("(x)=") - 1,
+                "k_bufferSize should fit all situations.");
+  char buffer[k_bufferSize];
   if (f->isNull() || f->properties().status() ==
                          ContinuousFunctionProperties::Status::Undefined) {
     // Function is new or undefined, complete the equation with a default name
-    constexpr size_t k_bufferSize =
-        Shared::ContinuousFunction::k_maxDefaultNameSize + sizeof("(x)=") - 1;
-    char buffer[k_bufferSize];
     // Insert "f(x)=", with f the default function name and x the symbol
+    CodePoint symbol =
+        layoutRepresentsPolarFunction(equationField->layout())
+            ? ContinuousFunction::k_polarSymbol
+            : (layoutRepresentsParametricFunction(equationField->layout())
+                   ? ContinuousFunction::k_parametricSymbol
+                   : ContinuousFunction::k_cartesianSymbol);
     fillWithDefaultFunctionEquation(buffer, k_bufferSize,
                                     &m_modelsParameterController, symbol);
-    return equationField->handleEventWithText(buffer, false, true);
+  } else {
+    // Insert the name, symbol and equation symbol of the existing function
+    size_t nameLength = f->nameWithArgument(buffer, k_bufferSize);
+    nameLength += strlcpy(buffer + nameLength, f->properties().equationSymbol(),
+                          k_bufferSize - nameLength);
+    assert(nameLength < k_bufferSize);
   }
-  // Insert the name, symbol and equation symbol of the existing function
-  constexpr size_t k_bufferSize =
-      SymbolAbstractNode::k_maxNameSize + sizeof("(x)≥") - 1;
-  static_assert(k_bufferSize >= sizeof("r="),
-                "k_bufferSize should fit both situations.");
-  char buffer[k_bufferSize];
-  size_t nameLength = f->nameWithArgument(buffer, k_bufferSize);
-  nameLength += strlcpy(buffer + nameLength, f->properties().equationSymbol(),
-                        k_bufferSize - nameLength);
-  assert(nameLength < k_bufferSize);
-  return equationField->handleEventWithText(buffer, false, true);
+  bool handled = equationField->handleEventWithText(buffer, false, true);
+  equationField->putCursorOnOneSide(OMG::Direction::Right());
+  return handled;
 }
 
-// TODO: factorize with solver
 bool ListController::layoutFieldDidReceiveEvent(LayoutField *layoutField,
                                                 Ion::Events::Event event) {
   m_parameterColumnSelected = false;
-  if (layoutField->isEditing() && layoutField->shouldFinishEditing(event) &&
-      !layoutField->layout().hasTopLevelEquationSymbol()) {
-    char buffer[TextField::MaxBufferSize()];
-    layoutField->layout().serializeForParsing(buffer,
-                                              TextField::MaxBufferSize());
-    Expression parsedExpression = Expression::Parse(buffer, nullptr);
-    if (parsedExpression.isUninitialized() ||
-        (!parsedExpression.isOfType({
-             ExpressionNode::Type::Comparison,
-             ExpressionNode::Type::Point,
-         }) &&
-         !parsedExpression.deepIsList(nullptr))) {
-      layoutField->putCursorOnOneSide(OMG::Direction::Left());
-      CodePoint symbol =
-          layoutRepresentsPolarFunction(layoutField->layout())
-              ? ContinuousFunction::k_polarSymbol
-              : (layoutRepresentsParametricFunction(layoutField->layout())
-                     ? ContinuousFunction::k_parametricSymbol
-                     : ContinuousFunction::k_cartesianSymbol);
-      if (!completeEquation(layoutField, symbol)) {
-        layoutField->putCursorOnOneSide(OMG::Direction::Right());
-        Container::activeApp()->displayWarning(I18n::Message::RequireEquation);
-        return true;
-      }
-    }
+  return ExpressionModelListController::layoutFieldDidReceiveEvent(layoutField,
+                                                                   event);
+}
+
+CodePoint ListController::defaultXNT() {
+  int selectedFunctionIndex = selectedRow();
+  if (selectedFunctionIndex >= 0) {
+    assert(selectedFunctionIndex < modelStore()->numberOfModels());
+    Ion::Storage::Record record =
+        modelStore()->recordAtIndex(selectedFunctionIndex);
+    return modelStore()->modelForRecord(record)->symbol();
   }
-  return Shared::LayoutFieldDelegate::layoutFieldDidReceiveEvent(layoutField,
-                                                                 event);
+  return ContinuousFunction::k_cartesianSymbol;
 }
 
 void ListController::editExpression(Ion::Events::Event event) {
@@ -189,16 +189,14 @@ void ListController::editExpression(Ion::Events::Event event) {
 
 /* Responder */
 
-KDCoordinate ListController::expressionRowHeight(int j) {
-  if (j == m_editedCellIndex) {
-    return m_editableCell.minimalSizeForOptimalDisplay().height();
-  }
-  if (typeAtRow(j) == k_addNewModelCellType) {
-    return Shared::FunctionListController::expressionRowHeight(j);
-  }
+KDCoordinate ListController::expressionRowHeight(int row) {
+  assert(typeAtRow(row) == k_expressionCellType);
   FunctionCell tempCell;
-  fillCellForRow(&tempCell, j);
-  return tempCell.minimalSizeForOptimalDisplay().height();
+  return protectedNonMemoizedRowHeight(&tempCell, row);
+}
+
+KDCoordinate ListController::editableRowHeight() {
+  return m_editableCell.minimalSizeForOptimalDisplay().height();
 }
 
 bool ListController::handleEvent(Ion::Events::Event event) {
@@ -218,13 +216,13 @@ bool ListController::handleEvent(Ion::Events::Event event) {
       if (event == Ion::Events::Left) {
         // Leave parameter column
         m_parameterColumnSelected = false;
-        selectableListView()->reloadData();
+        selectableListView()->reloadData(true, false);
         return true;
       }
     } else if (event == Ion::Events::Right) {
       // Enter parameter column
       m_parameterColumnSelected = true;
-      selectableListView()->reloadData();
+      selectableListView()->reloadData(true, false);
       return true;
     }
   }
@@ -232,7 +230,7 @@ bool ListController::handleEvent(Ion::Events::Event event) {
     if (selectedRow() == -1) {
       footer()->setSelectedButton(-1);
       selectableListView()->selectCell(numberOfRows() - 1);
-      Container::activeApp()->setFirstResponder(selectableListView());
+      App::app()->setFirstResponder(selectableListView());
       return true;
     }
     selectableListView()->deselectTable();
@@ -259,6 +257,13 @@ int ListController::maxNumberOfDisplayableRows() {
   return k_maxNumberOfDisplayableRows;
 }
 
+Poincare::Layout ListController::extraCellLayoutAtRow(int row) {
+  assert(row < k_numberOfToolboxExtraCells);
+  constexpr CodePoint codepoints[k_numberOfToolboxExtraCells] = {
+      UCodePointInferiorEqual, UCodePointSuperiorEqual};
+  return CodePointLayout::Builder(codepoints[row]);
+}
+
 HighlightCell *ListController::functionCells(int row) {
   assert(row >= 0 && row < k_maxNumberOfDisplayableRows);
   return &m_expressionCells[row];
@@ -274,34 +279,25 @@ void ListController::fillCellForRow(HighlightCell *cell, int row) {
     return;
   }
   assert(type == k_expressionCellType || type == k_editableCellType);
-  AbstractFunctionCell *functionCell =
-      static_cast<AbstractFunctionCell *>(cell);
   ExpiringPointer<ContinuousFunction> f =
       modelStore()->modelForRecord(modelStore()->recordAtIndex(row));
   if (type == k_expressionCellType) {
-    functionCell->setLayout(f->layout());
-    functionCell->setMessage(
-        Preferences::sharedPreferences->examMode().forbidImplicitPlots()
-            ? I18n::Message::Default
-            : f->properties().caption());
+    FunctionCell *functionCell = static_cast<FunctionCell *>(cell);
+    functionCell->expressionCell()->setLayout(f->layout());
+    functionCell->setMessage(f->properties().caption());
     KDColor textColor = f->isActive() ? KDColorBlack : Palette::GrayDark;
-    functionCell->setTextColor(textColor);
+    functionCell->expressionCell()->setTextColor(textColor);
     static_cast<FunctionCell *>(functionCell)
         ->setParameterSelected(m_parameterColumnSelected);
   }
   KDColor functionColor = f->isActive() ? f->color() : Palette::GrayDark;
-  functionCell->setColor(functionColor);
-  functionCell->reloadCell();
-}
-
-FunctionToolbox *ListController::toolbox() {
-  return App::app()->functionToolbox();
+  static_cast<AbstractFunctionCell *>(cell)->setColor(functionColor);
+  cell->reloadCell();
 }
 
 void ListController::addModel() {
-  Container::activeApp()->displayModalViewController(
-      &m_modelsStackController, 0.f, 0.f, Metric::PopUpTopMargin,
-      Metric::PopUpRightMargin, 0, Metric::PopUpLeftMargin);
+  App::app()->displayModalViewController(&m_modelsStackController, 0.f, 0.f,
+                                         Metric::PopUpMarginsNoBottom);
 }
 
 ContinuousFunctionStore *ListController::modelStore() const {

@@ -20,6 +20,7 @@ class ZoomCurveViewController : public Escher::ViewController {
       : Escher::ViewController(parentResponder) {}
   Escher::View* view() override { return curveView(); }
   bool handleEvent(Ion::Events::Event event) override;
+  void viewWillAppear() override;
 
  protected:
   virtual bool handleZoom(Ion::Events::Event event);
@@ -28,6 +29,7 @@ class ZoomCurveViewController : public Escher::ViewController {
   virtual AbstractPlotView* curveView() = 0;
   virtual float xFocus() = 0;
   virtual float yFocus() = 0;
+  virtual float offscreenYAxis() const { return 0.f; }
   CurveViewCursor* m_cursor;
 };
 

@@ -19,7 +19,6 @@ template <typename T, int N>
 void DynamicCellsDataSource<T, N>::createCells() {
   if (m_cells == nullptr) {
     createCellsWithOffset(0);
-    m_delegate->tableView()->reloadData(false);
   }
 }
 
@@ -65,7 +64,7 @@ void DynamicCellsDataSource<T, N>::destroyCells() {
 
 template <typename T, int N>
 Escher::HighlightCell* DynamicCellsDataSource<T, N>::cell(int i) {
-  createCells();
+  assert(m_cells);
   return &m_cells[i];
 }
 
@@ -92,12 +91,20 @@ static_assert(k_inputControllerNumberOfReusableCells ==
                   InputController::k_numberOfReusableCells,
               "k_inputControllerNumberOfReusableCells should be updated with "
               "InputController::k_numberOfReusableCells");
+static_assert(k_goodnessContributionsTableNumberOfReusableCells ==
+              Escher::Metric::MinimalNumberOfScrollableRowsToFillDisplayHeight(
+                  Escher::Metric::SmallEditableCellHeight,
+                  Escher::Metric::TabHeight) *
+                  3);
 template class DynamicCellsDataSource<
     InferenceEvenOddBufferCell, k_homogeneityTableNumberOfReusableHeaderCells>;
 template class DynamicCellsDataSource<
     InferenceEvenOddBufferCell, k_homogeneityTableNumberOfReusableInnerCells>;
 template class DynamicCellsDataSource<
     InferenceEvenOddEditableCell, k_homogeneityTableNumberOfReusableInnerCells>;
+template class DynamicCellsDataSource<
+    InferenceEvenOddBufferCell,
+    k_goodnessContributionsTableNumberOfReusableCells>;
 template class DynamicCellsDataSource<InferenceEvenOddEditableCell,
                                       k_doubleColumnTableNumberOfReusableCells>;
 template class DynamicCellsDataSource<

@@ -33,7 +33,7 @@ void ExamPopUpController::viewDidDisappear() {
 
 bool ExamPopUpController::handleEvent(Ion::Events::Event event) {
   if (event == Ion::Events::USBEnumeration) {
-    Container::activeApp()->modalViewController()->dismissModal();
+    App::app()->modalViewController()->dismissModal();
     return false;
   }
   return MessagePopUpController::handleEvent(event);
@@ -54,8 +54,8 @@ I18n::Message ExamPopUpController::activationWarningMessage() const {
       I18n::Message::ActiveDutchExamModeMessage,
       I18n::Message::ActiveDutchExamModeWithResetMessage,
       // IBTest
-      I18n::Message::ActiveKeystoneSTAAROrIBExamModeMessage,
-      I18n::Message::ActiveKeystoneSTAAROrIBExamModeWithResetMessage,
+      I18n::Message::ActiveUSAExamModeMessage,
+      I18n::Message::ActiveTxPaScIbExamModeWithResetMessage,
       // PressToTest
       I18n::Message::ActivePressToTestModeMessage,
       I18n::Message::ActivePressToTestWithResetMessage,
@@ -66,11 +66,17 @@ I18n::Message ExamPopUpController::activationWarningMessage() const {
       I18n::Message::ActiveEnglishExamModeMessage,
       I18n::Message::ActiveEnglishExamModeWithResetMessage,
       // STAAR
-      I18n::Message::ActiveKeystoneSTAAROrIBExamModeMessage,
-      I18n::Message::ActiveKeystoneSTAAROrIBExamModeWithResetMessage,
-      // Keystone
-      I18n::Message::ActiveKeystoneSTAAROrIBExamModeMessage,
-      I18n::Message::ActiveKeystoneSTAAROrIBExamModeWithResetMessage,
+      I18n::Message::ActiveUSAExamModeMessage,
+      I18n::Message::ActiveTxPaScIbExamModeWithResetMessage,
+      // Pennsylvania
+      I18n::Message::ActiveUSAExamModeMessage,
+      I18n::Message::ActiveTxPaScIbExamModeWithResetMessage,
+      // SouthCarolina
+      I18n::Message::ActiveUSAExamModeMessage,
+      I18n::Message::ActiveTxPaScIbExamModeWithResetMessage,
+      // NorthCarolina
+      I18n::Message::ActiveUSAExamModeMessage,
+      I18n::Message::ActiveTxPaScIbExamModeWithResetMessage,
   };
   static_assert(std::size(messages) == numberOfModes * messagesPerMode,
                 "messages size is invalid");

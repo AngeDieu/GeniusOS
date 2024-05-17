@@ -9,26 +9,56 @@ using namespace Poincare;
 
 namespace Calculation {
 
+void LayoutField::updateCursorBeforeInsertion() {
+  if (m_insertionCursor.isUninitialized()) {
+    return;
+  }
+  KDSize previousSize = minimalSizeForOptimalDisplay();
+  Layout insertionLayout = m_insertionCursor.layout();
+  int maxPossiblePosition =
+      LayoutCursor::RightmostPossibleCursorPosition(insertionLayout);
+  cursor()->safeSetLayout(insertionLayout, OMG::Direction::Left());
+  /* The cursor position can be greater than the max possible position if the
+   * layout was beautified when the cursor left the position.
+   * Example:
+   * - Input []
+   * - Go down
+   * - Input "pi"
+   * - Go up until being in the history
+   * - Press EXE on the last calculation result
+   * It's too complicated for now to track the new position of the cursor after
+   * beautification so we just set a valid position. */
+  cursor()->safeSetPosition(
+      std::min(maxPossiblePosition, m_insertionCursor.position()));
+  reload(previousSize);
+  resetInsertionCursor();
+}
+
 bool LayoutField::handleEvent(Ion::Events::Event event) {
+  /* If the user tries to go back in history to insert a layout in the field,
+   * we want to remember where the up sequence started so that the insertion
+   * is done here. */
+  if (event == Ion::Events::Up) {
+    if (m_insertionCursor.isUninitialized()) {
+      m_insertionCursor = *cursor();
+      /* Ensure insertion cursor will stay valid even when the current layout is
+       * exited */
+      m_insertionCursor.prepareForExitingPosition();
+    }
+  } else if (event.isKeyPress()) {
+    resetInsertionCursor();
+  }
   if (event != Ion::Events::Division && event.isKeyPress()) {
     m_divisionCycleWithAns = TrinaryBoolean::Unknown;
   }
   if (event == Ion::Events::Back) {
     return false;
   }
-  if (event == Ion::Events::Ans) {
-    handleEventWithText(Symbol::k_ansAliases.mainAlias());
-    return true;
-  }
   if (isEditing() && isEmpty() &&
       (event == Ion::Events::Multiplication || event == Ion::Events::Plus ||
        event == Ion::Events::Power || event == Ion::Events::Square ||
        event == Ion::Events::Sto)) {
-    handleEventWithText(Symbol::k_ansAliases.mainAlias());
-  }
-  if (event == Ion::Events::Sto) {
-    handleEventWithText("→");
-    return true;
+    insertText(Symbol::k_ansAliases.mainAlias());
   }
   if (event == Ion::Events::Minus && isEditing() &&
       fieldContainsSingleMinusSymbol()) {
@@ -60,33 +90,25 @@ bool LayoutField::handleDivision() {
   assert(m_divisionCycleWithAns != TrinaryBoolean::Unknown);
   bool mixedFractionsEnabled =
       Preferences::sharedPreferences->mixedFractionsAreEnabled();
-  bool editionIn1D = linearMode();
   Ion::Events::Event event = Ion::Events::Division;
-  bool handled = true;
 
   if (m_divisionCycleWithAns == TrinaryBoolean::True) {
     /* When we are in the "Ans" case, the cycle is the following :
      * Start -> DenominatorOfAnsFraction -> NumeratorOfEmptyFraction (->
      * MixedFraction) -> DenominatorOfAnsFraction -> etc with the mixed fraction
      * step only kept when the country enables it */
+    clearLayout();
     switch (m_currentStep) {
       case DivisionCycleStep::DenominatorOfAnsFraction:
         // DenominatorOfAnsFraction -> NumeratorOfEmptyFraction
         m_currentStep = DivisionCycleStep::NumeratorOfEmptyFraction;
-        setText("");
         break;
       case DivisionCycleStep::NumeratorOfEmptyFraction:
         // NumeratorOfEmptyFraction -> MixedFraction
         m_currentStep = DivisionCycleStep::MixedFraction;
         if (mixedFractionsEnabled) {
-          if (editionIn1D) {
-            setText(" /");
-          } else {
-            setText("");
-            handleEventWithText(
-                I18n::translate(I18n::Message::MixedFractionCommand));
-          }
-          return true;
+          return handleEventWithText(
+              I18n::translate(I18n::Message::MixedFractionCommand));
         }
         /* If mixed fractions are not enabled, fall under next case
          * in order to skip the MixedFraction step */
@@ -95,10 +117,12 @@ bool LayoutField::handleDivision() {
         assert(m_currentStep == DivisionCycleStep::Start ||
                m_currentStep == DivisionCycleStep::MixedFraction);
         m_currentStep = DivisionCycleStep::DenominatorOfAnsFraction;
-        setText(Symbol::k_ansAliases.mainAlias());
+        insertText(Symbol::k_ansAliases.mainAlias());
     }
   } else if (mixedFractionsEnabled) {
     assert(m_divisionCycleWithAns == TrinaryBoolean::False);
+    bool editionIn1D = linearMode();
+    bool handled = true;
     /* When we are in NOT the "Ans" case, the cycle is the following :
      *   - in 1D: Start -> DenominatorOfEmptyFraction ->
      * NumeratorOfEmptyFraction   -> MixedFraction -> DenominatorOfEmptyFraction
@@ -129,10 +153,12 @@ bool LayoutField::handleDivision() {
       case DivisionCycleStep::NumeratorOfEmptyFraction:
         if (editionIn1D) {
           // 1D: NumeratorOfEmptyFraction -> MixedFraction
+          handled = Escher::LayoutField::handleEvent(Ion::Events::Space);
+          if (!handled) {
+            // Not enough space
+            return false;
+          }
           m_currentStep = DivisionCycleStep::MixedFraction;
-          handled = Escher::LayoutField::handleEvent(
-              Ion::Events::Space);  // TODO : OR handleEventWithText(" ");
-          assert(handled);
           event = Ion::Events::Left;
         } else {
           // 2D: NumeratorOfEmptyFraction -> DenominatorOfEmptyFraction
@@ -156,10 +182,8 @@ bool LayoutField::handleDivision() {
         if (editionIn1D) {
           // 1D: MixedFraction -> DenominatorOfEmptyFraction
           m_currentStep = DivisionCycleStep::DenominatorOfEmptyFraction;
-          // TODO: OR m_textField.moveCursorRight(); but protected in TextInput
           handled = Escher::LayoutField::handleEvent(Ion::Events::Right);
           assert(handled);
-          // TODO : OR m_textField.removePreviousGlyph();
           handled = Escher::LayoutField::handleEvent(Ion::Events::Backspace);
           assert(handled);
         } else {

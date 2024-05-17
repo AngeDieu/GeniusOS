@@ -14,10 +14,7 @@ ScrollView::ScrollView(View *contentView, ScrollViewDataSource *dataSource)
       m_dataSource(dataSource),
       m_contentView(contentView),
       m_innerView(this),
-      m_topMargin(0),
-      m_rightMargin(0),
-      m_bottomMargin(0),
-      m_leftMargin(0),
+      m_margins(),
       m_excessWidth(0),
       m_excessHeight(0),
       m_backgroundColor(Palette::WallScreen) {
@@ -26,8 +23,9 @@ ScrollView::ScrollView(View *contentView, ScrollViewDataSource *dataSource)
 
 KDSize ScrollView::minimalSizeForOptimalDisplay() const {
   KDSize contentSize = m_contentView->minimalSizeForOptimalDisplay();
-  KDCoordinate width = contentSize.width() + m_leftMargin + m_rightMargin;
-  KDCoordinate height = contentSize.height() + m_topMargin + m_bottomMargin;
+  KDSize contentSizeWithMargins = contentSize + m_margins;
+  KDCoordinate width = contentSizeWithMargins.width();
+  KDCoordinate height = contentSizeWithMargins.height();
 
   /* Crop right or bottom margins if content fits without a portion of them.
    * With a 0.0 tolerance, right and bottom margin is never cropped.
@@ -35,7 +33,7 @@ KDSize ScrollView::minimalSizeForOptimalDisplay() const {
    * With a 1.0 tolerance, right or bottom margin can be entirely cropped. */
   KDCoordinate excessWidth = width - bounds().width();
   if (excessWidth > 0 &&
-      excessWidth <= marginPortionTolerance() * m_rightMargin) {
+      excessWidth <= marginPortionTolerance() * m_margins.right()) {
     width -= excessWidth;
     m_excessWidth = excessWidth;
   } else {
@@ -43,7 +41,7 @@ KDSize ScrollView::minimalSizeForOptimalDisplay() const {
   }
   KDCoordinate excessHeight = height - bounds().height();
   if (excessHeight > 0 &&
-      excessHeight <= marginPortionTolerance() * m_bottomMargin) {
+      excessHeight <= marginPortionTolerance() * m_margins.bottom()) {
     height -= excessHeight;
     m_excessHeight = excessHeight;
   } else {
@@ -51,14 +49,6 @@ KDSize ScrollView::minimalSizeForOptimalDisplay() const {
   }
 
   return KDSize(width, height);
-}
-
-void ScrollView::setMargins(KDCoordinate top, KDCoordinate right,
-                            KDCoordinate bottom, KDCoordinate left) {
-  setTopMargin(top);
-  setRightMargin(right);
-  setBottomMargin(bottom);
-  setLeftMargin(left);
 }
 
 void ScrollView::scrollToContentPoint(KDPoint p) {
@@ -83,17 +73,19 @@ void ScrollView::scrollToContentPoint(KDPoint p) {
   if (visibleRect.bottom() < p.y()) {
     offsetY = p.y() - visibleRect.bottom();
   }
-  if (offsetX != 0 || offsetY != 0) {
-    setContentOffset(contentOffset().translatedBy(KDPoint(offsetX, offsetY)));
-  }
 
+  KDPoint newOffset = contentOffset().translatedBy(KDPoint(offsetX, offsetY));
+  setClippedContentOffset(newOffset);
+}
+
+void ScrollView::setClippedContentOffset(KDPoint offset) {
   // Handle cases when the size of the view has decreased.
   setContentOffset(KDPoint(
-      std::min(contentOffset().x(),
+      std::min(offset.x(),
                std::max<KDCoordinate>(
                    minimalSizeForOptimalDisplay().width() - bounds().width(),
                    KDCoordinate(0))),
-      std::min(contentOffset().y(),
+      std::min(offset.y(),
                std::max<KDCoordinate>(
                    minimalSizeForOptimalDisplay().height() - bounds().height(),
                    KDCoordinate(0)))));
@@ -152,15 +144,42 @@ void ScrollView::scrollToContentRect(KDRect rect) {
 
 KDRect ScrollView::visibleContentRect() {
   return KDRect(
-      contentOffset().x(), contentOffset().y(),
-      bounds().width() - m_leftMargin - m_rightMargin + m_excessWidth,
-      bounds().height() - m_topMargin - m_bottomMargin + m_excessHeight);
+      KDPoint(contentOffset().x(), contentOffset().y()),
+      bounds().size() + KDSize(m_excessWidth, m_excessHeight) - m_margins);
 }
 
 void ScrollView::layoutSubviews(bool force) {
   if (bounds().isEmpty()) {
     return;
   }
+
+  KDRect innerFrame = bounds();
+  if (decorator()->layoutBeforeInnerView()) {
+    innerFrame = layoutDecorator(force);
+  }
+
+  setChildFrame(&m_innerView, innerFrame, force);
+  KDPoint offset = contentOffset()
+                       .opposite()
+                       .translatedBy(m_margins.topLeftPoint())
+                       .relativeTo(innerFrame.origin());
+
+  KDRect contentFrame = KDRect(offset, contentSize());
+  m_innerView.setChildFrame(m_contentView, contentFrame,
+                            force || alwaysForceRelayoutOfContentView());
+
+  if (!decorator()->layoutBeforeInnerView()) {
+    layoutDecorator(force);
+  }
+}
+
+void ScrollView::setContentOffset(KDPoint offset) {
+  if (m_dataSource->setOffset(offset)) {
+    layoutSubviews();
+  }
+}
+
+KDRect ScrollView::layoutDecorator(bool force) {
   KDRect r1 = KDRectZero;
   KDRect r2 = KDRectZero;
   KDRect innerFrame = decorator()->layoutIndicators(
@@ -172,19 +191,7 @@ void ScrollView::layoutSubviews(bool force) {
   if (!r2.isEmpty()) {
     markRectAsDirty(r2);
   }
-  setChildFrame(&m_innerView, innerFrame, force);
-  KDPoint offset = contentOffset()
-                       .opposite()
-                       .translatedBy({m_leftMargin, m_topMargin})
-                       .relativeTo(innerFrame.origin());
-  KDRect contentFrame = KDRect(offset, contentSize());
-  m_innerView.setChildFrame(m_contentView, contentFrame, force);
-}
-
-void ScrollView::setContentOffset(KDPoint offset) {
-  if (m_dataSource->setOffset(offset)) {
-    layoutSubviews();
-  }
+  return innerFrame;
 }
 
 void ScrollView::InnerView::drawRect(KDContext *ctx, KDRect rect) const {

@@ -14,20 +14,24 @@ using namespace Inference;
 
 InputController::InputController(Escher::StackViewController *parent,
                                  ResultsController *resultsController,
-                                 Statistic *statistic,
-                                 Escher::InputEventHandlerDelegate *handler)
-    : FloatParameterController<double>(parent),
+                                 Statistic *statistic)
+    : FloatParameterController<double>(parent, &m_messageView),
       DynamicCellsDataSource<ParameterCell, k_maxNumberOfParameterCell>(this),
       m_statistic(statistic),
       m_resultsController(resultsController),
-      m_significanceCell(&m_selectableListView, handler, this) {
+      m_significanceCell(&m_selectableListView, this),
+      m_messageView(I18n::Message::DefineParameters, k_messageFormat) {
   m_okButton.setMessage(I18n::Message::Next);
 }
 
 KDCoordinate InputController::nonMemoizedRowHeight(int row) {
-  if (typeAtRow(row) == k_parameterCellType) {
+  int type = typeAtRow(row);
+  if (type == k_parameterCellType) {
     ParameterCell tempCell;
-    return nonMemoizedRowHeightWithWidthInit(&tempCell, row);
+    return protectedNonMemoizedRowHeight(&tempCell, row);
+  }
+  if (type == k_significanceCellType) {
+    return m_significanceCell.minimalSizeForOptimalDisplay().height();
   }
   return Shared::FloatParameterController<double>::nonMemoizedRowHeight(row);
 }
@@ -35,7 +39,7 @@ KDCoordinate InputController::nonMemoizedRowHeight(int row) {
 void InputController::initCell(ParameterCell, void *cell, int index) {
   ParameterCell *c = static_cast<ParameterCell *>(cell);
   c->setParentResponder(&m_selectableListView);
-  c->setDelegates(App::app(), this);
+  c->setDelegate(this);
 }
 
 void InputController::InputTitle(Escher::ViewController *vc,
@@ -50,26 +54,26 @@ void InputController::InputTitle(Escher::ViewController *vc,
         statistic->hypothesisParams()->comparisonOperator());
     StackViewController *stackViewControllerResponder =
         static_cast<StackViewController *>(vc->parentResponder());
+    constexpr int k_maxNumberOfGlyphs =
+        Poincare::Print::k_maxNumberOfSmallGlyphsInScreenWidth;
     if (stackViewControllerResponder->topViewController() != vc) {
-      Poincare::Print::CustomPrintf(
-          titleBuffer, titleBufferSize, "H0:%s=%*.*ed Ha:%s%s%*.*ed α=%*.*ed",
-          symbol, statistic->hypothesisParams()->firstParam(),
-          Poincare::Preferences::PrintFloatMode::Decimal,
-          k_numberOfTitleSignificantDigits, symbol, op,
+      Poincare::Print::CustomPrintfWithMaxNumberOfGlyphs(
+          titleBuffer, titleBufferSize, k_numberOfTitleSignificantDigits,
+          k_maxNumberOfGlyphs, "H0:%s=%*.*ed Ha:%s%s%*.*ed α=%*.*ed", symbol,
+          statistic->hypothesisParams()->firstParam(),
+          Poincare::Preferences::PrintFloatMode::Decimal, symbol, op,
           statistic->hypothesisParams()->firstParam(),
           Poincare::Preferences::PrintFloatMode::Decimal,
-          k_numberOfTitleSignificantDigits, statistic->threshold(),
-          Poincare::Preferences::PrintFloatMode::Decimal,
-          k_numberOfTitleSignificantDigits);
+          statistic->threshold(),
+          Poincare::Preferences::PrintFloatMode::Decimal);
     } else {
-      Poincare::Print::CustomPrintf(
-          titleBuffer, titleBufferSize, "H0:%s=%*.*ed Ha:%s%s%*.*ed", symbol,
+      Poincare::Print::CustomPrintfWithMaxNumberOfGlyphs(
+          titleBuffer, titleBufferSize, k_numberOfTitleSignificantDigits,
+          k_maxNumberOfGlyphs, "H0:%s=%*.*ed Ha:%s%s%*.*ed", symbol,
           statistic->hypothesisParams()->firstParam(),
-          Poincare::Preferences::PrintFloatMode::Decimal,
-          k_numberOfTitleSignificantDigits, symbol, op,
+          Poincare::Preferences::PrintFloatMode::Decimal, symbol, op,
           statistic->hypothesisParams()->firstParam(),
-          Poincare::Preferences::PrintFloatMode::Decimal,
-          k_numberOfTitleSignificantDigits);
+          Poincare::Preferences::PrintFloatMode::Decimal);
     }
   } else {
     Poincare::Print::CustomPrintf(titleBuffer, titleBufferSize,
@@ -83,6 +87,18 @@ ViewController::TitlesDisplay InputController::titlesDisplay() {
     return ViewController::TitlesDisplay::DisplayLastTwoTitles;
   }
   return ViewController::TitlesDisplay::DisplayLastTitle;
+}
+
+void InputController::initView() {
+  createCells();
+  FloatParameterController::initView();
+}
+
+void InputController::viewWillAppear() {
+  m_significanceCell.label()->setMessage(m_statistic->thresholdName());
+  m_significanceCell.subLabel()->setMessage(
+      m_statistic->thresholdDescription());
+  FloatParameterController::viewWillAppear();
 }
 
 int InputController::typeAtRow(int row) const {
@@ -102,15 +118,11 @@ void InputController::buttonAction() {
 }
 
 void InputController::fillCellForRow(Escher::HighlightCell *cell, int row) {
-  if (row < m_statistic->indexOfThreshold()) {
+  int type = typeAtRow(row);
+  if (type == k_parameterCellType) {
     ParameterCell *mCell = static_cast<ParameterCell *>(cell);
     mCell->label()->setLayout(m_statistic->parameterSymbolAtIndex(row));
     mCell->subLabel()->setMessage(m_statistic->parameterDefinitionAtIndex(row));
-  } else if (typeAtRow(row) == k_significanceCellType) {
-    assert(cell == &m_significanceCell);
-    m_significanceCell.label()->setMessage(m_statistic->thresholdName());
-    m_significanceCell.subLabel()->setMessage(
-        m_statistic->thresholdDescription());
   }
   FloatParameterController<double>::fillCellForRow(cell, row);
 }

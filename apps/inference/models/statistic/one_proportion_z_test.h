@@ -1,8 +1,6 @@
 #ifndef INFERENCE_MODELS_STATISTIC_ONE_PROPORTION_Z_TEST_H
 #define INFERENCE_MODELS_STATISTIC_ONE_PROPORTION_Z_TEST_H
 
-#include "interfaces/distributions.h"
-#include "interfaces/significance_tests.h"
 #include "test.h"
 
 namespace Inference {
@@ -18,9 +16,6 @@ class OneProportionZTest : public Test {
     return DistributionType::Z;
   }
   I18n::Message title() const override { return OneProportion::Title(); }
-  I18n::Message graphTitleFormat() const override {
-    return DistributionZ::GraphTitleFormat();
-  }
   void tidy() override { m_estimateLayout = Poincare::Layout(); }
 
   // Significance Test: OneProportion
@@ -53,22 +48,6 @@ class OneProportionZTest : public Test {
     return OneProportion::EstimateDescription();
   }
 
-  // Distribution: z
-  Poincare::Layout testCriticalValueSymbol() override {
-    return DistributionZ::TestCriticalValueSymbol();
-  }
-  float canonicalDensityFunction(float x) const override {
-    return DistributionZ::CanonicalDensityFunction(x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveFunctionAtAbscissa(double x) const override {
-    return DistributionZ::CumulativeNormalizedDistributionFunction(
-        x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveInverseForProbability(double p) const override {
-    return DistributionZ::CumulativeNormalizedInverseDistributionFunction(
-        p, m_degreesOfFreedom);
-  }
-
  private:
   // Significance Test: OneProportion
   bool validateInputs() override {
@@ -82,10 +61,6 @@ class OneProportionZTest : public Test {
     return OneProportion::ParameterRepresentationAtIndex(i);
   }
   double* parametersArray() override { return m_params; }
-  // Distribution: z
-  float computeYMax() const override {
-    return DistributionZ::YMax(m_degreesOfFreedom);
-  }
 
   double m_params[OneProportion::k_numberOfParams];
   mutable Poincare::Layout m_estimateLayout;

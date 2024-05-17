@@ -3,31 +3,26 @@
 
 #include <apps/i18n.h>
 #include <escher/editable_expression_cell.h>
+#include <escher/editable_fiel_help_box.h>
 #include <escher/list_view_data_source.h>
-#include <escher/pervasive_box.h>
 #include <escher/selectable_list_view.h>
 #include <escher/selectable_table_view_data_source.h>
 #include <escher/stack_view_controller.h>
 
-#include "layout_field_delegate.h"
+#include "math_field_delegate.h"
 #include "pop_up_controller.h"
-#include "text_field_delegate.h"
 
 namespace Shared {
 
 class StoreMenuController : public Escher::ModalViewController,
                             public Escher::ListViewDataSource,
                             public Escher::SelectableListViewDataSource,
-                            public TextFieldDelegate,
-                            public LayoutFieldDelegate,
-                            public Escher::PervasiveBox {
+                            public MathLayoutFieldDelegate {
  public:
   StoreMenuController();
   void setText(const char* text);
 
-  // PervasiveBox
-  void open() override;
-
+  void open();
   void close();
 
   // Responder
@@ -47,26 +42,22 @@ class StoreMenuController : public Escher::ModalViewController,
 
   // LayoutFieldDelegate
   bool layoutFieldDidFinishEditing(Escher::LayoutField* layoutField,
-                                   Poincare::Layout layoutR,
                                    Ion::Events::Event event) override;
-  bool layoutFieldDidReceiveEvent(Escher::LayoutField* layoutField,
-                                  Ion::Events::Event event) override;
   void layoutFieldDidAbortEditing(Escher::LayoutField* layoutField) override;
   void layoutFieldDidChangeSize(Escher::LayoutField* layoutField) override;
+  bool insertTextForStoEvent(Escher::LayoutField* layoutField) const override {
+    return true;
+  }
 
  private:
   class InnerListController : public ViewController {
    public:
-    InnerListController(StoreMenuController* dataSource,
-                        Escher::SelectableListViewDelegate* delegate = nullptr);
+    InnerListController(StoreMenuController* dataSource);
     const char* title() override {
       return I18n::translate(I18n::Message::DefineVariable);
     }
     Escher::View* view() override { return &m_selectableListView; }
     void didBecomeFirstResponder() override;
-    Escher::SelectableTableView* selectableTableView() {
-      return &m_selectableListView;
-    }
 
    private:
     Escher::SelectableListView m_selectableListView;

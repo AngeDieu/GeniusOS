@@ -3,33 +3,28 @@
 
 #include <escher/button_row_controller.h>
 #include <escher/even_odd_editable_text_cell.h>
+#include <escher/prefaced_table_view.h>
 #include <escher/stack_view_controller.h>
 #include <escher/tab_view_controller.h>
 
 #include "buffer_function_title_cell.h"
 #include "double_pair_store.h"
 #include "editable_cell_table_view_controller.h"
-#include "input_event_handler_delegate.h"
-#include "layout_field_delegate.h"
-#include "prefaced_table_view.h"
 #include "store_parameter_controller.h"
 
 namespace Shared {
 
 class StoreController : public EditableCellTableViewController,
                         public Escher::ButtonRowDelegate,
-                        public StoreColumnHelper,
-                        public Escher::SelectableListViewDelegate {
+                        public StoreColumnHelper {
  public:
-  StoreController(Escher::Responder* parentResponder,
-                  Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-                  DoublePairStore* store, Escher::ButtonRowController* header,
+  StoreController(Escher::Responder* parentResponder, DoublePairStore* store,
+                  Escher::ButtonRowController* header,
                   Poincare::Context* parentContext);
   TELEMETRY_ID("Store");
 
   // TextFieldDelegate
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
 
   // TableViewDataSource
@@ -40,9 +35,11 @@ class StoreController : public EditableCellTableViewController,
   void fillCellForLocation(Escher::HighlightCell* cell, int column,
                            int row) override;
   KDCoordinate separatorBeforeColumn(int column) override;
+  bool canStoreCellAtLocation(int column, int row) override { return row > 0; }
 
   // ViewController
   Escher::View* view() override { return &m_prefacedTableView; }
+  void viewWillAppear() override;
 
   // Responder
   bool handleEvent(Ion::Events::Event event) override;
@@ -55,12 +52,6 @@ class StoreController : public EditableCellTableViewController,
 
   // EditableCellTableViewController
   int numberOfRowsAtColumn(int i) const override;
-
-  // SelectableListViewDelegate
-  bool canStoreContentOfCell(Escher::SelectableListView* t,
-                             int row) const override {
-    return row > 0;
-  }
 
   void loadMemoizedFormulasFromSnapshot();
 
@@ -90,9 +81,7 @@ class StoreController : public EditableCellTableViewController,
   void resetMemoizedFormulasOfEmptyColumns(int series);
   void memoizeFormula(Poincare::Layout formula, int index) override;
 
-  PrefacedTableView m_prefacedTableView;
-  Escher::EvenOddEditableTextCell<>
-      m_editableCells[k_maxNumberOfDisplayableCells];
+  Escher::PrefacedTableView m_prefacedTableView;
   DoublePairStore* m_store;
   Poincare::Layout
       m_memoizedFormulas[DoublePairStore::k_numberOfSeries *
@@ -108,6 +97,8 @@ class StoreController : public EditableCellTableViewController,
 
   // TableViewDataSource
   Escher::TableSize1DManager* columnWidthManager() override {
+    /* Do not implement a RegularTableSize1DManager for width since it does not
+     * work with table separators. */
     return &m_widthManager;
   }
   Escher::TableSize1DManager* rowHeightManager() override {
@@ -118,8 +109,11 @@ class StoreController : public EditableCellTableViewController,
   DoublePairStore* store() override { return m_store; }
 
   BufferFunctionTitleCell m_titleCells[k_maxNumberOfDisplayableColumns];
+  Escher::EvenOddEditableTextCell<
+      Escher::AbstractEvenOddBufferTextCell::k_defaultPrecision>
+      m_editableCells[k_maxNumberOfDisplayableCells];
 
-  Escher::RegularTableSize1DManager m_widthManager;
+  Escher::MemoizedColumnWidthManager<6> m_widthManager;
   Escher::RegularTableSize1DManager m_heightManager;
 };
 

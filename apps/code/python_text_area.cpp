@@ -176,7 +176,7 @@ PythonTextArea::AutocompletionType PythonTextArea::autocompletionType(
   nlr_buf_t nlr;
   if (nlr_push(&nlr) == 0) {
     const char *firstNonSpace =
-        UTF8Helper::BeginningOfWord(m_contentView.editedText(), location);
+        UTF8Helper::BeginningOfWord(m_contentView.draftText(), location);
     mp_lexer_t *lex = mp_lexer_new_from_str_len(
         0, firstNonSpace, UTF8Helper::EndOfWord(location) - firstNonSpace, 0);
 
@@ -237,7 +237,7 @@ PythonTextArea::AutocompletionType PythonTextArea::autocompletionType(
 }
 
 const char *PythonTextArea::ContentView::textToAutocomplete() const {
-  return UTF8Helper::BeginningOfWord(editedText(), cursorLocation());
+  return UTF8Helper::BeginningOfWord(draftText(), cursorLocation());
 }
 
 void PythonTextArea::ContentView::loadSyntaxHighlighter() {
@@ -437,17 +437,14 @@ bool PythonTextArea::handleEvent(Ion::Events::Event event) {
         scrollToCursor();
         return true;
       }
-    } else if (event == Ion::Events::Toolbox || event == Ion::Events::Shift ||
-               event == Ion::Events::Alpha || event == Ion::Events::OnOff) {
     } else if (event == Ion::Events::Up || event == Ion::Events::Down) {
       cycleAutocompletion(event == Ion::Events::Down);
       return true;
-    } else if (event == Ion::Events::Var) {
-      /* Remove the autocompletion text so that opening the Varbox does not
-       * invalidate the ScriptNodes name pointers. */
-      m_wasAutocompleting = true;
-      removeAutocompletion();
-    } else if (event.isKeyPress() || event == Ion::Events::USBEnumeration) {
+    } else if ((event.isKeyPress() &&
+                !(event == Ion::Events::Toolbox || event == Ion::Events::Var ||
+                  event == Ion::Events::Shift || event == Ion::Events::Alpha ||
+                  event == Ion::Events::OnOff)) ||
+               event == Ion::Events::USBEnumeration) {
       /* USBEnumeration will pop the view (see EditorController::handleEvent).
        * Autocompletion is stopped to ensure that isAutocompleting() is false
        * when coming back */
@@ -460,7 +457,15 @@ bool PythonTextArea::handleEvent(Ion::Events::Event event) {
       }
     }
   }
-  bool result = TextArea::handleEvent(event);
+
+  if (event == Ion::Events::Var) {
+    prepareVariableBoxBeforeOpening();
+    assert(!m_contentView.isAutocompleting());
+  }
+
+  bool result = App::app()->textInputDidReceiveEvent(this, event) ||
+                handleSpecialEvent(event) || TextArea::handleEvent(event);
+
   if (event == Ion::Events::Backspace && !m_contentView.isAutocompleting() &&
       selectionIsEmpty()) {
     /* We want to add autocompletion when we are editing a word (after adding or
@@ -474,6 +479,48 @@ bool PythonTextArea::handleEvent(Ion::Events::Event event) {
     removeAutocompletion();
   }
   return result;
+}
+
+bool PythonTextArea::handleSpecialEvent(Ion::Events::Event event) {
+  if (event == Ion::Events::EXE) {
+    handleEventWithText(k_newLine, true, false);
+    return true;
+  }
+
+  if (event != Ion::Events::Backspace && event != Ion::Events::Space) {
+    return false;
+  }
+
+  /* If the cursor is on the left of the text of a line:
+   * - backspace one indentation space at a time.
+   * - a space triggers an indentation.*/
+  const char *thisText = text();
+  const char *thisCursorLocation = cursorLocation();
+  const char *firstNonSpace =
+      UTF8Helper::NotCodePointSearch(thisText, ' ', true, thisCursorLocation);
+  assert(firstNonSpace >= thisText);
+  bool cursorIsPrecededOnTheLineBySpacesOnly =
+      UTF8Helper::CodePointIs(firstNonSpace, '\n') || firstNonSpace == thisText;
+  if (!cursorIsPrecededOnTheLineBySpacesOnly) {
+    return false;
+  } else if (event == Ion::Events::Space) {
+    handleEventWithText(k_indentation);
+    return true;
+  } else if (event == Ion::Events::Backspace && selectionIsEmpty()) {
+    static_assert(UTF8Decoder::CharSizeOfCodePoint(' ') == 1,
+                  "Space is more than 1 char long");
+    constexpr size_t newLineSize = UTF8Decoder::CharSizeOfCodePoint('\n');
+    size_t numberOfSpaces = thisCursorLocation - firstNonSpace -
+                            (firstNonSpace != thisText) * newLineSize;
+    if (numberOfSpaces >= k_indentationSpaces) {
+      for (int i = 0; i < k_indentationSpaces; i++) {
+        removePreviousGlyph();
+      }
+      return true;
+    }
+  }
+
+  return false;
 }
 
 bool PythonTextArea::handleEventWithText(const char *text, bool indentation,
@@ -490,12 +537,6 @@ bool PythonTextArea::handleEventWithText(const char *text, bool indentation,
   return result;
 }
 
-void PythonTextArea::removeAutocompletion() {
-  assert(m_contentView.isAutocompleting());
-  removeAutocompletionText();
-  m_contentView.setAutocompleting(false);
-}
-
 void PythonTextArea::removeAutocompletionText() {
   assert(m_contentView.isAutocompleting());
   assert(m_contentView.autocompletionEnd() != nullptr);
@@ -503,6 +544,46 @@ void PythonTextArea::removeAutocompletionText() {
   const char *autocompleteEnd = m_contentView.autocompletionEnd();
   assert(autocompleteEnd != nullptr && autocompleteEnd > autocompleteStart);
   m_contentView.removeText(autocompleteStart, autocompleteEnd);
+}
+
+void PythonTextArea::prepareVariableBoxBeforeOpening() {
+  if (m_contentView.isAutocompleting()) {
+    /* Remove the autocompletion text so that opening the Varbox does not
+     * invalidate the ScriptNodes name pointers. */
+    m_wasAutocompleting = true;
+    removeAutocompletion();
+  }
+  PythonVariableBoxController *varBox = App::app()->variableBox();
+  // Subtitle display status must be set before as it alter loaded node order
+  varBox->setDisplaySubtitles(true);
+  varBox->setTitle(I18n::Message::Autocomplete);
+  /* If the editor should be autocompleting an identifier, the variable box has
+   * already been loaded. We check shouldAutocomplete and not isAutocompleting,
+   * because the autocompletion result might be empty. */
+  const char *beginningOfAutocompletion = nullptr;
+  const char *cursor = nullptr;
+  PythonTextArea::AutocompletionType autocompType =
+      autocompletionType(nullptr, &beginningOfAutocompletion, &cursor);
+  int scriptIndex =
+      m_contentView.pythonDelegate()->menuController()->editedScriptIndex();
+  if (autocompType == PythonTextArea::AutocompletionType::NoIdentifier) {
+    varBox->loadFunctionsAndVariables(scriptIndex, nullptr, 0);
+  } else if (autocompType ==
+             PythonTextArea::AutocompletionType::MiddleOfIdentifier) {
+    varBox->empty();
+  } else {
+    assert(autocompType == PythonTextArea::AutocompletionType::EndOfIdentifier);
+    assert(beginningOfAutocompletion != nullptr && cursor != nullptr);
+    assert(cursor > beginningOfAutocompletion);
+    varBox->loadFunctionsAndVariables(scriptIndex, beginningOfAutocompletion,
+                                      cursor - beginningOfAutocompletion);
+  }
+}
+
+void PythonTextArea::removeAutocompletion() {
+  assert(m_contentView.isAutocompleting());
+  removeAutocompletionText();
+  m_contentView.setAutocompleting(false);
 }
 
 void PythonTextArea::addAutocompletion(int index) {
@@ -542,7 +623,8 @@ bool PythonTextArea::addAutocompletionTextAtIndex(int nextIndex,
   }
   assert(type == AutocompletionType::EndOfIdentifier);
   (void)type;  // Silence warnings
-  VariableBoxController *varBox = m_contentView.pythonDelegate()->variableBox();
+  PythonVariableBoxController *varBox =
+      m_contentView.pythonDelegate()->variableBox();
   int textToInsertLength = 0;
   bool addParentheses = false;
   const char *textToInsert = varBox->autocompletionAlternativeAtIndex(

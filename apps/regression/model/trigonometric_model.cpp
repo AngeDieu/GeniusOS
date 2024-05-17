@@ -1,6 +1,7 @@
 #include "trigonometric_model.h"
 
 #include <apps/regression/store.h>
+#include <apps/shared/poincare_helpers.h>
 #include <assert.h>
 #include <poincare/multiplication.h>
 #include <poincare/number.h>
@@ -8,11 +9,10 @@
 #include <poincare/preferences.h>
 #include <poincare/print.h>
 #include <poincare/sine.h>
+#include <poincare/statistics_dataset.h>
 #include <poincare/symbol.h>
 
 #include <cmath>
-
-#include "../../shared/poincare_helpers.h"
 
 using namespace Poincare;
 using namespace Shared;
@@ -79,8 +79,8 @@ double TrigonometricModel::partialDerivate(double* modelCoefficients,
 }
 
 // If (x2, y2) was an extremum, update xExtremum and yExtremum
-bool checkExtremum(double x2, double y2, int lastExtremum, double* xExtremum,
-                   double* yExtremum) {
+static bool checkExtremum(double x2, double y2, int lastExtremum,
+                          double* xExtremum, double* yExtremum) {
   assert(lastExtremum >= 2);
   if (lastExtremum != 2) {
     return false;
@@ -91,8 +91,8 @@ bool checkExtremum(double x2, double y2, int lastExtremum, double* xExtremum,
 }
 
 // If lower < higher, update xMinMax and yMinMax with x and y
-void updateMinMax(double lower, double higher, double x, double y,
-                  double* xMinMax, double* yMinMax) {
+static void updateMinMax(double lower, double higher, double x, double y,
+                         double* xMinMax, double* yMinMax) {
   if (lower < higher) {
     *xMinMax = x;
     *yMinMax = y;
@@ -103,16 +103,21 @@ void updateMinMax(double lower, double higher, double x, double y,
  * - minimum extrema: x(i) having y(i-2) > y(i-1) > y(i) < y(i+1) < y(i+2)
  * - maximum extrema: x(i) having y(i-2) < y(i-1) < y(i) > y(i+1) > y(i+2)
  * If one isn't found, return series min and max */
-void findExtrema(double* xMinExtremum, double* xMaxExtremum,
-                 double* yMinExtremum, double* yMaxExtremum, Store* store,
-                 int series) {
+static void findExtrema(double* xMinExtremum, double* xMaxExtremum,
+                        double* yMinExtremum, double* yMaxExtremum,
+                        Store* store, int series) {
   int numberOfPairs = store->numberOfPairsOfSeries(series);
   assert(numberOfPairs >= 3);
+  // Use a StatisticsDataset to memoize the sorted index
+  Poincare::StatisticsDataset<double> dataset =
+      store->createDatasetFromSeries(series);
   // Compute values at index 0 and 1
-  double x2 = store->get(series, 0, 0);
-  double y2 = store->get(series, 1, 0);
-  double x1 = store->get(series, 0, 1);
-  double y1 = store->get(series, 1, 1);
+  int firstIndex = dataset.indexAtSortedIndex(0);
+  int secondIndex = dataset.indexAtSortedIndex(1);
+  double x2 = store->get(series, 0, firstIndex);
+  double y2 = store->get(series, 1, firstIndex);
+  double x1 = store->get(series, 0, secondIndex);
+  double y1 = store->get(series, 1, secondIndex);
   // Compute max and min in case an extremum isn't identified
   double xMin, yMin, xMax, yMax, x0, y0;
   yMin = yMax = y2;
@@ -125,8 +130,9 @@ void findExtrema(double* xMinExtremum, double* xMaxExtremum,
   bool foundMin, foundMax;
   foundMin = foundMax = false;
   for (int i = 2; i < numberOfPairs; i++) {
-    x0 = store->get(series, 0, i);
-    y0 = store->get(series, 1, i);
+    int sortedIndex = dataset.indexAtSortedIndex(i);
+    x0 = store->get(series, 0, sortedIndex);
+    y0 = store->get(series, 1, sortedIndex);
     if (y2 < y1 && y1 < y0) {
       // Check if (x2, y2) was a minimum extrema (y4 > y3 > y2 < y1 < y0)
       foundMin = foundMin || checkExtremum(x2, y2, lastMinExtremum,

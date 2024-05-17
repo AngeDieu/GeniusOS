@@ -15,13 +15,6 @@ TableView::TableView(TableViewDataSource* dataSource,
   m_decorator.setVisibility(true);
 }
 
-void TableView::initSize(KDRect rect) {
-  if (bounds().width() <= 0 || bounds().height() <= 0) {
-    setSize(KDSize(rect.width(), rect.height()));
-    dataSource()->initCellSize(this);
-  }
-}
-
 void TableView::reloadVisibleCellsAtColumn(int column) {
   // Reload visible cells of the selected column
   int firstVisibleCol = firstDisplayedColumn();
@@ -39,19 +32,16 @@ void TableView::reloadVisibleCellsAtColumn(int column) {
   }
 }
 
+void TableView::resetSizeAndOffsetMemoization() {
+  dataSource()->resetSizeMemoization();
+  resetMemoizedColumnAndRowOffsets();
+}
+
 void TableView::layoutSubviews(bool force) {
-  /* We need to relayout m_contentView to reload data and sizes but also
-   * ScrollView if the offset or m_contentView's size changed.
-   * On the one hand, ScrollView::layoutSubviews() set m_contentView's frame,
-   * which calls layoutSubviews() over m_contentView IF the frame is changed.
-   * On the other hand, m_contentView.layoutSubviews() does not relayout
-   * ScrollView. For those reasons, we call both of them explicitly. Besides, we
-   * must call relayout m_contentView first in order to reload the table's data,
-   * otherwise the table's size might be miscomputed for ScrollView.
-   * FIXME: This solution is not optimal since layoutSubviews can be called
-   * twice over m_contentView. */
-  dataSource()->initCellSize(this);
-  m_contentView.layoutSubviews(force, true);
+  /* Reset memoization in case scrolling offset or frame changed.
+   * This is done here and not in ContentView::layoutSubviews because if the
+   * content view frame is empty, subviews won't be relayouted. */
+  resetMemoizedColumnAndRowOffsets();
   ScrollView::layoutSubviews(force);
 }
 
@@ -65,7 +55,9 @@ TableView::ContentView::ContentView(TableView* tableView,
       m_tableView(tableView),
       m_dataSource(dataSource),
       m_horizontalCellOverlap(horizontalCellOverlap),
-      m_verticalCellOverlap(verticalCellOverlap) {}
+      m_verticalCellOverlap(verticalCellOverlap),
+      m_rowsScrollingOffset(-1),
+      m_columnsScrollingOffset(-1) {}
 
 void TableView::ContentView::drawRect(KDContext* ctx, KDRect rect) const {
   /* The separators between cells need to be filled with background color.
@@ -128,9 +120,6 @@ KDRect TableView::ContentView::cellFrame(int col, int row) const {
   if (columnWidth == 0 || rowHeight == 0) {
     return KDRectZero;
   }
-  if (columnWidth == KDCOORDINATE_MAX) {  // For ListViewDataSource
-    columnWidth = m_tableView->maxContentWidthDisplayableWithoutScrolling();
-  }
   return KDRect(m_dataSource->cumulatedWidthBeforeColumn(col) +
                     m_dataSource->separatorBeforeColumn(col),
                 m_dataSource->cumulatedHeightBeforeRow(row) +
@@ -140,13 +129,9 @@ KDRect TableView::ContentView::cellFrame(int col, int row) const {
 }
 
 KDCoordinate TableView::ContentView::width() const {
-  int result = m_dataSource->cumulatedWidthBeforeColumn(
-                   m_dataSource->numberOfColumns()) +
-               m_horizontalCellOverlap;
-  // handle the case of list: cumulatedWidthBeforeColumn() = KDCOORDINATE_MAX
-  return result == KDCOORDINATE_MAX
-             ? m_tableView->maxContentWidthDisplayableWithoutScrolling()
-             : result;
+  return m_dataSource->cumulatedWidthBeforeColumn(
+             m_dataSource->numberOfColumns()) +
+         m_horizontalCellOverlap;
 }
 
 void TableView::ContentView::reloadCellAtLocation(int col, int row,
@@ -170,6 +155,7 @@ int TableView::ContentView::typeOfSubviewAtIndex(int index) const {
 
 int TableView::ContentView::typeIndexFromSubviewIndex(int index,
                                                       int type) const {
+  assert(index >= 0);
   int typeIndex = 0;
   for (int k = 0; k < index; k++) {
     if (typeOfSubviewAtIndex(k) == type) {
@@ -193,6 +179,28 @@ HighlightCell* TableView::ContentView::cellAtLocation(int col, int row) {
   return m_dataSource->reusableCell(typeIndex, type);
 }
 
+int TableView::ContentView::rowsScrollingOffset() const {
+  if (m_rowsScrollingOffset < 0) {
+    m_rowsScrollingOffset =
+        m_dataSource->rowAfterCumulatedHeight(invisibleHeight());
+  } else {
+    assert(m_rowsScrollingOffset ==
+           m_dataSource->rowAfterCumulatedHeight(invisibleHeight()));
+  }
+  return m_rowsScrollingOffset;
+}
+
+int TableView::ContentView::columnsScrollingOffset() const {
+  if (m_columnsScrollingOffset < 0) {
+    m_columnsScrollingOffset =
+        m_dataSource->columnAfterCumulatedWidth(invisibleWidth());
+  } else {
+    assert(m_columnsScrollingOffset ==
+           m_dataSource->columnAfterCumulatedWidth(invisibleWidth()));
+  }
+  return m_columnsScrollingOffset;
+}
+
 View* TableView::ContentView::subviewAtIndex(int index) {
   /* This is a hack: the redrawing routine tracks a rectangle which has to be
    * redrawn. Thereby, the union of the rectangles that need to be redrawn
@@ -201,18 +209,19 @@ View* TableView::ContentView::subviewAtIndex(int index) {
    * redraw the top left cells rather than the bottom right cells. Due to the
    * screen driver specifications, blinking is less visible at the top left
    * corner than at the bottom right. */
+  assert(0 <= index && index < numberOfSubviews());
   return static_cast<View*>(
       reusableCellAtIndex(numberOfSubviews() - 1 - index));
 }
 
 HighlightCell* TableView::ContentView::reusableCellAtIndex(int index) {
+  assert(0 <= index && index < numberOfSubviews());
   int type = typeOfSubviewAtIndex(index);
   int typeIndex = typeIndexFromSubviewIndex(index, type);
   return m_dataSource->reusableCell(typeIndex, type);
 }
 
-void TableView::ContentView::layoutSubviews(bool force,
-                                            bool updateCellContent) {
+void TableView::ContentView::layoutSubviews(bool force) {
   /* The number of cells might change during the layouting so it needs to be
    * recomputed at each step of the for loop. */
   for (int index = 0; index < numberOfDisplayableCells(); index++) {
@@ -220,9 +229,7 @@ void TableView::ContentView::layoutSubviews(bool force,
     int col = absoluteColumnFromSubviewIndex(index);
     int row = absoluteRowFromSubviewIndex(index);
     assert(cellAtLocation(col, row) == cell);
-    if (updateCellContent) {
-      m_dataSource->fillCellForLocation(cell, col, row);
-    }
+    m_dataSource->fillCellForLocation(cell, col, row);
     /* Cell's content might change and fit in the same frame. LayoutSubviews
      * must be called on each cells even with an unchanged frame. */
     setChildFrame(cell, cellFrame(col, row), true);
@@ -230,6 +237,9 @@ void TableView::ContentView::layoutSubviews(bool force,
 }
 
 int TableView::ContentView::numberOfDisplayableRows() const {
+  if (m_tableView->bounds().isEmpty()) {
+    return 0;
+  }
   int rowOffset = rowsScrollingOffset();
   int cumulatedHeightOfLastVisiblePixel =
       m_tableView->bounds().height() + invisibleHeight() - 1;
@@ -241,6 +251,9 @@ int TableView::ContentView::numberOfDisplayableRows() const {
 }
 
 int TableView::ContentView::numberOfDisplayableColumns() const {
+  if (m_tableView->bounds().isEmpty()) {
+    return 0;
+  }
   int columnOffset = columnsScrollingOffset();
   int cumulatedWidthOfLastVisiblePixel =
       m_tableView->bounds().width() + invisibleWidth() - 1;

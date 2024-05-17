@@ -1,5 +1,6 @@
 #include "script_parameter_controller.h"
 
+#include "app.h"
 #include "menu_controller.h"
 
 using namespace Escher;
@@ -46,9 +47,10 @@ bool ScriptParameterController::handleEvent(Ion::Events::Event event) {
     m_menuController->renameSelectedScript();
   } else if (cell == &m_autoImportScript) {
     m_script.toggleAutoImportation();
+    updateAutoImportSwitch();
     m_selectableListView.reloadSelectedCell();
     m_menuController->reloadConsole();
-    Container::activeApp()->setFirstResponder(&m_selectableListView);
+    App::app()->setFirstResponder(&m_selectableListView);
   } else {
     assert(cell == &m_deleteScript);
     dismissScriptParameterController();
@@ -60,13 +62,13 @@ bool ScriptParameterController::handleEvent(Ion::Events::Event event) {
 
 void ScriptParameterController::viewWillAppear() {
   ViewController::viewWillAppear();
-  resetMemoization();
+  updateAutoImportSwitch();
   m_selectableListView.reloadData();
   m_selectableListView.selectCell(0);
 }
 
 void ScriptParameterController::didBecomeFirstResponder() {
-  selectCell(0);
+  selectRow(0);
   ExplicitSelectableListViewController::didBecomeFirstResponder();
 }
 
@@ -78,14 +80,14 @@ AbstractMenuCell *ScriptParameterController::cell(int row) {
   return cells[row];
 }
 
-void ScriptParameterController::fillCellForRow(HighlightCell *cell, int row) {
-  if (cell == &m_autoImportScript && !m_script.isNull()) {
-    m_autoImportScript.accessory()->setState(m_script.autoImportation());
-  }
-}
-
 StackViewController *ScriptParameterController::stackViewController() {
   return static_cast<StackViewController *>(parentResponder());
+}
+
+void ScriptParameterController::updateAutoImportSwitch() {
+  if (!m_script.isNull()) {
+    m_autoImportScript.accessory()->setState(m_script.autoImportation());
+  }
 }
 
 }  // namespace Code

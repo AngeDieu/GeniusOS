@@ -21,20 +21,17 @@ using namespace Escher;
 namespace Regression {
 
 GraphController::GraphController(
-    Responder *parentResponder,
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
-    ButtonRowController *header,
+    Responder *parentResponder, ButtonRowController *header,
     Shared::InteractiveCurveViewRange *interactiveRange,
     CurveViewCursor *cursor, int *selectedDotIndex, int *selectedCurveIndex,
     Store *store)
-    : InteractiveCurveViewController(
-          parentResponder, inputEventHandlerDelegate, header, interactiveRange,
-          &m_view, cursor, I18n::Message::Regression, selectedCurveIndex),
-      m_bannerView(this, inputEventHandlerDelegate, this),
+    : InteractiveCurveViewController(parentResponder, header, interactiveRange,
+                                     &m_view, cursor, I18n::Message::Regression,
+                                     selectedCurveIndex),
+      m_bannerView(this, this),
       m_view(interactiveRange, store, m_cursor, &m_bannerView, &m_cursorView),
       m_store(store),
-      m_graphOptionsController(this, inputEventHandlerDelegate,
-                               interactiveRange, m_store, m_cursor, this),
+      m_graphOptionsController(this, interactiveRange, m_store, m_cursor, this),
       m_curveSelectionController(this),
       m_selectedDotIndex(selectedDotIndex),
       m_selectedModelType((Model::Type)-1) {
@@ -86,8 +83,8 @@ void GraphController::didBecomeFirstResponder() {
 
 void GraphController::setAbscissaInputAsFirstResponder() {
   m_bannerView.abscissaValue()->setParentResponder(this);
-  m_bannerView.abscissaValue()->setDelegates(textFieldDelegateApp(), this);
-  Container::activeApp()->setFirstResponder(m_bannerView.abscissaValue());
+  m_bannerView.abscissaValue()->setDelegate(this);
+  App::app()->setFirstResponder(m_bannerView.abscissaValue());
 }
 
 Poincare::Context *GraphController::globalContext() const {
@@ -101,18 +98,18 @@ KDCoordinate GraphController::CurveSelectionController::nonMemoizedRowHeight(
   if (row < 0 || row >= numberOfRows()) {
     return 0;
   }
-  return KDFont::GlyphHeight(KDFont::Size::Large) + Metric::CellTopMargin +
-         Metric::CellBottomMargin;
+  return KDFont::GlyphHeight(KDFont::Size::Large) +
+         Metric::CellMargins.height();
 }
 
 void GraphController::CurveSelectionController::fillCellForRow(
     HighlightCell *cell, int row) {
   int series = graphController()->seriesIndexFromCurveIndex(row);
   const char *name = Store::SeriesTitle(series);
-  static_cast<CurveSelectionCellWithChevron *>(cell)->setColor(
-      DoublePairStore::colorOfSeriesAtIndex(series));
-  static_cast<CurveSelectionCellWithChevron *>(cell)->label()->setLayout(
-      LayoutHelper::String(name));
+  CurveSelectionCellWithChevron *myCell =
+      static_cast<CurveSelectionCellWithChevron *>(cell);
+  myCell->setColor(DoublePairStore::colorOfSeriesAtIndex(series));
+  myCell->label()->setLayout(LayoutHelper::String(name));
 }
 
 bool GraphController::buildRegressionExpression(
@@ -242,8 +239,8 @@ InteractiveCurveViewRange *GraphController::interactiveCurveViewRange() const {
 void GraphController::openMenuForCurveAtIndex(int curveIndex) {
   if (*m_selectedCurveIndex != curveIndex) {
     *m_selectedCurveIndex = curveIndex;
-    Coordinate2D<double> xy = xyValues(curveIndex, m_cursor->t(),
-                                       textFieldDelegateApp()->localContext());
+    Coordinate2D<double> xy =
+        xyValues(curveIndex, m_cursor->t(), App::app()->localContext());
     m_cursor->moveTo(m_cursor->t(), xy.x(), xy.y());
   }
   if (curveIsScatterPlot(*m_selectedCurveIndex)) {
@@ -367,7 +364,7 @@ bool GraphController::moveCursorVertically(OMG::VerticalDirection direction) {
     double newY = dotOrdinate(*m_selectedCurveIndex, dotSelected);
     m_cursor->moveTo(newX, newX, newY);
     // abscissa input must resolve first responder
-    Container::activeApp()->setFirstResponder(this);
+    App::app()->setFirstResponder(this);
     return true;
   }
 

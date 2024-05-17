@@ -9,6 +9,67 @@
 namespace Ion {
 namespace Events {
 
+class ShiftAlphaStatus {
+ public:
+  enum class ShiftStatus : bool { Inactive = false, Active = true };
+  enum class AlphaStatus : uint8_t {
+    Inactive = 0,
+    Active,
+    Locked,
+    NumberOfStatuses
+  };
+
+  constexpr ShiftAlphaStatus(ShiftStatus shift, AlphaStatus alpha)
+      : m_value{.fields = {.shift = shift, .alpha = alpha}} {}
+
+  constexpr ShiftAlphaStatus()
+      : ShiftAlphaStatus(ShiftStatus::Inactive, AlphaStatus::Inactive) {}
+
+  operator uint8_t() const { return m_value.raw; }
+
+  bool operator==(const ShiftAlphaStatus& other) {
+    return m_value.raw == other.m_value.raw;
+  }
+  bool operator!=(const ShiftAlphaStatus& other) { return !(*this == other); }
+
+  bool shiftIsActive() const {
+    return m_value.fields.shift != ShiftStatus::Inactive;
+  }
+  bool alphaIsActive() const {
+    return m_value.fields.alpha != AlphaStatus::Inactive;
+  }
+  bool alphaIsLocked() const {
+    return m_value.fields.alpha == AlphaStatus::Locked;
+  }
+
+  void removeShift() { m_value.fields.shift = ShiftStatus::Inactive; }
+  void removeAlpha() { m_value.fields.alpha = AlphaStatus::Inactive; }
+
+  void toggleShift() {
+    m_value.fields.shift =
+        static_cast<ShiftStatus>(!static_cast<bool>(m_value.fields.shift));
+  }
+  void cycleAlpha() {
+    m_value.fields.alpha = static_cast<AlphaStatus>(
+        (static_cast<uint8_t>(m_value.fields.alpha) + 1) %
+        static_cast<uint8_t>(AlphaStatus::NumberOfStatuses));
+    if (m_value.fields.alpha == AlphaStatus::Inactive) {
+      removeShift();
+    }
+  }
+
+ private:
+  /* This is implemented as an uint8_t so that only 1 register has to be passed
+   * through SVCalls. */
+  union {
+    uint8_t raw;
+    struct {
+      ShiftStatus shift : 1;
+      AlphaStatus alpha : 2;
+    } fields;
+  } m_value;
+};
+
 class Event {
  public:
   constexpr static int k_pageSize = Keyboard::NumberOfKeys;
@@ -77,16 +138,6 @@ class Journal {
 void replayFrom(Journal* l);
 void logTo(Journal* l);
 #endif
-
-enum class ShiftAlphaStatus : uint8_t {
-  Default,
-  Shift,
-  Alpha,
-  ShiftAlpha,
-  AlphaLock,
-  ShiftAlphaLock,
-  NumberOfStatus
-};
 
 Event getEvent(int* timeout);
 size_t copyText(uint8_t eventId, char* buffer, size_t bufferSize);

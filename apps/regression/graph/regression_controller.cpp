@@ -57,7 +57,7 @@ void RegressionController::didBecomeFirstResponder() {
     assert(!Store::HasCoefficients(type) ||
            type == ModelTypeAtIndex(initialIndex));
   }
-  selectCell(initialIndex);
+  m_selectableListView.selectCell(initialIndex);
   SelectableListViewController<
       MemoizedListViewDataSource>::didBecomeFirstResponder();
 }
@@ -84,7 +84,7 @@ bool RegressionController::handleEvent(Ion::Events::Event event) {
 KDCoordinate RegressionController::nonMemoizedRowHeight(int row) {
   assert(row >= 0 && row < numberOfRows());
   MenuCell<MessageTextView, LayoutView> tempCell;
-  return nonMemoizedRowHeightWithWidthInit(&tempCell, row);
+  return protectedNonMemoizedRowHeight(&tempCell, row);
 }
 
 HighlightCell *RegressionController::reusableCell(int index, int type) {
@@ -95,11 +95,11 @@ HighlightCell *RegressionController::reusableCell(int index, int type) {
 
 void RegressionController::fillCellForRow(HighlightCell *cell, int row) {
   assert(row >= 0 && row < numberOfRows());
-  MenuCell<MessageTextView, LayoutView> *castedCell =
+  MenuCell<MessageTextView, LayoutView> *myCell =
       static_cast<MenuCell<MessageTextView, LayoutView> *>(cell);
   Model *model = m_store->regressionModel(ModelTypeAtIndex(row));
-  castedCell->label()->setMessage(model->name());
-  castedCell->subLabel()->setLayout(model->templateLayout());
+  myCell->label()->setMessage(model->name());
+  myCell->subLabel()->setLayout(model->templateLayout());
 }
 
 }  // namespace Regression

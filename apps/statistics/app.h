@@ -33,6 +33,7 @@ class App : public Shared::StoreApp, Escher::AlternateViewDelegate {
 
     App *unpack(Escher::Container *container) override;
     void reset() override;
+    void countryWasUpdated() override;
     const Descriptor *descriptor() const override;
     uint32_t *storeVersion() { return &m_storeVersion; }
     GraphViewModel *graphViewModel() { return &m_graphViewModel; }
@@ -48,9 +49,7 @@ class App : public Shared::StoreApp, Escher::AlternateViewDelegate {
     int16_t m_selectedIndex;
   };
 
-  static App *app() {
-    return static_cast<App *>(Escher::Container::activeApp());
-  }
+  static App *app() { return static_cast<App *>(Escher::App::app()); }
 
   TELEMETRY_ID("Statistics");
 

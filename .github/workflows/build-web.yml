@@ -1,0 +1,38 @@
+name: Web Build
+on:
+  workflow_dispatch:
+    inputs:
+      debug:
+       type: boolean
+       default: 'false'
+
+env:
+  MAKEFLAGS: ${{ (github.repository == 'numworks/epsilon-internal') && '-j32' || '-j2' }}
+  DEBUG: ${{ fromJSON('["0", "1"]')[github.event.inputs.debug == 'true'] }}
+
+jobs:
+  build:
+    runs-on: ${{ (github.repository == 'numworks/epsilon-internal') && 'self-hosted' || 'ubuntu-latest' }}
+    steps:
+      - name: Download emscripten
+        uses: numworks/setup-emscripten@latest
+        with:
+          sdk: 3.1.43
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup
+        run: build/setup.sh --only-simulator
+      - name: Build
+        run: make DEBUG=$DEBUG PLATFORM=simulator TARGET=web epsilon.html htmlpack.zip
+      - name: Upload epsilon.html
+        uses: actions/upload-artifact@v3
+        with:
+          name: epsilon.html
+          path: output/${{ fromJSON('["release", "debug"]')[github.event.inputs.debug == 'true'] }}/simulator/web/epsilon.html
+          retention-days: 7
+      - name: Upload htmlpack.zip
+        uses: actions/upload-artifact@v3
+        with:
+          name: htmlpack.zip
+          path: output/${{ fromJSON('["release", "debug"]')[github.event.inputs.debug == 'true'] }}/simulator/web/htmlpack.zip
+          retention-days: 7

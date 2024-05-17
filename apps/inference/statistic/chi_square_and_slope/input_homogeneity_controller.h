@@ -11,8 +11,7 @@ class InputHomogeneityController : public InputCategoricalController {
   InputHomogeneityController(
       Escher::StackViewController* parent,
       Escher::ViewController* homogeneityResultsController,
-      HomogeneityTest* statistic,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate);
+      HomogeneityTest* statistic);
 
   // ViewController
   const char* title() override {
@@ -26,6 +25,7 @@ class InputHomogeneityController : public InputCategoricalController {
   InputCategoricalTableCell* categoricalTableCell() override {
     return &m_inputHomogeneityTable;
   }
+  void createDynamicCells() override;
 
   InputHomogeneityTableCell m_inputHomogeneityTable;
 };

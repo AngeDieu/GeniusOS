@@ -46,33 +46,29 @@ Expression Equation::Model::standardForm(
   // Reduce the expression
   Expression simplifiedInput = expressionInputWithoutFunctions;
   PoincareHelpers::CloneAndSimplify(&simplifiedInput, contextToUse,
-                                    reductionTarget);
+                                    {.target = reductionTarget});
 
   if (simplifiedInput.type() == ExpressionNode::Type::Nonreal) {
     returnedExpression = Nonreal::Builder();
   } else if (simplifiedInput.recursivelyMatches(
                  [](const Expression e, Context *context) {
-                   return e.type() == ExpressionNode::Type::Undefined ||
-                          e.type() == ExpressionNode::Type::Infinity ||
+                   return e.isOfType({ExpressionNode::Type::Undefined,
+                                      ExpressionNode::Type::Infinity}) ||
                           Expression::IsMatrix(e, context);
                  },
                  contextToUse)) {
     returnedExpression = Undefined::Builder();
   } else if (ComparisonNode::IsBinaryEquality(simplifiedInput)) {
-    Preferences *preferences = Preferences::sharedPreferences;
     returnedExpression = Subtraction::Builder(simplifiedInput.childAtIndex(0),
                                               simplifiedInput.childAtIndex(1));
-    returnedExpression = returnedExpression.cloneAndReduce(ReductionContext(
-        contextToUse,
-        Preferences::UpdatedComplexFormatWithExpressionInput(
-            preferences->complexFormat(), expressionInputWithoutFunctions,
-            contextToUse),
-        preferences->angleUnit(),
-        GlobalPreferences::sharedGlobalPreferences->unitFormat(),
-        reductionTarget));
+    ReductionContext reductionContext =
+        PoincareHelpers::ReductionContextForParameters(
+            expressionInputWithoutFunctions, contextToUse,
+            {.target = reductionTarget});
+    returnedExpression = returnedExpression.cloneAndReduce(reductionContext);
   } else {
-    assert(simplifiedInput.type() == ExpressionNode::Type::Boolean ||
-           simplifiedInput.type() == ExpressionNode::Type::List);
+    assert(simplifiedInput.isOfType(
+        {ExpressionNode::Type::Boolean, ExpressionNode::Type::List}));
     /* The equality has disappeared after reduction. This may be because:
      * - the comparison was always true or false (e.g. 1 = 0) and has been
      *   reduced to a boolean.

@@ -42,6 +42,16 @@ class ComplexNode final : public EvaluationNode<T>, public std::complex<T> {
 };
 
 template <typename T>
+std::complex<T> complexNAN() {
+  return std::complex<T>(NAN, NAN);
+}
+
+template <typename T>
+std::complex<T> complexRealNAN() {
+  return std::complex<T>(NAN, 0.0);
+}
+
+template <typename T>
 class Complex final : public Evaluation<T> {
  public:
   Complex(ComplexNode<T> *n) : Evaluation<T>(n) {}
@@ -49,8 +59,10 @@ class Complex final : public Evaluation<T> {
   static Complex<T> Builder(T a, T b = 0.0) {
     return Complex<T>::Builder(std::complex<T>(a, b));
   }
-  static Complex<T> Undefined() { return Complex<T>::Builder(NAN, NAN); }
-  static Complex<T> RealUndefined() { return Complex<T>::Builder(NAN, 0.0); }
+  static Complex<T> Undefined() { return Complex<T>::Builder(complexNAN<T>()); }
+  static Complex<T> RealUndefined() {
+    return Complex<T>::Builder(complexRealNAN<T>());
+  }
   T real() { return node()->real(); }
   T imag() { return node()->imag(); }
 

@@ -36,6 +36,10 @@ class ComputationContext {
       : m_context(context),
         m_complexFormat(complexFormat),
         m_angleUnit(angleUnit) {}
+  ComputationContext(Context* context)
+      : ComputationContext(context,
+                           Preferences::sharedPreferences->complexFormat(),
+                           Preferences::sharedPreferences->angleUnit()) {}
 
   Context* context() const { return m_context; }
   void setContext(Context* context) { m_context = context; }
@@ -47,6 +51,8 @@ class ComputationContext {
   void setAngleUnit(Preferences::AngleUnit angleUnit) {
     m_angleUnit = angleUnit;
   }
+
+  void updateComplexFormat(const Expression e);
 
  private:
   Context* m_context;
@@ -142,11 +148,17 @@ class ApproximationContext : public ComputationContext {
                        bool withinReduce = false)
       : ComputationContext(context, complexFormat, angleUnit),
         m_withinReduce(withinReduce) {}
-  ApproximationContext(const ReductionContext& reductionContext,
-                       bool withinReduce)
-      : ApproximationContext(reductionContext.context(),
-                             reductionContext.complexFormat(),
-                             reductionContext.angleUnit(), withinReduce) {}
+  ApproximationContext(const ComputationContext& computationContext,
+                       bool withinReduce = false)
+      : ApproximationContext(computationContext.context(),
+                             computationContext.complexFormat(),
+                             computationContext.angleUnit(), withinReduce) {}
+  ApproximationContext(Context* context, bool withinReduce = false)
+      : ComputationContext(context), m_withinReduce(withinReduce) {}
+  ApproximationContext(Context* context,
+                       Preferences::ComplexFormat complexFormat)
+      : ApproximationContext(context, complexFormat,
+                             Preferences::sharedPreferences->angleUnit()) {}
 
   bool withinReduce() const { return m_withinReduce; }
 

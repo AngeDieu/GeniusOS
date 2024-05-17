@@ -23,8 +23,7 @@ class MainController : public Escher::ViewController,
 
   // Escher::Responder
   void didBecomeFirstResponder() override {
-    Escher::Container::activeApp()->setFirstResponder(
-        m_view.bannerView()->textField());
+    Escher::App::app()->setFirstResponder(m_view.bannerView()->textField());
   }
   bool handleEvent(Ion::Events::Event e) override;
 
@@ -33,17 +32,13 @@ class MainController : public Escher::ViewController,
   void activeDataFieldHasChanged() override;
 
   // Escher::TextFieldDelegate
-  bool textFieldShouldFinishEditing(Escher::AbstractTextField* textField,
-                                    Ion::Events::Event event) override;
   void textFieldDidStartEditing(Escher::AbstractTextField* textField) override;
   bool textFieldDidReceiveEvent(Escher::AbstractTextField* textField,
                                 Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
-  bool textFieldDidAbortEditing(Escher::AbstractTextField* textField) override;
-  bool textFieldDidHandleEvent(Escher::AbstractTextField* textField,
-                               bool returnValue, bool textDidChange) override;
+  void textFieldDidAbortEditing(Escher::AbstractTextField* textField) override;
+  void textFieldDidHandleEvent(Escher::AbstractTextField* textField) override;
 
  private:
   class ContentView : public Escher::View {

@@ -1,8 +1,7 @@
 #ifndef ELEMENTS_APP_H
 #define ELEMENTS_APP_H
 
-#include <apps/shared/layout_field_delegate_app.h>
-#include <apps/shared/shared_app.h>
+#include <apps/shared/app_with_store_menu.h>
 #include <escher/container.h>
 #include <escher/stack_view_controller.h>
 
@@ -11,7 +10,7 @@
 
 namespace Elements {
 
-class App : public Shared::LayoutFieldDelegateApp {
+class App : public Shared::AppWithStoreMenu {
  public:
   class Descriptor : public Escher::App::Descriptor {
    public:
@@ -22,10 +21,11 @@ class App : public Shared::LayoutFieldDelegateApp {
 
   class Snapshot : public Shared::SharedApp::Snapshot {
    public:
-    Snapshot();
+    Snapshot() { init(); };
 
     App *unpack(Escher::Container *container) override;
     const Descriptor *descriptor() const override;
+    void reset() override;
 
     const DataField *field() const { return m_field; }
     void setField(const DataField *field) { m_field = field; }
@@ -39,15 +39,15 @@ class App : public Shared::LayoutFieldDelegateApp {
     }
 
    private:
+    void init();
+
     const DataField *m_field;
     AtomicNumber m_selectedElement;
     AtomicNumber m_previousElement;
   };
   TELEMETRY_ID("ElementsTable");
 
-  static App *app() {
-    return static_cast<App *>(Escher::Container::activeApp());
-  }
+  static App *app() { return static_cast<App *>(Escher::App::app()); }
 
   Snapshot *snapshot() {
     return static_cast<Snapshot *>(Escher::App::snapshot());

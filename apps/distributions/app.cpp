@@ -1,7 +1,6 @@
 #include "app.h"
 
 #include <apps/apps_container.h>
-#include <apps/shared/text_field_delegate_app.h>
 
 #include "distributions_icon.h"
 
@@ -19,12 +18,11 @@ App *App::Snapshot::unpack(Container *container) {
 }
 
 App::App(Snapshot *snapshot, Poincare::Context *parentContext)
-    : LayoutFieldDelegateApp(snapshot, &m_stackViewController),
-      m_calculationController(&m_stackViewController, this,
-                              snapshot->distribution(),
+    : MathApp(snapshot, &m_stackViewController),
+      m_calculationController(&m_stackViewController, snapshot->distribution(),
                               snapshot->calculation()),
-      m_parameterController(&m_stackViewController, this,
-                            snapshot->distribution(), &m_calculationController),
+      m_parameterController(&m_stackViewController, snapshot->distribution(),
+                            &m_calculationController),
       m_distributionController(&m_stackViewController, snapshot->distribution(),
                                &m_parameterController),
       m_stackViewController(&m_modalViewController, &m_distributionController,

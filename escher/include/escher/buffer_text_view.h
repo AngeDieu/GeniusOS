@@ -24,10 +24,11 @@ class AbstractBufferTextView : public TextView {
   void setText(const char* text) override;
 
   void setMessageWithPlaceholders(I18n::Message message, ...);
+  bool unsafeSetMessageWithPlaceholders(I18n::Message message, ...);
   void appendText(const char* text);
 
  protected:
-  void privateSetMessageWithPlaceholders(I18n::Message message, va_list args);
+  bool privateSetMessageWithPlaceholders(I18n::Message message, va_list args);
   virtual char* buffer() = 0;
   virtual int maxTextSize() const = 0;
 };
@@ -49,12 +50,14 @@ class BufferTextView : public AbstractBufferTextView {
 template <KDFont::Size Font, int NumberOfLines>
 using MultipleLinesBufferTextView = BufferTextView<
     NumberOfLines*(Ion::Display::Width / KDFont::GlyphWidth(Font)) + 1>;
+/* TODO: NumberOfLines * (Ion::Display::Width / KDFont::GlyphWidth(Font)) is a
+ * size in terms of glyphs which is different from the size in terms of chars */
 
 template <KDFont::Size Font = KDFont::Size::Small>
 using OneLineBufferTextView = MultipleLinesBufferTextView<Font, 1>;
 
 template <int numberOfSignificantDigits =
-              Poincare::PrintFloat::k_numberOfStoredSignificantDigits>
+              Poincare::PrintFloat::k_maxNumberOfSignificantDigits>
 using FloatBufferTextView =
     BufferTextView<Poincare::PrintFloat::charSizeForFloatsWithPrecision(
         numberOfSignificantDigits)>;

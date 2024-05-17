@@ -56,6 +56,8 @@ class IntegralNode final : public ParameteredExpressionNode {
     T integral;
     T absoluteError;
   };
+  template <typename T>
+  static bool DetailedResultIsValid(DetailedResult<T> result);
   constexpr static int k_maxNumberOfIterations = 20;
 #ifdef LAGRANGE_METHOD
   template <typename T>
@@ -96,6 +98,11 @@ class IntegralNode final : public ParameteredExpressionNode {
   template <typename T>
   DetailedResult<T> adaptiveQuadrature(
       T a, T b, T eps, int numberOfIterations, Substitution<T> substitution,
+      const ApproximationContext& approximationContext) const;
+  template <typename T>
+  DetailedResult<T> iterateAdaptiveQuadrature(
+      DetailedResult<T> quadKG, T a, T b, T eps, int numberOfIterations,
+      Substitution<T> substitution,
       const ApproximationContext& approximationContext) const;
 #endif
 };

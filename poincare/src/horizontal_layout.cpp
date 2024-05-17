@@ -31,14 +31,6 @@ Layout HorizontalLayoutNode::deepChildToPointToWhenInserting() const {
 int HorizontalLayoutNode::serialize(
     char *buffer, int bufferSize, Preferences::PrintFloatMode floatDisplayMode,
     int numberOfSignificantDigits) const {
-  return serializeChildrenBetweenIndexes(buffer, bufferSize, floatDisplayMode,
-                                         numberOfSignificantDigits, false);
-}
-
-int HorizontalLayoutNode::serializeChildrenBetweenIndexes(
-    char *buffer, int bufferSize, Preferences::PrintFloatMode floatDisplayMode,
-    int numberOfSignificantDigits, bool forceIndexes, int firstIndex,
-    int lastIndex) const {
   if (bufferSize == 0) {
     return bufferSize - 1;
   }
@@ -50,12 +42,9 @@ int HorizontalLayoutNode::serializeChildrenBetweenIndexes(
 
   int numberOfChar = 0;
   // Write the children, adding multiplication signs if needed
-  int index1 = forceIndexes ? firstIndex : 0;
-  int index2 = forceIndexes ? lastIndex + 1 : childrenCount;
-  assert(index1 >= 0 && index2 <= childrenCount && index1 <= index2);
-  LayoutNode *currentChild = childAtIndex(index1);
+  LayoutNode *currentChild = childAtIndex(0);
   LayoutNode *nextChild = nullptr;
-  for (int i = index1; i < index2; i++) {
+  for (int i = 0; i < childrenCount; i++) {
     // Write the child
     assert(currentChild);
     numberOfChar += currentChild->serialize(
@@ -73,7 +62,6 @@ int HorizontalLayoutNode::serializeChildrenBetweenIndexes(
            nextChildType == LayoutNode::Type::BinomialCoefficientLayout ||
            nextChildType == LayoutNode::Type::CeilingLayout ||
            nextChildType == LayoutNode::Type::ConjugateLayout ||
-           nextChildType == LayoutNode::Type::CeilingLayout ||
            nextChildType == LayoutNode::Type::FloorLayout ||
            nextChildType == LayoutNode::Type::IntegralLayout ||
            nextChildType ==
@@ -136,11 +124,17 @@ KDSize HorizontalLayoutNode::layoutSizeBetweenIndexes(int leftIndex,
   for (int i = leftIndex; i < rightIndex; i++) {
     LayoutNode *childi = childAtIndex(i);
     KDSize childSize = childi->layoutSize(font);
-    totalWidth += childSize.width();
     KDCoordinate childBaseline = childi->baseline(font);
     maxUnderBaseline = std::max<KDCoordinate>(
         maxUnderBaseline, childSize.height() - childBaseline);
     maxAboveBaseline = std::max(maxAboveBaseline, childBaseline);
+    if (totalWidth >= k_maxLayoutSize - childSize.width()) {
+      /* If the width overflows k_maxLayoutSize, break now to avoid overflowing
+       * KDCoordinate. */
+      totalWidth = k_maxLayoutSize;
+      break;
+    }
+    totalWidth += childSize.width();
   }
   return KDSize(totalWidth, maxUnderBaseline + maxAboveBaseline);
 }
@@ -250,15 +244,6 @@ Layout HorizontalLayout::squashUnaryHierarchyInPlace() {
     return child;
   }
   return *this;
-}
-
-void HorizontalLayout::serializeChildren(int firstIndex, int lastIndex,
-                                         char *buffer, int bufferSize) {
-  static_cast<HorizontalLayoutNode *>(node())->serializeChildrenBetweenIndexes(
-      buffer, bufferSize,
-      Poincare::Preferences::sharedPreferences->displayMode(),
-      Poincare::Preferences::sharedPreferences->numberOfSignificantDigits(),
-      true, firstIndex, lastIndex);
 }
 
 }  // namespace Poincare

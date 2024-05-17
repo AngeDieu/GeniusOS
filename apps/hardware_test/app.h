@@ -1,9 +1,9 @@
 #ifndef HARDWARE_TEST_APP_H
 #define HARDWARE_TEST_APP_H
 
+#include <escher/app.h>
 #include <escher/bank_view_controller.h>
 
-#include "../shared/shared_app.h"
 #include "battery_test_controller.h"
 #include "colors_lcd_test_controller.h"
 #include "dead_pixels_test_controller.h"
@@ -18,7 +18,7 @@ namespace HardwareTest {
 
 class App : public Escher::App {
  public:
-  class Snapshot : public Shared::SharedApp::Snapshot {
+  class Snapshot : public Escher::App::Snapshot {
    public:
     App* unpack(Escher::Container* container) override;
     const Descriptor* descriptor() const override;

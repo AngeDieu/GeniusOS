@@ -14,20 +14,16 @@ using namespace Escher;
 namespace Graph {
 
 CalculationParameterController::CalculationParameterController(
-    Responder *parentResponder,
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
-    GraphView *graphView, BannerView *bannerView,
+    Responder *parentResponder, GraphView *graphView, BannerView *bannerView,
     InteractiveCurveViewRange *range, CurveViewCursor *cursor)
     : ExplicitSelectableListViewController(parentResponder),
-      m_preimageParameterController(nullptr, inputEventHandlerDelegate, range,
-                                    cursor, &m_preimageGraphController),
+      m_preimageParameterController(nullptr, range, cursor,
+                                    &m_preimageGraphController),
       m_preimageGraphController(nullptr, graphView, bannerView, range, cursor),
       m_tangentGraphController(nullptr, graphView, bannerView, range, cursor),
-      m_integralGraphController(nullptr, inputEventHandlerDelegate, graphView,
-                                range, cursor),
+      m_integralGraphController(nullptr, graphView, range, cursor),
       m_areaParameterController(nullptr, &m_areaGraphController),
-      m_areaGraphController(nullptr, inputEventHandlerDelegate, graphView,
-                            range, cursor),
+      m_areaGraphController(nullptr, graphView, range, cursor),
       m_minimumGraphController(nullptr, graphView, bannerView, range, cursor),
       m_maximumGraphController(nullptr, graphView, bannerView, range, cursor),
       m_rootGraphController(nullptr, graphView, bannerView, range, cursor),
@@ -58,29 +54,28 @@ void CalculationParameterController::viewWillAppear() {
   bool areaWasVisible = m_areaCell.isVisible();
   m_intersectionCell.setVisible(ShouldDisplayIntersection());
   m_areaCell.setVisible(ShouldDisplayAreaBetweenCurves());
-  if (intersectionWasVisible != m_intersectionCell.isVisible() ||
-      areaWasVisible != m_areaCell.isVisible()) {
-    resetMemoization();
+  bool resetSizeMemoization =
+      intersectionWasVisible != m_intersectionCell.isVisible() ||
+      areaWasVisible != m_areaCell.isVisible();
+  if (m_areaCell.isVisible()) {
+    fillAreaCell();
   }
   ViewController::viewWillAppear();
-  m_selectableListView.reloadData();
+  m_selectableListView.reloadData(true, resetSizeMemoization);
 }
 
 template <class T>
 void CalculationParameterController::push(T *controller, bool pop) {
   StackViewController *stack =
       static_cast<StackViewController *>(parentResponder());
+  assert(App::app()->functionStore()->modelForRecord(m_record)->isActive());
   controller->setRecord(m_record);
-  bool hasControllerToPush =
-      !pop || App::app()->functionStore()->modelForRecord(m_record)->isActive();
   if (pop) {
     stack->popUntilDepth(
         Shared::InteractiveCurveViewController::k_graphControllerStackDepth,
-        !hasControllerToPush);
+        false);
   }
-  if (hasControllerToPush) {
-    stack->push(controller);
-  }
+  stack->push(controller);
 }
 
 bool CalculationParameterController::handleEvent(Ion::Events::Event event) {
@@ -123,12 +118,7 @@ bool CalculationParameterController::handleEvent(Ion::Events::Event event) {
   return true;
 }
 
-void CalculationParameterController::fillCellForRow(HighlightCell *cell,
-                                                    int row) {
-  assert(row >= 0 && row <= numberOfRows());
-  if (cell != &m_areaCell) {
-    return;
-  }
+void CalculationParameterController::fillAreaCell() {
   assert(ShouldDisplayAreaBetweenCurves());
   // If there is only two derivable functions, hide the chevron
   m_areaCell.accessory()->displayChevron(ShouldDisplayChevronInAreaCell());
@@ -159,11 +149,12 @@ void CalculationParameterController::fillCellForRow(HighlightCell *cell,
     // If there are more than 2 functions, display "Area between f(x) and"
     secondPlaceHolder[0] = 0;
   }
-  m_areaCell.label()->setMessageWithPlaceholders(
+  bool labelFitsInBuffer = m_areaCell.label()->unsafeSetMessageWithPlaceholders(
       I18n::Message::AreaBetweenCurvesWithFunctionName, mainFunctionName,
       secondPlaceHolder);
-  if (m_areaCell.labelView()->minimalSizeForOptimalDisplay().width() >
-      m_areaCell.innerWidth()) {
+  if (!labelFitsInBuffer ||
+      m_areaCell.labelView()->minimalSizeForOptimalDisplay().width() >
+          m_areaCell.innerWidth()) {
     // If there is not enough space in the cell, display "Area between curves"
     m_areaCell.label()->setMessageWithPlaceholders(
         I18n::Message::AreaBetweenCurves);
@@ -175,7 +166,7 @@ void CalculationParameterController::setRecord(Ion::Storage::Record record) {
   selectRow(0);
   m_intersectionCell.setVisible(ShouldDisplayIntersection());
   m_areaCell.setVisible(ShouldDisplayAreaBetweenCurves());
-  resetMemoization();
+  m_selectableListView.resetSizeAndOffsetMemoization();
 }
 
 bool CalculationParameterController::ShouldDisplayIntersection() {

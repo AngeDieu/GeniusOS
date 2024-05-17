@@ -3,7 +3,6 @@
 
 #include <escher/editable_text_cell.h>
 #include <escher/highlight_cell.h>
-#include <escher/input_event_handler_delegate.h>
 #include <escher/message_text_view.h>
 #include <escher/text_field_delegate.h>
 
@@ -11,12 +10,10 @@ namespace Distributions {
 
 class CalculationCell : public Escher::HighlightCell {
  public:
-  CalculationCell(
-      Escher::Responder* parentResponder = nullptr,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate = nullptr,
-      Escher::TextFieldDelegate* textFieldDelegate = nullptr);
+  CalculationCell(Escher::Responder* parentResponder = nullptr,
+                  Escher::TextFieldDelegate* textFieldDelegate = nullptr);
   Escher::Responder* responder() override;
-  void setResponder(bool shouldbeResponder);
+  void setEditable(bool editable) { m_isEditable = editable; }
   void setHighlighted(bool highlight) override;
   KDSize minimalSizeForOptimalDisplay() const override;
   void drawRect(KDContext* ctx, KDRect rect) const override;
@@ -33,7 +30,7 @@ class CalculationCell : public Escher::HighlightCell {
   KDCoordinate calculationCellWidth() const;
   Escher::MessageTextView m_text;
   Escher::EditableTextCell<> m_calculation;
-  bool m_isResponder;
+  bool m_isEditable;
 };
 
 }  // namespace Distributions

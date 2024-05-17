@@ -7,10 +7,6 @@
 
 namespace Shared {
 
-constexpr int ContinuousFunctionCache::k_sizeOfCache;
-constexpr float ContinuousFunctionCache::k_cacheHitTolerance;
-constexpr int ContinuousFunctionCache::k_numberOfAvailableCaches;
-
 // public
 void ContinuousFunctionCache::PrepareForCaching(void *fun,
                                                 ContinuousFunctionCache *cache,
@@ -44,11 +40,10 @@ void ContinuousFunctionCache::PrepareForCaching(void *fun,
   if (function->cache() != cache) {
     cache->clear();
     function->setCache(cache);
-  } else if (tStep != 0.f && tStep != cache->step()) {
+  } else if (tStep != 0.f &&
+             std::fabs(tStep - cache->step()) > k_cacheHitTolerance) {
     cache->clear();
-  }
-
-  if (function->properties().isCartesian() && tStep != 0) {
+  } else if (function->properties().isCartesian() && tStep != 0) {
     function->cache()->pan(function, tMin);
   }
   function->cache()->setRange(tMin, tStep);
@@ -89,7 +84,7 @@ void ContinuousFunctionCache::ComputeNonCartesianSteps(float *tStep,
   /* Define cacheStep such that every whole graph steps are equally divided
    * For instance, with :
    *    graphStepDenominator = 10.1
-   *    numberOfCacheablePoints = 160
+   *    numberOfCacheablePoints = 320
    * tMin [----------------|----------------| ... |----------------|**] tMax
    *             step1           step2                  step10       step11
    * There are 11 steps, the first 10 are whole and have an equal size (tStep).
@@ -112,7 +107,7 @@ void ContinuousFunctionCache::setRange(float tMin, float tStep) {
 int ContinuousFunctionCache::indexForParameter(
     const ContinuousFunction *function, float t, int curveIndex) const {
   assert(!std::isnan(t));
-  if (curveIndex != 0) {
+  if (curveIndex != 0 || std::isinf(t)) {
     /* TODO: For now, second curves are not cached. It may (or not) be slightly
      * better to cache both, but it should also be handled in pan. */
     return -1;
@@ -122,6 +117,8 @@ int ContinuousFunctionCache::indexForParameter(
   if (delta < 0 || delta >= static_cast<float>(INT_MAX)) {
     return -1;
   }
+  // Round behaviour changes platform-wise if std::isnan(delta)
+  assert(!std::isnan(delta));
   int res = std::round(delta);
   assert(res >= 0);
   if ((res >= k_sizeOfCache) ||

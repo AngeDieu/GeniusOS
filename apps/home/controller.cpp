@@ -1,10 +1,10 @@
 #include "controller.h"
 
+#include <apps/apps_container.h>
 #include <apps/home/apps_layout.h>
 #include <ion/keyboard/layout_events.h>
 #include <poincare/preferences.h>
 
-#include "../apps_container.h"
 #include "app.h"
 
 extern "C" {
@@ -21,10 +21,10 @@ Controller::ContentView::ContentView(
     : m_selectableTableView(controller, controller, selectionDataSource,
                             controller) {
   m_selectableTableView.setVerticalCellOverlap(0);
-  m_selectableTableView.setMargins(0, k_sideMargin, 0, k_sideMargin);
+  m_selectableTableView.setMargins(k_margins);
   m_selectableTableView.setBackgroundColor(KDColorWhite);
   m_selectableTableView.decorator()->setVerticalMargins(
-      k_indicatorMargin, k_indicatorMargin - k_bottomMargin);
+      {k_indicatorMargin, k_indicatorMargin - k_bottomMargin});
 }
 
 SelectableTableView *Controller::ContentView::selectableTableView() {
@@ -116,7 +116,7 @@ void Controller::didBecomeFirstResponder() {
   if (selectionDataSource()->selectedRow() == -1) {
     selectionDataSource()->selectCellAtLocation(0, 0);
   }
-  Container::activeApp()->setFirstResponder(m_view.selectableTableView());
+  App::app()->setFirstResponder(m_view.selectableTableView());
 }
 
 HighlightCell *Controller::reusableCell(int index) {

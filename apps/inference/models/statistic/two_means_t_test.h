@@ -1,8 +1,6 @@
 #ifndef INFERENCE_MODELS_STATISTIC_TWO_MEANS_T_TEST_H
 #define INFERENCE_MODELS_STATISTIC_TWO_MEANS_T_TEST_H
 
-#include "interfaces/distributions.h"
-#include "interfaces/significance_tests.h"
 #include "test.h"
 
 namespace Inference {
@@ -18,9 +16,6 @@ class TwoMeansTTest : public Test {
     return DistributionType::T;
   }
   I18n::Message title() const override { return TwoMeans::TTitle(); }
-  I18n::Message graphTitleFormat() const override {
-    return DistributionT::GraphTitleFormat();
-  }
 
   // Significance Test: TwoMeans
   bool initializeDistribution(DistributionType distributionType) override {
@@ -47,22 +42,6 @@ class TwoMeansTTest : public Test {
 
   void compute() override { TwoMeans::ComputeTTest(this); }
 
-  // Distribution: t
-  Poincare::Layout testCriticalValueSymbol() override {
-    return DistributionT::TestCriticalValueSymbol();
-  }
-  float canonicalDensityFunction(float x) const override {
-    return DistributionT::CanonicalDensityFunction(x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveFunctionAtAbscissa(double x) const override {
-    return DistributionT::CumulativeNormalizedDistributionFunction(
-        x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveInverseForProbability(double p) const override {
-    return DistributionT::CumulativeNormalizedInverseDistributionFunction(
-        p, m_degreesOfFreedom);
-  }
-
  private:
   // Significance Test: TwoMeans
   bool validateInputs() override { return TwoMeans::TValidateInputs(m_params); }
@@ -74,11 +53,6 @@ class TwoMeansTTest : public Test {
     return TwoMeans::TParameterRepresentationAtIndex(i);
   }
   double* parametersArray() override { return m_params; }
-
-  // Distribution: t
-  float computeYMax() const override {
-    return DistributionT::YMax(m_degreesOfFreedom);
-  }
 
   double m_params[TwoMeans::k_numberOfParams];
 };

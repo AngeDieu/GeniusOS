@@ -53,14 +53,14 @@ Range2D Zoom::range(bool beautify, bool forceNormalization) const {
   Range2D result;
   Range2D pretty =
       beautify ? prettyRange(forceNormalization) : sanitizedRange();
-  assert(pretty.x()->isValid() && pretty.y()->isValid());
-  result.x()->setMin(pretty.xMin(), m_maxFloat);
-  result.x()->setMax(pretty.xMax(), m_maxFloat);
-  result.y()->setMin(pretty.yMin(), m_maxFloat);
-  result.y()->setMax(pretty.yMax(), m_maxFloat);
+  assert(!pretty.x()->isNan() && !pretty.y()->isNan());
+  *(result.x()) =
+      Range1D::ValidRangeBetween(pretty.xMin(), pretty.xMax(), m_maxFloat);
+  *(result.y()) =
+      Range1D::ValidRangeBetween(pretty.yMin(), pretty.yMax(), m_maxFloat);
 #if ASSERTIONS
-  bool xRangeIsForced = m_forcedRange.x()->isValid();
-  bool yRangeIsForced = m_forcedRange.y()->isValid();
+  bool xRangeIsForced = !m_forcedRange.x()->isNan();
+  bool yRangeIsForced = !m_forcedRange.y()->isNan();
   assert(xRangeIsForced || (yRangeIsForced && forceNormalization) ||
          rangeIsValidZoom(*result.x(), *m_interestingRange.x(), m_maxFloat));
   assert(yRangeIsForced || (xRangeIsForced && forceNormalization) ||
@@ -70,8 +70,7 @@ Range2D Zoom::range(bool beautify, bool forceNormalization) const {
                              result.xMax() == m_forcedRange.xMax()));
   assert(!yRangeIsForced || (result.yMin() == m_forcedRange.yMin() &&
                              result.yMax() == m_forcedRange.yMax()));
-  assert(result.x()->isValid() && result.y()->isValid() &&
-         !result.x()->isEmpty() && !result.y()->isEmpty());
+  assert(result.x()->isValid() && result.y()->isValid());
 #endif
   return result;
 }
@@ -122,13 +121,14 @@ void Zoom::fitPoint(Coordinate2D<float> xy, bool flipped, float leftMargin,
   privateFitPoint(Coordinate2D<float>(xR.max(), yR.max()), flipped);
 }
 
+#if 0
 void Zoom::fitFullFunction(Function2DWithContext<float> f, const void *model) {
   float step = m_bounds.length() / (k_sampleSize - 1);
   for (size_t i = 0; i < k_sampleSize; i++) {
     float t = m_bounds.min() + step * i;
     privateFitPoint(f(t, model, m_context));
   }
-}
+#endif
 
 static Solver<float>::Interest pointIsInterestingHelper(Coordinate2D<float> a,
                                                         Coordinate2D<float> b,
@@ -149,7 +149,8 @@ static Solver<float>::Interest pointIsInterestingHelper(Coordinate2D<float> a,
 
 void Zoom::fitPointsOfInterest(Function2DWithContext<float> f,
                                const void *model, bool vertical,
-                               Function2DWithContext<double> fDouble) {
+                               Function2DWithContext<double> fDouble,
+                               bool *finiteNumberOfPoints) {
   HorizontalAsymptoteHelper asymptotes(m_bounds.center());
   float (Coordinate2D<float>::*ordinate)() const =
       vertical ? &Coordinate2D<float>::x : &Coordinate2D<float>::y;
@@ -184,6 +185,10 @@ void Zoom::fitPointsOfInterest(Function2DWithContext<float> f,
   if (!rightInterrupted) {
     privateFitPoint(asymptotes.right(), vertical);
   }
+  if (finiteNumberOfPoints) {
+    *finiteNumberOfPoints =
+        *finiteNumberOfPoints && !leftInterrupted && !rightInterrupted;
+  }
 }
 
 void Zoom::fitIntersections(Function2DWithContext<float> f1, const void *model1,
@@ -217,27 +222,27 @@ void Zoom::fitConditions(PiecewiseOperator p,
     Zoom *zoom;
     PiecewiseOperator p;
     const char *symbol;
-    Preferences::ComplexFormat complexFormat;
-    Preferences::AngleUnit angleUnit;
+    const ApproximationContext &approximationContext;
     Function2DWithContext<float> fullFunction;
     const void *model;
     bool vertical;
   };
-  const ConditionsParameters params = {.zoom = this,
-                                       .p = p,
-                                       .symbol = symbol,
-                                       .complexFormat = complexFormat,
-                                       .angleUnit = angleUnit,
-                                       .fullFunction = fullFunction,
-                                       .model = model,
-                                       .vertical = vertical};
+  ApproximationContext approximationContext(m_context, complexFormat,
+                                            angleUnit);
+  const ConditionsParameters params = {
+      .zoom = this,
+      .p = p,
+      .symbol = symbol,
+      .approximationContext = approximationContext,
+      .fullFunction = fullFunction,
+      .model = model,
+      .vertical = vertical};
   Solver<float>::FunctionEvaluation evaluator = [](float t, const void *aux) {
     const ConditionsParameters *params =
         static_cast<const ConditionsParameters *>(aux);
     return static_cast<float>(
         params->p.indexOfFirstTrueConditionWithValueForSymbol(
-            params->symbol, t, params->zoom->m_context, params->complexFormat,
-            params->angleUnit));
+            params->symbol, t, params->approximationContext));
   };
   Solver<float>::BracketTest test = [](Coordinate2D<float> a,
                                        Coordinate2D<float>,
@@ -260,7 +265,7 @@ void Zoom::fitConditions(PiecewiseOperator p,
 }
 
 void Zoom::fitMagnitude(Function2DWithContext<float> f, const void *model,
-                        bool vertical) {
+                        bool cropOutliers, bool vertical) {
   /* We compute the log mean value of the expression, which gives an idea of the
    * order of magnitude of the function, to crop the Y axis. */
   constexpr float aboutZero = Solver<float>::k_minimalAbsoluteStep;
@@ -278,6 +283,9 @@ void Zoom::fitMagnitude(Function2DWithContext<float> f, const void *model,
     float x = xRange.min() + i * step;
     float y = (f(x, model, m_context).*ordinate)();
     sample.extend(y, m_maxFloat);
+    if (!cropOutliers) {
+      continue;
+    }
     float yAbs = std::fabs(y);
     if (!(yAbs > aboutZero)) {  // Negated to account for NANs
       continue;
@@ -291,13 +299,20 @@ void Zoom::fitMagnitude(Function2DWithContext<float> f, const void *model,
       pPop++;
     }
   }
+
   Range1D *magnitudeRange =
       vertical ? m_magnitudeRange.x() : m_magnitudeRange.y();
-  float yMax = pPop > 0 ? std::min(sample.max(), std::exp(pSum / pPop + 1.f))
-                        : sample.max();
+  float yMax = sample.max();
+  if (pPop > 0) {
+    assert(cropOutliers);
+    yMax = std::min(yMax, std::exp(pSum / pPop + 1.f));
+  }
   magnitudeRange->extend(yMax, m_maxFloat);
-  float yMin = nPop > 0 ? std::max(sample.min(), -std::exp(nSum / nPop + 1.f))
-                        : sample.min();
+  float yMin = sample.min();
+  if (nPop > 0) {
+    assert(cropOutliers);
+    yMin = std::max(yMin, -std::exp(nSum / nPop + 1.f));
+  }
   magnitudeRange->extend(yMin, m_maxFloat);
 }
 
@@ -428,18 +443,22 @@ Coordinate2D<float> Zoom::HoneIntersection(Solver<float>::FunctionEvaluation f,
   Coordinate2D<float> pa, pu, pv, pb;
   honeHelper(f, aux, a, b, interest, Solver<float>::EvenOrOddRootInBracket, &pa,
              &pu, &pv, &pb);
-
+/* The following if condition was supposed to discard vertical asymptotes but it
+ * seems to be irrelevant for now since the autozoom also focuses on asymptotes.
+ * Removing it thus changes nothing and avoids discarding false positives. */
+#if 0
   /* We must make sure the "root" we've found is not an odd vertical asymptote.
-   * We only select roots that are lower than an arbitrary threshold. The
-   * value of the threshold itself does not require fine tuning as the
-   * functions we want to filter out will diverge most of the time.
-   * FIXME This test will fail when confronted with discontinuous functions
-   * that do not have asymptotes. */
-  constexpr float k_threshold = 1.f;
-  if (!(std::fabs(pb.y()) < k_threshold)) {
+   * We thus discard roots that change direction.
+   */
+  if ((Solver<float>::EvenOrOddRootInBracket(pu, pv, pb, aux) ==
+           Solver<float>::Interest::Root &&
+       (pa.y() <= pu.y()) != (pa.y() <= pb.y())) ||
+      (Solver<float>::EvenOrOddRootInBracket(pa, pu, pv, aux) ==
+           Solver<float>::Interest::Root &&
+       (pv.y() <= pb.y()) != (pa.y() <= pb.y()))) {
     return Coordinate2D<float>();
   }
-
+#endif
   const IntersectionParameters *p =
       static_cast<const IntersectionParameters *>(aux);
   return p->f1(pb.x(), p->model1, p->context);
@@ -447,10 +466,10 @@ Coordinate2D<float> Zoom::HoneIntersection(Solver<float>::FunctionEvaluation f,
 
 static Range1D sanitation1DHelper(Range1D range, Range1D forcedRange,
                                   float defaultHalfLength, float limit) {
-  if (forcedRange.isValid()) {
+  if (!forcedRange.isNan()) {
     return forcedRange;
   }
-  if (!range.isValid()) {
+  if (range.isNan()) {
     range = Range1D(0.f, 0.f, limit);
   }
   range.stretchIfTooSmall(defaultHalfLength, limit);
@@ -466,9 +485,45 @@ Range2D Zoom::sanitize2DHelper(Range2D range) const {
   return Range2D(xRange, yRange);
 }
 
+static bool lengthCompatibleWithNormalization(float length,
+                                              float lengthNormalized,
+                                              float interestingLength) {
+  constexpr float k_minimalCoverage = 0.3f;
+  constexpr float k_minimalNormalizedCoverage = 0.15f;
+  return
+      /* The range (interesting + magnitude) makes up for at least 30% of the
+       * normalized range (i.e. the curve does not appear squeezed). */
+      lengthNormalized * k_minimalCoverage <= length &&
+      /* The normalized range makes up for at least 15% of the range. This is to
+       * prevent that, by shrinking the range, the other axis becomes too long
+       * for the remaining visible part of the curve. */
+      length * k_minimalNormalizedCoverage <= lengthNormalized &&
+      /* The normalized range can fit the interesting range. We only count the
+       * interesting range for this part as discarding the part that comes from
+       * the magnitude is not an issue. */
+      interestingLength <= lengthNormalized;
+}
+
+bool Zoom::xLengthCompatibleWithNormalization(float xLength,
+                                              float xLengthNormalized) const {
+  return lengthCompatibleWithNormalization(xLength, xLengthNormalized,
+                                           m_interestingRange.x()->length());
+}
+
+bool Zoom::yLengthCompatibleWithNormalization(float yLength,
+                                              float yLengthNormalized) const {
+  return lengthCompatibleWithNormalization(yLength, yLengthNormalized,
+                                           m_interestingRange.y()->length()) &&
+         /* If X range is forced, the normalized Y range must fit the magnitude
+            Y range, otherwise it will crop some values. */
+         (m_forcedRange.x()->isNan() ||
+          m_magnitudeRange.y()->length() <= yLengthNormalized);
+}
+
 Range2D Zoom::prettyRange(bool forceNormalization) const {
-  assert(!forceNormalization || !m_forcedRange.x()->isValid() ||
-         !m_forcedRange.y()->isValid());
+  bool xRangeIsForced = !m_forcedRange.x()->isNan();
+  bool yRangeIsForced = !m_forcedRange.y()->isNan();
+  assert(!forceNormalization || !xRangeIsForced || !yRangeIsForced);
 
   Range2D saneRange = m_interestingRange;
   saneRange.extend(
@@ -483,34 +538,13 @@ Range2D Zoom::prettyRange(bool forceNormalization) const {
   float yLength = saneRange.y()->length();
   float xLengthNormalized = yLength / m_normalRatio;
   float yLengthNormalized = xLength * m_normalRatio;
-  constexpr float k_minimalXCoverage = 0.3f;
-  constexpr float k_minimalXNormalizedCoverage = 0.15f;
-  constexpr float k_minimalYCoverage = 0.3f;
-  constexpr float k_minimalYNormalizedCoverage = 0.15f;
 
-  /* Y can be normalized if:
-   * - the Y range (interesting + magnitude) makes up for at least 30% of the
-   *   normalized Y range (i.e. the curve does not appear squeezed).
-   * - the normalized Y range makes up for at least 15% of the Y range. This is
-   *   to prevent that, by shrinking Y, the X axis becomes too long for the
-   *   remaining visible part of the curve.
-   * - a normalized Y range can fit the interesting Y range. We only count the
-   *   interesting Y range for this part as discarding the part that comes from
-   *   the magnitude is not an issue.*/
-
-  bool xLengthCompatibleWithNormalization =
-      xLengthNormalized * k_minimalXCoverage <= xLength &&
-      xLength * k_minimalXNormalizedCoverage <= xLengthNormalized &&
-      m_interestingRange.x()->length() <= xLengthNormalized;
-  bool yLengthCompatibleWithNormalization =
-      yLengthNormalized * k_minimalYCoverage <= yLength &&
-      yLength * k_minimalYNormalizedCoverage <= yLengthNormalized &&
-      m_interestingRange.y()->length() <= yLengthNormalized;
-
-  bool normalizeX = !m_forcedRange.x()->isValid() &&
-                    (forceNormalization || xLengthCompatibleWithNormalization);
-  bool normalizeY = !m_forcedRange.y()->isValid() &&
-                    (forceNormalization || yLengthCompatibleWithNormalization);
+  bool normalizeX = !xRangeIsForced &&
+                    (forceNormalization || xLengthCompatibleWithNormalization(
+                                               xLength, xLengthNormalized));
+  bool normalizeY = !yRangeIsForced &&
+                    (forceNormalization || yLengthCompatibleWithNormalization(
+                                               yLength, yLengthNormalized));
   if (normalizeX && normalizeY) {
     /* Both axes are good candidates for normalization, pick the one that does
      * not lead to the range being shrunk. */
@@ -535,19 +569,19 @@ Range2D Zoom::prettyRange(bool forceNormalization) const {
     normalLength = yLengthNormalized;
   }
 
-  float interestingCenter = interestingRange->isValid()
-                                ? interestingRange->center()
-                                : rangeToEdit->center();
+  float interestingCenter = interestingRange->isNan()
+                                ? rangeToEdit->center()
+                                : interestingRange->center();
   assert(std::isfinite(interestingCenter));
   float portionOverInterestingCenter =
       (rangeToEdit->max() - interestingCenter) / rangeToEdit->length();
   float lengthOverCenter = portionOverInterestingCenter * normalLength;
   float lengthUnderCenter = normalLength - lengthOverCenter;
-  if (interestingRange->isValid() &&
+  if (!interestingRange->isNan() &&
       interestingCenter - lengthUnderCenter > interestingRange->min()) {
     *rangeToEdit = Range1D(interestingRange->min(),
                            interestingRange->min() + normalLength, m_maxFloat);
-  } else if (interestingRange->isValid() &&
+  } else if (!interestingRange->isNan() &&
              interestingCenter + lengthOverCenter < interestingRange->max()) {
     *rangeToEdit = Range1D(interestingRange->max() - normalLength,
                            interestingRange->max(), m_maxFloat);
@@ -597,7 +631,7 @@ bool Zoom::fitWithSolverHelper(float start, float end,
                                Solver<float>::HoneResult hone, bool vertical,
                                Solver<double>::FunctionEvaluation fDouble) {
   constexpr int k_maxPointsOnOneSide = 20;
-  constexpr int k_maxPointsIfInfinite = 5;
+  constexpr int k_thresholdForSavedRange = 3;
 
   /* Search for points of interest in one direction, up to a certain number.
    * - k_maxPointsOnOneSide is the absolute maximum number of points we are
@@ -605,13 +639,21 @@ bool Zoom::fitWithSolverHelper(float start, float end,
    *   polynomial.
    * - if we find more the k_maxPointsOnOneSide points, we assume that there
    *   are an infinite number of points. As such there is no need to display
-   *   all of them, and we only register up to k_maxPointsIfInfinite. This
-   *   trick improves the display of periodic function, which would otherwise
-   *   appear cramped. */
+   *   all of them, and we backtrack to a savedRange. This trick improves the
+   *   display of periodic function, which would otherwise appear cramped.
+   *   The savedRange is created when either the number of roots, or the number
+   *   of other points of interest cross a threshold. Roots and other interests
+   *   are splitted so that cos(x) and cos(x)+2 have the same range.
+   *
+   *   TODO: We should probably find a better way to detect the period of
+   *         periodic functions, so that we show one or two period instead of a
+   *         fixed number of points of interest. */
 
   Solver<float> solver(start, end);
-  Range2D tempRange;
-  int n = 0;
+  Range2D savedRange;
+  bool savedRangeIsInit = false;
+  int nRoots = 0;
+  int nOthers = 0;
   Coordinate2D<float> p;
   while (std::isfinite((p = solver.next(evaluator, aux, test, hone))
                            .x())) {  // assignment in condition
@@ -624,11 +666,18 @@ bool Zoom::fitWithSolverHelper(float start, float end,
       return false;
     }
     privateFitPoint(p, vertical);
-    n++;
-    if (n == k_maxPointsIfInfinite) {
-      tempRange = m_interestingRange;
-    } else if (n >= k_maxPointsOnOneSide) {
-      m_interestingRange = tempRange;
+    if (solver.lastInterest() == Solver<float>::Interest::Root) {
+      nRoots++;
+    } else {
+      nOthers++;
+    }
+    if (!savedRangeIsInit && (nRoots >= k_thresholdForSavedRange ||
+                              nOthers >= k_thresholdForSavedRange)) {
+      savedRangeIsInit = true;
+      savedRange = m_interestingRange;
+    } else if (nRoots + nOthers >= k_maxPointsOnOneSide) {
+      assert(savedRangeIsInit);
+      m_interestingRange = savedRange;
       return true;
     }
   }

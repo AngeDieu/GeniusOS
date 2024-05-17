@@ -19,48 +19,29 @@ class CalculationController : public Shared::DoublePairTableController {
   CalculationController(Escher::Responder* parentResponder,
                         Escher::ButtonRowController* header, Store* store);
 
-  void viewWillAppear() override;
+  // ViewController
+  TELEMETRY_ID("Calculation");
 
   // TableViewDataSource
   int numberOfRows() const override {
     return fixedNumberOfRows() + m_store->totalNumberOfModes() +
            showModeFrequency();
   }
-  bool showModeFrequency() const { return m_store->totalNumberOfModes() > 0; }
-  int numberOfColumns() const override;
   void fillCellForLocation(Escher::HighlightCell* cell, int column,
                            int row) override;
   Escher::HighlightCell* reusableCell(int index, int type) override;
   int reusableCellCount(int type) override;
   int typeAtLocation(int column, int row) override;
-  KDCoordinate separatorBeforeColumn(int column) override;
 
-  // ViewController
-  TELEMETRY_ID("Calculation");
+  bool showModeFrequency() const { return m_store->totalNumberOfModes() > 0; }
 
  private:
+  // Number of cells
   constexpr static int k_fixedMaxNumberOfRows = 17;
-  constexpr static int k_numberOfCalculationCells =
-      3 * k_maxNumberOfDisplayableRows;
-  constexpr static int k_numberOfSeriesTitleCells = 3;
-  constexpr static int k_numberOfCalculationTitleCells =
-      k_maxNumberOfDisplayableRows;
-  constexpr static int k_numberOfHeaderColumns = 2;  // Title & Symbol
-
-  constexpr static int k_calculationTitleCellType = 0;
-  constexpr static int k_calculationSymbolCellType = 1;
-  constexpr static int k_calculationModeTitleCellType = 2;
-  constexpr static int k_calculationModeSymbolCellType = 3;
-  constexpr static int k_calculationCellType = 4;
-  constexpr static int k_seriesTitleCellType = 5;
-  constexpr static int k_hideableCellType = 6;
-  constexpr static KDCoordinate k_calculationTitleCellWidth =
-      Escher::Metric::SmallFontCellWidth(
-          k_titleNumberOfChars, Escher::Metric::CellVerticalElementMargin);
-  constexpr static KDCoordinate CalculationSymbolCellWidth(int maxChars) {
-    return Escher::Metric::SmallFontCellWidth(
-        maxChars, Escher::Metric::CellVerticalElementMargin);
-  }
+  // Cell types
+  constexpr static int k_calculationModeTitleCellType = 5;
+  constexpr static int k_calculationModeSymbolCellType = 6;
+  // Cell sizes
   /* Margins from EvenOddCell::layoutSubviews (and derived classes
    * implementations) must be accounted for here. */
   constexpr static KDCoordinate k_calculationCellWidth =
@@ -69,17 +50,17 @@ class CalculationController : public Shared::DoublePairTableController {
               Escher::AbstractEvenOddBufferTextCell::k_defaultPrecision),
           Escher::EvenOddCell::k_horizontalMargin);
 
-  typedef struct {
+  struct CalculationRow {
     I18n::Message title;
     I18n::Message symbol;
     Store::CalculPointer calculationMethod;
     uint8_t defaultIndex;
     uint8_t variant1Index;
-  } CalculationRow;
+  };
 
   constexpr static CalculationRow k_calculationRows[] = {
       // Message, symbol, function, defaultLayout, variant1Layout
-      {I18n::Message::TotalFrequency, I18n::Message::TotalFrequencySymbol,
+      {I18n::Message::TotalFrequency, I18n::Message::N,
        &Store::sumOfOccurrences, 0, 0},
       {I18n::Message::Minimum, I18n::Message::MinimumSymbol, &Store::minValue,
        1, 1},
@@ -88,9 +69,8 @@ class CalculationController : public Shared::DoublePairTableController {
       {I18n::Message::Range, I18n::Message::RangeSymbol, &Store::range, 3, 6},
       {I18n::Message::Mean, I18n::Message::MeanSymbol, &Store::mean, 4,
        16},  // Not displayed under variant1Layout
-      {I18n::Message::StandardDeviation,
-       I18n::Message::StandardDeviationSigmaSymbol, &Store::standardDeviation,
-       5, 9},
+      {I18n::Message::StandardDeviation, I18n::Message::Sigma,
+       &Store::standardDeviation, 5, 9},
       {I18n::Message::Deviation, I18n::Message::DeviationSymbol,
        &Store::variance, 6, 10},
       {I18n::Message::FirstQuartile, I18n::Message::FirstQuartileSymbol,
@@ -105,8 +85,7 @@ class CalculationController : public Shared::DoublePairTableController {
        11, 14},
       {I18n::Message::SumSquareValues, I18n::Message::SumSquareValuesSymbol,
        &Store::squaredValueSum, 12, 15},
-      {I18n::Message::SampleStandardDeviationS,
-       I18n::Message::SampleStandardDeviationSSymbol,
+      {I18n::Message::SampleStandardDeviationS, I18n::Message::S,
        &Store::sampleStandardDeviation, 13, 12},
       {I18n::Message::SampleVariance, I18n::Message::SampleVarianceSymbol,
        &Store::sampleVariance, 14, 13},
@@ -119,26 +98,22 @@ class CalculationController : public Shared::DoublePairTableController {
 
   // TableViewDataSource
   KDCoordinate nonMemoizedColumnWidth(int column) override;
-  void resetMemoization(bool force = true) override;
+  void resetSizeMemoization() override;
+
+  // DoublePairTableController
+  Shared::DoublePairStore* store() const override { return m_store; }
 
   int findCellIndex(int i) const;
-
   int fixedNumberOfRows() const;
-  Shared::DoublePairStore* store() const override { return m_store; }
 
   Shared::BufferFunctionTitleCell
       m_seriesTitleCells[k_numberOfSeriesTitleCells];
-  Escher::EvenOddMessageTextCell
-      m_calculationTitleCells[k_numberOfCalculationTitleCells];
-  Escher::EvenOddMessageTextCell
-      m_calculationSymbolCells[k_numberOfCalculationTitleCells];
   Escher::SmallFontEvenOddBufferTextCell
-      m_calculationModeTitleCells[k_numberOfCalculationTitleCells];
+      m_calculationModeTitleCells[k_maxNumberOfDisplayableRows];
   Escher::SmallFontEvenOddBufferTextCell
-      m_calculationModeSymbolCells[k_numberOfCalculationTitleCells];
+      m_calculationModeSymbolCells[k_maxNumberOfDisplayableRows];
   Escher::FloatEvenOddBufferTextCell<>
       m_calculationCells[k_numberOfCalculationCells];
-  Escher::EvenOddCell m_hideableCell[k_numberOfHeaderColumns];
   double m_memoizedCellContent[Store::k_numberOfSeries][k_numberOfCalculations];
   Store* m_store;
 };

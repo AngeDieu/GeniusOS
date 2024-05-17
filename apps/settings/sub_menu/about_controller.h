@@ -12,12 +12,6 @@ namespace Settings {
 
 class AboutController : public GenericSubController {
  public:
-#if TERMS_OF_USE
-  constexpr static int k_totalNumberOfCell = 4;
-#else
-  constexpr static int k_totalNumberOfCell = 3;
-#endif
-
   AboutController(Escher::Responder* parentResponder);
   TELEMETRY_ID("About");
   bool handleEvent(Ion::Events::Event event) override;
@@ -25,13 +19,23 @@ class AboutController : public GenericSubController {
   KDCoordinate nonMemoizedRowHeight(int row) override;
   void viewWillAppear() override;
 
- private:
-  constexpr static int k_versionCellIndex = 0;
-  constexpr static int k_hardwareTestCellIndex = 2;
+  enum class CellType : uint8_t {
+    DeviceName = 0,
+    Version,
+    SerialNumber,
+    FCCID,
 #if TERMS_OF_USE
-  constexpr static int k_termsOfUseCellIndex = 3;
+    TermsOfUse,
 #endif
+    NumberOfCells
+  };
 
+  constexpr static int k_totalNumberOfCell =
+      static_cast<int>(CellType::NumberOfCells);
+  constexpr static int Row(CellType type) { return static_cast<int>(type); }
+
+ private:
+  const char* deviceName() const;
   Escher::MenuCell<Escher::MessageTextView, Escher::OneLineBufferTextView<>>
       m_cells[k_totalNumberOfCell];
   Shared::MessagePopUpController m_hardwareTestPopUpController;

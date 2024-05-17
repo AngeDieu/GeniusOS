@@ -2,9 +2,8 @@
 #define SOLVER_APP_H
 
 #include <apps/i18n.h>
+#include <apps/shared/math_app.h>
 
-#include "../shared/layout_field_delegate_app.h"
-#include "../shared/shared_app.h"
 #include "equation_store.h"
 #include "interval_controller.h"
 #include "list_controller.h"
@@ -14,7 +13,7 @@
 
 namespace Solver {
 
-class App : public Shared::LayoutFieldDelegateApp {
+class App : public Shared::MathApp {
  public:
   // Descriptor
   class Descriptor : public Escher::App::Descriptor {
@@ -34,26 +33,16 @@ class App : public Shared::LayoutFieldDelegateApp {
     };
     const Descriptor *descriptor() const override;
     void reset() override;
-    EquationStore *equationStore() { return &m_equationStore; }
-
-   private:
-    void tidy() override;
-    EquationStore m_equationStore;
   };
 
-  static App *app() {
-    return static_cast<App *>(Escher::Container::activeApp());
-  }
+  static App *app() { return static_cast<App *>(Escher::App::app()); }
   Poincare::Context *localContext() override { return &m_context; }
   Snapshot *snapshot() const {
     return static_cast<Snapshot *>(Escher::App::snapshot());
   }
 
-  EquationStore *equationStore() { return snapshot()->equationStore(); }
+  EquationStore *equationStore() { return &m_equationStore; }
   SystemOfEquations *system() { return &m_system; }
-  Escher::ViewController *solutionsControllerStack() {
-    return &m_alternateEmptyViewController;
-  }
   Escher::ViewController *intervalController() { return &m_intervalController; }
   SolutionsController *solutionsController() { return &m_solutionsController; }
 
@@ -64,14 +53,11 @@ class App : public Shared::LayoutFieldDelegateApp {
 
  private:
   App(Snapshot *snapshot);
-  // TextFieldDelegateApp
-  bool isAcceptableExpression(Escher::EditableField *field,
-                              const Poincare::Expression expression) override;
 
+  EquationStore m_equationStore;
   // Controllers
   SolutionsController m_solutionsController;
   IntervalController m_intervalController;
-  Escher::AlternateEmptyViewController m_alternateEmptyViewController;
   ListController m_listController;
   Escher::ButtonRowController m_listFooter;
   Escher::StackViewController m_stackViewController;

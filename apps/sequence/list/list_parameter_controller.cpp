@@ -1,8 +1,8 @@
 #include "list_parameter_controller.h"
 
 #include <apps/i18n.h>
+#include <apps/shared/poincare_helpers.h>
 
-#include "../../shared/poincare_helpers.h"
 #include "../app.h"
 #include "list_controller.h"
 
@@ -12,19 +12,14 @@ using namespace Escher;
 
 namespace Sequence {
 
-ListParameterController::ListParameterController(
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
-    ListController *listController)
+ListParameterController::ListParameterController(ListController *listController)
     : Shared::ListParameterController(listController,
                                       I18n::Message::SequenceColor,
                                       I18n::Message::DeleteSequence, this),
-      m_initialRankCell(&m_selectableListView, inputEventHandlerDelegate, this),
-      m_typeParameterController(this, listController, Metric::CommonTopMargin,
-                                Metric::CommonRightMargin,
-                                Metric::CommonBottomMargin,
-                                Metric::CommonLeftMargin) {
+      m_firstRankCell(&m_selectableListView, this),
+      m_typeParameterController(this, listController, Metric::CommonMargins) {
   m_typeCell.label()->setMessage(I18n::Message::SequenceType);
-  m_initialRankCell.label()->setMessage(I18n::Message::FirstTermIndex);
+  m_firstRankCell.label()->setMessage(I18n::Message::FirstTermIndex);
 }
 
 const char *ListParameterController::title() {
@@ -34,26 +29,26 @@ const char *ListParameterController::title() {
 bool ListParameterController::textFieldShouldFinishEditing(
     AbstractTextField *textField, Ion::Events::Event event) {
   return event == Ion::Events::Down || event == Ion::Events::Up ||
-         TextFieldDelegate::textFieldShouldFinishEditing(textField, event);
+         MathTextFieldDelegate::textFieldShouldFinishEditing(textField, event);
 }
 
 bool ListParameterController::textFieldDidFinishEditing(
-    AbstractTextField *textField, const char *text, Ion::Events::Event event) {
-  double floatBody =
-      textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
-  if (textFieldDelegateApp()->hasUndefinedValue(floatBody)) {
+    AbstractTextField *textField, Ion::Events::Event event) {
+  double floatBody = ParseInputFloatValue<double>(textField->draftText());
+  if (HasUndefinedValue(floatBody)) {
     return false;
   }
   int index = std::floor(floatBody);
   if (index < 0 || index > Shared::Sequence::k_maxInitialRank) {
-    Container::activeApp()->displayWarning(I18n::Message::ForbiddenValue);
+    App::app()->displayWarning(I18n::Message::ForbiddenValue);
     return false;
   }
   sequence()->setInitialRank(index);
+  updateFirstRankCell();
+
   App::app()->snapshot()->updateInterval();
   // Invalidate sequence context cache when changing sequence type
   App::app()->localContext()->resetCache();
-  m_selectableListView.reloadSelectedCell();
   m_selectableListView.handleEvent(event);
   return true;
 }
@@ -66,37 +61,29 @@ void ListParameterController::listViewDidChangeSelectionAndDidScroll(
     return;
   }
   if (previousSelectedRow == 1) {
-    assert(l->cell(previousSelectedRow) == &m_initialRankCell);
-    m_initialRankCell.textField()->setEditing(false);
-    Container::activeApp()->setFirstResponder(&m_selectableListView);
+    assert(l->cell(previousSelectedRow) == &m_firstRankCell);
+    m_firstRankCell.textField()->setEditing(false);
+    App::app()->setFirstResponder(&m_selectableListView);
   }
   if (l->selectedRow() == 1) {
-    assert(l->selectedCell() == &m_initialRankCell);
-    Container::activeApp()->setFirstResponder(&m_initialRankCell);
+    assert(l->selectedCell() == &m_firstRankCell);
+    App::app()->setFirstResponder(&m_firstRankCell);
   }
 }
 
 HighlightCell *ListParameterController::cell(int index) {
   assert(0 <= index && index < numberOfRows());
-  HighlightCell *const cells[] = {&m_typeCell, &m_initialRankCell,
-                                  &m_enableCell, &m_colorCell, &m_deleteCell};
+  HighlightCell *const cells[] = {&m_typeCell, &m_firstRankCell, &m_enableCell,
+                                  &m_colorCell, &m_deleteCell};
   return cells[index];
 }
 
-void ListParameterController::fillCellForRow(HighlightCell *cell, int row) {
-  Shared::ListParameterController::fillCellForRow(cell, row);
-  if (cell == &m_typeCell && !m_record.isNull()) {
+void ListParameterController::viewWillAppear() {
+  if (!m_record.isNull()) {
     m_typeCell.subLabel()->setLayout(sequence()->definitionName());
+    updateFirstRankCell();
   }
-  if (cell == &m_initialRankCell && !m_record.isNull()) {
-    if (m_initialRankCell.textField()->isEditing()) {
-      return;
-    }
-    char buffer[Shared::Sequence::k_initialRankNumberOfDigits + 1];
-    Poincare::Integer(sequence()->initialRank())
-        .serialize(buffer, Shared::Sequence::k_initialRankNumberOfDigits + 1);
-    m_initialRankCell.textField()->setText(buffer);
-  }
+  Shared::ListParameterController::viewWillAppear();
 }
 
 bool ListParameterController::handleEvent(Ion::Events::Event event) {
@@ -109,11 +96,15 @@ bool ListParameterController::handleEvent(Ion::Events::Event event) {
   }
   if (cell == &m_enableCell && m_enableCell.canBeActivatedByEvent(event)) {
     App::app()->localContext()->resetCache();
-    function()->setActive(!function()->isActive());
-    m_selectableListView.reloadSelectedCell();
-    return true;
   }
   return Shared::ListParameterController::handleEvent(event);
+}
+
+void ListParameterController::updateFirstRankCell() {
+  char buffer[Shared::Sequence::k_initialRankNumberOfDigits + 1];
+  Poincare::Integer(sequence()->initialRank())
+      .serialize(buffer, Shared::Sequence::k_initialRankNumberOfDigits + 1);
+  m_firstRankCell.textField()->setText(buffer);
 }
 
 }  // namespace Sequence

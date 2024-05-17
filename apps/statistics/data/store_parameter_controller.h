@@ -19,7 +19,7 @@ class StoreParameterController : public Shared::StoreParameterController {
   bool handleEvent(Ion::Events::Event event) override;
   int numberOfRows() const override;
   Escher::AbstractMenuCell* cell(int index) override;
-  void fillCellForRow(Escher::HighlightCell* cell, int row) override;
+  void viewWillAppear() override;
 
  private:
   /* When displayed, hideCumulatedFrequencyCell is last and second.
@@ -29,10 +29,7 @@ class StoreParameterController : public Shared::StoreParameterController {
   constexpr static int k_displayCFIndex =
       Shared::StoreParameterController::k_numberOfCells;
 
-  I18n::Message sortMessage() override {
-    return (m_column % 2 == 0) ? I18n::Message::SortValues
-                               : I18n::Message::SortSizes;
-  }
+  I18n::Message sortMessage() override;
 
   Escher::MenuCell<Escher::MessageTextView, Escher::MessageTextView,
                    Escher::SwitchView>

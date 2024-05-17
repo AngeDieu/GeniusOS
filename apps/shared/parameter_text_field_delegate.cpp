@@ -13,7 +13,7 @@ bool ParameterTextFieldDelegate::textFieldDidReceiveEvent(
     textField->setEditing(true);
     return true;
   }
-  return TextFieldDelegate::textFieldDidReceiveEvent(textField, event);
+  return MathTextFieldDelegate::textFieldDidReceiveEvent(textField, event);
 }
 
 }  // namespace Shared

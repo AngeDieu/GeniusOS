@@ -20,28 +20,13 @@ CalculationController::CalculationController(Responder *parentResponder,
                                              ButtonRowController *header,
                                              Store *store)
     : DoublePairTableController(parentResponder, header), m_store(store) {
-  for (int i = 0; i < Store::k_numberOfSeries; i++) {
-    m_columnTitleCells[i].setParentResponder(&m_selectableTableView);
+  for (int i = 0; i < k_numberOfSeriesTitleCells; i++) {
+    m_seriesTitleCells[i].setParentResponder(&m_selectableTableView);
   }
   for (int i = 0; i < k_numberOfDoubleCalculationCells; i++) {
     m_doubleCalculationCells[i].setParentResponder(&m_selectableTableView);
   }
-  for (int i = 0; i < k_maxNumberOfDisplayableRows; i++) {
-    m_titleCells[i].setAlignment(KDGlyph::k_alignRight, KDGlyph::k_alignCenter);
-    m_titleCells[i].setMessageFont(KDFont::Size::Small);
-    m_titleSymbolCells[i].setAlignment(KDGlyph::k_alignCenter,
-                                       KDGlyph::k_alignCenter);
-    m_titleSymbolCells[i].setMessageFont(KDFont::Size::Small);
-  }
-  for (int i = 0; i < k_numberOfHeaderColumns; i++) {
-    m_hideableCell[i].hide();
-  }
-  resetMemoization();
-}
-
-void CalculationController::viewWillAppear() {
-  resetMemoization();
-  Shared::DoublePairTableController::viewWillAppear();
+  m_selectableTableView.resetSizeAndOffsetMemoization();
 }
 
 void CalculationController::tableViewDidChangeSelectionAndDidScroll(
@@ -77,13 +62,11 @@ void CalculationController::tableViewDidChangeSelectionAndDidScroll(
   }
 }
 
-bool CalculationController::canStoreContentOfCellAtLocation(
-    Escher::SelectableTableView *t, int col, int row) const {
-  if (!Shared::DoublePairTableController::canStoreContentOfCellAtLocation(
-          t, col, row)) {
+bool CalculationController::canStoreCellAtLocation(int column, int row) {
+  if (!DoublePairTableController::canStoreCellAtLocation(column, row)) {
     return false;
   }
-  assert(row > 0 && col > 1);
+  assert(row > 0 && column > 1);
   const Calculation c = calculationForRow(row);
   if (c == Calculation::Regression) {
     return false;
@@ -91,7 +74,7 @@ bool CalculationController::canStoreContentOfCellAtLocation(
   if (c == Calculation::CorrelationCoeff || c > Calculation::Regression) {
     AbstractEvenOddBufferTextCell *bufferCell =
         static_cast<AbstractEvenOddBufferTextCell *>(
-            t->cellAtLocation(col, row));
+            m_selectableTableView.cellAtLocation(column, row));
     return strcmp(bufferCell->text(), I18n::translate(I18n::Message::Dash)) &&
            strcmp(bufferCell->text(), I18n::translate(I18n::Message::Disabled));
   }
@@ -111,10 +94,6 @@ int CalculationController::numberOfRows() const {
          m_store->AnyActiveSeriesSatisfies(Store::DisplayRSquared);
 }
 
-int CalculationController::numberOfColumns() const {
-  return 2 + m_store->numberOfActiveSeries();
-}
-
 void DashBufferCell(AbstractEvenOddBufferTextCell *bufferCell) {
   bufferCell->setText(I18n::translate(I18n::Message::Dash));
 }
@@ -126,19 +105,20 @@ void DisableBufferCell(AbstractEvenOddBufferTextCell *bufferCell) {
 
 void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
                                                 int row) {
-  if (column <= 1 && row == 0) {
+  int type = typeAtLocation(column, row);
+  if (type == k_hideableCellType) {
     return;
   }
   EvenOddCell *myCell = static_cast<EvenOddCell *>(cell);
   myCell->setEven(row % 2 == 0);
 
   // Coordinate and series title
-  if (row == 0 && column > 1) {
+  if (type == k_seriesTitleCellType) {
     ColumnTitleCell *myCell = static_cast<ColumnTitleCell *>(cell);
     size_t series = m_store->seriesIndexFromActiveSeriesIndex(
         column - k_numberOfHeaderColumns);
     assert(series < DoublePairStore::k_numberOfSeries);
-    char buffer[Shared::ClearColumnHelper::k_maxSizeOfColumnName];
+    char buffer[ClearColumnHelper::k_maxSizeOfColumnName];
     m_store->fillColumnName(series, 0, buffer);
     myCell->setFirstText(buffer);
     m_store->fillColumnName(series, 1, buffer);
@@ -152,12 +132,15 @@ void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
   bool forbidStatsDiagnostics =
       Preferences::sharedPreferences->examMode().forbidStatsDiagnostics();
   // Calculation title and symbols
-  if (column <= 1) {
+  if (type == k_calculationTitleCellType ||
+      type == k_calculationSymbolCellType) {
     EvenOddMessageTextCell *myCell =
         static_cast<EvenOddMessageTextCell *>(cell);
-    myCell->setTextColor(column == 0 ? KDColorBlack : Palette::GrayDark);
-    I18n::Message message =
-        (column == 0) ? MessageForCalculation(c) : SymbolForCalculation(c);
+    myCell->setTextColor(
+        type == k_calculationTitleCellType ? KDColorBlack : Palette::GrayDark);
+    I18n::Message message = type == k_calculationTitleCellType
+                                ? MessageForCalculation(c)
+                                : SymbolForCalculation(c);
     myCell->setMessage(message);
     if ((c == Calculation::CorrelationCoeff ||
          c == Calculation::DeterminationCoeff || c == Calculation::RSquared) &&
@@ -171,12 +154,12 @@ void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
   size_t series = m_store->seriesIndexFromActiveSeriesIndex(
       column - k_numberOfHeaderColumns);
   assert(series < DoublePairStore::k_numberOfSeries);
-  Model::Type type = m_store->seriesRegressionType(series);
+  Model::Type regressionType = m_store->seriesRegressionType(series);
 
   // Regression cell
   if (c == Calculation::Regression) {
     Model *model = m_store->modelForSeries(series);
-    I18n::Message message = Store::HasCoefficients(type)
+    I18n::Message message = Store::HasCoefficients(regressionType)
                                 ? model->formulaMessage()
                                 : I18n::Message::Dash;
     static_cast<AbstractEvenOddBufferTextCell *>(cell)->setText(
@@ -186,7 +169,8 @@ void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
     return;
   }
 
-  assert(column > 1 && row > 0);
+  assert(type == k_doubleBufferCalculationCellType ||
+         type == k_calculationCellType);
   constexpr int bufferSize = PrintFloat::charSizeForFloatsWithPrecision(
       AbstractEvenOddBufferTextCell::k_defaultPrecision);
   char buffer[bufferSize];
@@ -215,10 +199,10 @@ void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
       *calculation2 = (m_store->*calculationMethods[calculationIndex])(
           series, 1, Store::CalculationOptions());
     }
-    assert(Poincare::Helpers::EqualOrBothNan(
+    assert(Helpers::EqualOrBothNan(
                *calculation1, (m_store->*calculationMethods[calculationIndex])(
                                   series, 0, Store::CalculationOptions())) &&
-           Poincare::Helpers::EqualOrBothNan(
+           Helpers::EqualOrBothNan(
                *calculation2, (m_store->*calculationMethods[calculationIndex])(
                                   series, 1, Store::CalculationOptions())));
     EvenOddDoubleBufferTextCell *myCell =
@@ -235,7 +219,7 @@ void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
   }
 
   // Single calculation cells
-  Poincare::Context *globContext =
+  Context *globContext =
       AppsContainerHelper::sharedAppsContainerGlobalContext();
   AbstractEvenOddBufferTextCell *bufferCell =
       static_cast<AbstractEvenOddBufferTextCell *>(cell);
@@ -255,16 +239,16 @@ void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
     if (std::isnan(*calculation)) {
       *calculation = (m_store->*calculationMethods[calculationIndex])(series);
     }
-    assert((c == Calculation::NumberOfDots &&
-            Poincare::Helpers::EqualOrBothNan(
-                *calculation,
-                m_store->doubleCastedNumberOfPairsOfSeries(series))) ||
-           (c == Calculation::Covariance &&
-            Poincare::Helpers::EqualOrBothNan(*calculation,
-                                              m_store->covariance(series))) ||
-           (c == Calculation::SumOfProducts &&
-            Poincare::Helpers::EqualOrBothNan(
-                *calculation, m_store->columnProductSum(series))));
+    assert(
+        (c == Calculation::NumberOfDots &&
+         Helpers::EqualOrBothNan(
+             *calculation,
+             m_store->doubleCastedNumberOfPairsOfSeries(series))) ||
+        (c == Calculation::Covariance &&
+         Helpers::EqualOrBothNan(*calculation, m_store->covariance(series))) ||
+        (c == Calculation::SumOfProducts &&
+         Helpers::EqualOrBothNan(*calculation,
+                                 m_store->columnProductSum(series))));
     result = *calculation;
   } else if (c >= Calculation::CoefficientM && c <= Calculation::CoefficientE) {
     if (!m_store->coefficientsAreDefined(series, globContext)) {
@@ -275,8 +259,8 @@ void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
         static_cast<int>(c) - static_cast<int>(Calculation::CoefficientA);
     int numberOfCoefficients =
         m_store->modelForSeries(series)->numberOfCoefficients();
-    if (coefficientIndex <= 0 && Store::HasCoefficientM(type)) {
-      assert(!Store::HasCoefficientA(type));
+    if (coefficientIndex <= 0 && Store::HasCoefficientM(regressionType)) {
+      assert(!Store::HasCoefficientA(regressionType));
       // In that case only, M is coefficientIndex 0 and A is coefficientIndex -1
       coefficientIndex = -coefficientIndex - 1;
     }
@@ -287,7 +271,7 @@ void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
         m_store->coefficientsForSeries(series, globContext)[coefficientIndex];
   } else if (c == Calculation::CorrelationCoeff) {
     // This could be memoized but don't seem to slow the table down for now.
-    if (!Store::DisplayR(type)) {
+    if (!Store::DisplayR(regressionType)) {
       return DashBufferCell(bufferCell);
     }
     if (forbidStatsDiagnostics) {
@@ -295,14 +279,16 @@ void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
     }
     result = m_store->correlationCoefficient(series);
   } else if (c == Calculation::ResidualStandardDeviation) {
-    if (!Store::DisplayResidualStandardDeviation(type)) {
+    if (!Store::DisplayResidualStandardDeviation(regressionType)) {
       return DashBufferCell(bufferCell);
     }
     result = m_store->residualStandardDeviation(series, globContext);
   } else {
     assert(c == Calculation::DeterminationCoeff || c == Calculation::RSquared);
-    if ((c == Calculation::DeterminationCoeff && Store::DisplayR2(type)) ||
-        (c == Calculation::RSquared && Store::DisplayRSquared(type))) {
+    if ((c == Calculation::DeterminationCoeff &&
+         Store::DisplayR2(regressionType)) ||
+        (c == Calculation::RSquared &&
+         Store::DisplayRSquared(regressionType))) {
       if (forbidStatsDiagnostics) {
         return DisableBufferCell(bufferCell);
       }
@@ -319,7 +305,7 @@ void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
 
 KDCoordinate CalculationController::nonMemoizedColumnWidth(int column) {
   if (column == 0) {
-    return k_titleCalculationCellWidth;
+    return k_calculationTitleCellWidth;
   }
   if (column == 1) {
     return k_symbolColumnWidth;
@@ -337,65 +323,31 @@ KDCoordinate CalculationController::nonMemoizedColumnWidth(int column) {
 }
 
 HighlightCell *CalculationController::reusableCell(int index, int type) {
-  if (type == k_standardCalculationTitleCellType) {
-    assert(index >= 0 && index < k_maxNumberOfDisplayableRows);
-    return &m_titleCells[index];
+  assert(0 <= index && index < reusableCellCount(type));
+  switch (type) {
+    case k_seriesTitleCellType:
+      return &m_seriesTitleCells[index];
+    case k_calculationCellType:
+      return &m_calculationCells[index];
+    case k_doubleBufferCalculationCellType:
+      return &m_doubleCalculationCells[index];
+    default:
+      return DoublePairTableController::reusableCell(index, type);
   }
-  if (type == k_symbolCalculationTitleCellType) {
-    assert(index >= 0 && index < k_maxNumberOfDisplayableRows);
-    return &m_titleSymbolCells[index];
-  }
-  if (type == k_columnTitleCellType) {
-    assert(index >= 0 && index < Store::k_numberOfSeries);
-    return &m_columnTitleCells[index];
-  }
-  if (type == k_doubleBufferCalculationCellType) {
-    assert(index >= 0 && index < k_numberOfDoubleCalculationCells);
-    return &m_doubleCalculationCells[index];
-  }
-  if (type == k_hideableCellType) {
-    assert(index >= 0 && index < k_numberOfHeaderColumns);
-    return &m_hideableCell[index];
-  }
-  assert(index >= 0 && index < k_numberOfDisplayableCalculationCells);
-  return &m_calculationCells[index];
 }
 
 int CalculationController::reusableCellCount(int type) {
-  if (type == k_standardCalculationTitleCellType ||
-      type == k_symbolCalculationTitleCellType) {
-    return k_maxNumberOfDisplayableRows;
-  }
-  if (type == k_columnTitleCellType) {
-    return Store::k_numberOfSeries;
-  }
   if (type == k_doubleBufferCalculationCellType) {
     return k_numberOfDoubleCalculationCells;
   }
-  if (type == k_hideableCellType) {
-    return k_numberOfHeaderColumns;
-  }
-  assert(type == k_standardCalculationCellType);
-  return k_numberOfDisplayableCalculationCells;
+  return DoublePairTableController::reusableCellCount(type);
 }
 
 int CalculationController::typeAtLocation(int column, int row) {
-  if (column <= 1 && row == 0) {
-    return k_hideableCellType;
-  }
-  if (column == 0) {
-    return k_standardCalculationTitleCellType;
-  }
-  if (column == 1) {
-    return k_symbolCalculationTitleCellType;
-  }
-  if (row == 0) {
-    return k_columnTitleCellType;
-  }
-  if (row > 0 && row <= k_numberOfDoubleBufferCalculations) {
+  if (column > 1 && row > 0 && row <= k_numberOfDoubleBufferCalculations) {
     return k_doubleBufferCalculationCellType;
   }
-  return k_standardCalculationCellType;
+  return DoublePairTableController::typeAtLocation(column, row);
 }
 
 I18n::Message CalculationController::MessageForCalculation(Calculation c) {
@@ -433,9 +385,9 @@ I18n::Message CalculationController::SymbolForCalculation(Calculation c) {
           I18n::Message::MeanSymbol,
           I18n::Message::SumValuesSymbol,
           I18n::Message::SumSquareValuesSymbol,
-          I18n::Message::StandardDeviationSigmaSymbol,
+          I18n::Message::Sigma,
           I18n::Message::DeviationSymbol,
-          I18n::Message::SampleStandardDeviationSSymbol,
+          I18n::Message::S,
           I18n::Message::UpperN,
           I18n::Message::Cov,
           I18n::Message::Sxy,
@@ -523,9 +475,9 @@ int CalculationController::numberOfDisplayedBCDECoefficients() const {
   return maxNumberCoefficients;
 }
 
-void CalculationController::resetMemoization(bool force) {
-  DoublePairTableController::resetMemoization(force);
-  for (int s = 0; s < Store::k_numberOfSeries; s++) {
+void CalculationController::resetSizeMemoization() {
+  DoublePairTableController::resetSizeMemoization();
+  for (int s = 0; s < k_numberOfSeriesTitleCells; s++) {
     for (int i = 0; i < 2; i++) {
       for (int j = 0; j < k_numberOfDoubleBufferCalculations; j++) {
         m_memoizedDoubleCalculationCells[s][i][j] = NAN;

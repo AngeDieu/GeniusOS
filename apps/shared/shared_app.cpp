@@ -2,14 +2,19 @@
 
 #include <apps/apps_container_helper.h>
 
-#include "global_context.h"
+#include "../apps_container.h"
+
+using namespace Escher;
+using namespace Poincare;
 
 namespace Shared {
 
-/* TODO: SharedApp will be refactored in v22. This will be a good occasion to
- * put ContinuousFunctionStore and SequenceStore out of the global context and
- * in the MathApp instead. These two methods will then need to be also
- * refactored. */
+/* TODO: ContinuousFunctionStore and SequenceStore should be removed from global
+ * context and go in their respective apps. For now, SequenceStore does not need
+ * to be global, and ContinuousFunctionStore needs to be global only because
+ * it's costly to recompute the function symbol and layout each time the varbox
+ * is opened.
+ * Once this is done, these two methods can probably be delete. */
 void SharedApp::Snapshot::tidy() {
   /* Since the sequence store and the continuous function store is now
    * accessible from every app, when exiting any application, we need to tidy
@@ -21,6 +26,13 @@ void SharedApp::Snapshot::tidy() {
 
 void SharedApp::Snapshot::reset() {
   AppsContainerHelper::sharedAppsContainerGlobalContext()->reset();
+}
+
+SharedApp::SharedApp(Snapshot* snapshot, ViewController* rootViewController)
+    : ::App(snapshot, rootViewController, I18n::Message::Warning) {}
+
+Context* SharedApp::localContext() {
+  return AppsContainerHelper::sharedAppsContainerGlobalContext();
 }
 
 }  // namespace Shared

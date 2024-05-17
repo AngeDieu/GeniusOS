@@ -1,6 +1,7 @@
 #include "values_controller.h"
 
 #include <apps/i18n.h>
+#include <apps/shared/poincare_helpers.h>
 #include <assert.h>
 #include <poincare/based_integer.h>
 #include <poincare/sequence.h>
@@ -8,7 +9,6 @@
 
 #include <cmath>
 
-#include "../../shared/poincare_helpers.h"
 #include "../app.h"
 
 using namespace Poincare;
@@ -16,12 +16,10 @@ using namespace Escher;
 
 namespace Sequence {
 
-ValuesController::ValuesController(
-    Responder *parentResponder,
-    InputEventHandlerDelegate *inputEventHandlerDelegate,
-    ButtonRowController *header)
+ValuesController::ValuesController(Responder *parentResponder,
+                                   ButtonRowController *header)
     : Shared::ValuesController(parentResponder, header),
-      m_intervalParameterController(this, inputEventHandlerDelegate),
+      m_intervalParameterController(this),
       m_sequenceColumnParameterController(this),
       m_sumColumnParameterController(this),
       m_setIntervalButton(
@@ -45,7 +43,7 @@ ValuesController::ValuesController(
               this),
           k_cellFont),
       m_hasAtLeastOneSumColumn(false) {
-  setupSelectableTableViewAndCells(inputEventHandlerDelegate);
+  setupSelectableTableViewAndCells();
   setDefaultStartEndMessages();
   initValueCells();
 }
@@ -147,6 +145,7 @@ Layout *ValuesController::memoizedLayoutAtIndex(int i) {
 
 Layout ValuesController::functionTitleLayout(int column,
                                              bool forceShortVersion) {
+  Preferences *preferences = Preferences::sharedPreferences;
   bool isSumColumn = false;
   Shared::Sequence *sequence =
       functionStore()->modelForRecord(recordAtColumn(column, &isSumColumn));
@@ -162,16 +161,17 @@ Layout ValuesController::functionTitleLayout(int column,
                    Symbol::Builder(k_variable, strlen(k_variable)),
                    BasedInteger::Builder(sequence->initialRank()),
                    Symbol::Builder(n_variable, strlen(n_variable)));
-  return sumExpression.createLayout(
-      Preferences::sharedPreferences->displayMode(),
-      Preferences::sharedPreferences->numberOfSignificantDigits(), nullptr);
+  return sumExpression.createLayout(preferences->displayMode(),
+                                    preferences->numberOfSignificantDigits(),
+                                    nullptr);
 }
 
 void ValuesController::createMemoizedLayout(int column, int row, int index) {
+  Preferences *preferences = Preferences::sharedPreferences;
   double abscissa = intervalAtColumn(column)->element(
       row - 1);  // Subtract the title row from row to get the element index
   bool isSumColumn = false;
-  Context *context = textFieldDelegateApp()->localContext();
+  Context *context = App::app()->localContext();
   Shared::ExpiringPointer<Shared::Sequence> sequence =
       functionStore()->modelForRecord(recordAtColumn(column, &isSumColumn));
   Expression result;
@@ -183,9 +183,9 @@ void ValuesController::createMemoizedLayout(int column, int row, int index) {
         sequence->evaluateXYAtParameter(abscissa, context);
     result = Float<double>::Builder(xy.y());
   }
-  *memoizedLayoutAtIndex(index) = result.createLayout(
-      Preferences::PrintFloatMode::Decimal,
-      Preferences::VeryLargeNumberOfSignificantDigits, context);
+  *memoizedLayoutAtIndex(index) =
+      result.createLayout(preferences->displayMode(),
+                          preferences->numberOfSignificantDigits(), context);
 }
 
 Shared::Interval *ValuesController::intervalAtColumn(int column) {

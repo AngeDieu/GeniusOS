@@ -7,7 +7,6 @@
 #include <cmath>
 
 #include "function_banner_delegate.h"
-#include "text_field_delegate_app.h"
 
 using namespace Escher;
 using namespace Poincare;
@@ -15,17 +14,15 @@ using namespace Poincare;
 namespace Shared {
 
 InteractiveCurveViewController::InteractiveCurveViewController(
-    Responder *parentResponder,
-    InputEventHandlerDelegate *inputEventHandlerDelegate,
-    ButtonRowController *header, InteractiveCurveViewRange *interactiveRange,
-    AbstractPlotView *curveView, CurveViewCursor *cursor,
-    I18n::Message calculusButtonMessage, int *selectedCurveIndex)
+    Responder *parentResponder, ButtonRowController *header,
+    InteractiveCurveViewRange *interactiveRange, AbstractPlotView *curveView,
+    CurveViewCursor *cursor, I18n::Message calculusButtonMessage,
+    int *selectedCurveIndex)
     : SimpleInteractiveCurveViewController(parentResponder, cursor),
       ButtonRowDelegate(header, nullptr),
       m_selectedCurveIndex(selectedCurveIndex),
       m_selectedSubCurveIndex(0),
-      m_rangeParameterController(this, inputEventHandlerDelegate,
-                                 interactiveRange),
+      m_rangeParameterController(this, interactiveRange),
       m_zoomParameterController(this, interactiveRange, curveView),
       m_interactiveRange(interactiveRange),
       m_autoButton(this, I18n::Message::DefaultSetting, autoButtonInvocation(),
@@ -63,7 +60,6 @@ bool InteractiveCurveViewController::handleEvent(Ion::Events::Event event) {
       header()->setSelectedButton(0);
       return true;
     }
-    return false;
   } else if (event == Ion::Events::Toolbox) {
     openMenu();
     return true;
@@ -125,7 +121,7 @@ void InteractiveCurveViewController::viewWillAppear() {
     header()->setSelectedButton(-1);
   }
 
-  curveView()->reload(true);
+  SimpleInteractiveCurveViewController::viewWillAppear();
 }
 
 void InteractiveCurveViewController::refreshCursor(bool ignoreMargins,
@@ -164,16 +160,15 @@ void InteractiveCurveViewController::willExitResponderChain(
 }
 
 bool InteractiveCurveViewController::textFieldDidFinishEditing(
-    AbstractTextField *textField, const char *text, Ion::Events::Event event) {
-  double floatBody =
-      textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
-  if (textFieldDelegateApp()->hasUndefinedValue(floatBody)) {
+    AbstractTextField *textField, Ion::Events::Event event) {
+  double floatBody = ParseInputFloatValue<double>(textField->draftText());
+  if (HasUndefinedValue(floatBody)) {
     return false;
   }
   /* If possible, round floatBody so that we go to the evaluation of the
    * displayed floatBody */
   floatBody = FunctionBannerDelegate::GetValueDisplayedOnBanner(
-      floatBody, textFieldDelegateApp()->localContext(),
+      floatBody, App::app()->localContext(),
       Poincare::Preferences::sharedPreferences->numberOfSignificantDigits(),
       curveView()->pixelWidth(), false);
   moveCursorAndCenterIfNeeded(floatBody);
@@ -192,8 +187,8 @@ bool InteractiveCurveViewController::textFieldDidReceiveEvent(
 }
 
 void InteractiveCurveViewController::moveCursorAndCenterIfNeeded(double t) {
-  Coordinate2D<double> xy = xyValues(selectedCurveIndex(), t,
-                                     textFieldDelegateApp()->localContext(), 0);
+  Coordinate2D<double> xy =
+      xyValues(selectedCurveIndex(), t, App::app()->localContext(), 0);
   m_cursor->moveTo(t, xy.x(), xy.y());
   reloadBannerView();
   if (!isCursorCurrentlyVisible(false, true)) {
@@ -350,7 +345,7 @@ void InteractiveCurveViewController::setCurveViewAsMainView(
     bool resetInterrupted, bool forceReload) {
   header()->setSelectedButton(-1);
   curveView()->setFocus(true);
-  Container::activeApp()->setFirstResponder(this);
+  App::app()->setFirstResponder(this);
   reloadBannerView();
   panToMakeCursorVisible();
   curveView()->reload(resetInterrupted, forceReload);

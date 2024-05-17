@@ -9,8 +9,8 @@
 #include "column_helper.h"
 #include "column_parameter_controller.h"
 #include "editable_cell_selectable_table_view.h"
+#include "math_field_delegate.h"
 #include "tab_table_controller.h"
-#include "text_field_delegate.h"
 
 namespace Shared {
 
@@ -18,7 +18,7 @@ class ColumnParameterController;
 
 class EditableCellTableViewController : public TabTableController,
                                         public Escher::TableViewDataSource,
-                                        public TextFieldDelegate,
+                                        public MathTextFieldDelegate,
                                         public ClearColumnHelper {
  public:
   EditableCellTableViewController(
@@ -27,13 +27,13 @@ class EditableCellTableViewController : public TabTableController,
   bool textFieldShouldFinishEditing(Escher::AbstractTextField* textField,
                                     Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
 
   int numberOfRows() const override;
   void fillCellForLocationWithDisplayMode(
       Escher::HighlightCell* cell, int column, int row,
-      Poincare::Preferences::PrintFloatMode mode);
+      Poincare::Preferences::PrintFloatMode mode,
+      uint8_t numberOfSignificantDigits);
   void viewWillAppear() override;
   void didBecomeFirstResponder() override;
 
@@ -50,10 +50,6 @@ class EditableCellTableViewController : public TabTableController,
           Escher::AbstractEvenOddBufferTextCell::k_defaultPrecision) *
           KDFont::GlyphWidth(k_cellFont) +
       2 * Escher::Metric::SmallCellMargin;
-  constexpr static KDCoordinate k_margin =
-      Escher::Metric::TableSeparatorThickness;
-  constexpr static KDCoordinate k_scrollBarMargin =
-      Escher::Metric::CommonRightMargin;
 
   constexpr static int k_maxNumberOfDisplayableRows =
       Escher::Metric::MinimalNumberOfScrollableRowsToFillDisplayHeight(
@@ -72,8 +68,7 @@ class EditableCellTableViewController : public TabTableController,
   KDCoordinate defaultRowHeight() override { return k_cellHeight; }
   KDCoordinate defaultColumnWidth() override { return k_cellWidth; }
 
-  virtual void updateSizeMemoizationForRow(int row,
-                                           KDCoordinate rowPreviousHeight) {}
+  virtual void updateSizeMemoizationForRow(int row) {}
 
   // ClearColumnHelper
   Escher::SelectableTableView* table() override {

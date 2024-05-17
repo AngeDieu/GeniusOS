@@ -19,13 +19,7 @@ CalculationController::CalculationController(Responder *parentResponder,
   for (int i = 0; i < k_numberOfSeriesTitleCells; i++) {
     m_seriesTitleCells[i].setFont(KDFont::Size::Small);
   }
-  for (int i = 0; i < k_numberOfCalculationTitleCells; i++) {
-    m_calculationTitleCells[i].setAlignment(KDGlyph::k_alignRight,
-                                            KDGlyph::k_alignCenter);
-    m_calculationTitleCells[i].setMessageFont(KDFont::Size::Small);
-    m_calculationSymbolCells[i].setAlignment(KDGlyph::k_alignCenter,
-                                             KDGlyph::k_alignCenter);
-    m_calculationSymbolCells[i].setMessageFont(KDFont::Size::Small);
+  for (int i = 0; i < k_maxNumberOfDisplayableRows; i++) {
     m_calculationModeTitleCells[i].setAlignment(KDGlyph::k_alignRight,
                                                 KDGlyph::k_alignCenter);
     m_calculationModeTitleCells[i].setFont(KDFont::Size::Small);
@@ -33,25 +27,16 @@ CalculationController::CalculationController(Responder *parentResponder,
                                                  KDGlyph::k_alignCenter);
     m_calculationModeSymbolCells[i].setFont(KDFont::Size::Small);
   }
-  for (int i = 0; i < k_numberOfHeaderColumns; i++) {
-    m_hideableCell[i].hide();
-  }
-  resetMemoization();
-}
-
-void CalculationController::viewWillAppear() {
-  resetMemoization();
-  Shared::DoublePairTableController::viewWillAppear();
+  m_selectableTableView.resetSizeAndOffsetMemoization();
 }
 
 // TableViewDataSource
 
-int CalculationController::numberOfColumns() const {
-  return 2 + m_store->numberOfActiveSeries();
-}
-
 void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
                                                 int row) {
+  if (column <= 1 && row == 0) {
+    return;
+  }
   EvenOddCell *evenOddCell = static_cast<EvenOddCell *>(cell);
   evenOddCell->setEven(row % 2 == 0);
   int type = typeAtLocation(column, row);
@@ -84,8 +69,8 @@ void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
       // The NL "Modus 100" is the longest possible text here.
       constexpr static int bufferSize = sizeof("Modus 100") / sizeof(char);
       char buffer[bufferSize];
-      Poincare::Print::CustomPrintf(buffer, bufferSize, pattern,
-                                    I18n::translate(message), index);
+      Print::CustomPrintf(buffer, bufferSize, pattern, I18n::translate(message),
+                          index);
       AbstractEvenOddBufferTextCell *bufferCell =
           static_cast<AbstractEvenOddBufferTextCell *>(cell);
       bufferCell->setTextColor(column == 1 ? Palette::GrayDark : KDColorBlack);
@@ -148,11 +133,11 @@ void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
         }
       }
       constexpr int bufferSize = PrintFloat::charSizeForFloatsWithPrecision(
-          Escher::AbstractEvenOddBufferTextCell::k_defaultPrecision);
+          AbstractEvenOddBufferTextCell::k_defaultPrecision);
       char buffer[bufferSize];
       PoincareHelpers::ConvertFloatToText<double>(
           calculation, buffer, bufferSize,
-          Escher::AbstractEvenOddBufferTextCell::k_defaultPrecision);
+          AbstractEvenOddBufferTextCell::k_defaultPrecision);
       calculationCell->setText(buffer);
       return;
     }
@@ -171,78 +156,43 @@ KDCoordinate CalculationController::nonMemoizedColumnWidth(int column) {
     int numberOfChars = (numberOfModes < 10      ? 4
                          : (numberOfModes < 100) ? 5
                                                  : 6);
-    return CalculationSymbolCellWidth(numberOfChars);
+    return Metric::SmallFontCellWidth(numberOfChars,
+                                      Metric::CellVerticalElementMargin);
   }
   return k_calculationCellWidth;
 }
 
 HighlightCell *CalculationController::reusableCell(int index, int type) {
-  assert(index >= 0 && index < reusableCellCount(type));
+  assert(0 <= index && index < reusableCellCount(type));
   switch (type) {
-    case k_hideableCellType:
-      return &m_hideableCell[index];
-    case k_calculationTitleCellType:
-      return &m_calculationTitleCells[index];
-    case k_calculationSymbolCellType:
-      return &m_calculationSymbolCells[index];
+    case k_seriesTitleCellType:
+      return &m_seriesTitleCells[index];
+    case k_calculationCellType:
+      return &m_calculationCells[index];
     case k_calculationModeTitleCellType:
       return &m_calculationModeTitleCells[index];
     case k_calculationModeSymbolCellType:
       return &m_calculationModeSymbolCells[index];
-    case k_seriesTitleCellType:
-      return &m_seriesTitleCells[index];
     default:
-      assert(type == k_calculationCellType);
-      return &m_calculationCells[index];
+      return DoublePairTableController::reusableCell(index, type);
   }
 }
 
 int CalculationController::reusableCellCount(int type) {
-  switch (type) {
-    case k_hideableCellType:
-      return 2;
-    case k_calculationTitleCellType:
-      return k_numberOfCalculationTitleCells;
-    case k_calculationSymbolCellType:
-      return k_numberOfCalculationTitleCells;
-    case k_calculationModeTitleCellType:
-      return k_numberOfCalculationTitleCells;
-    case k_calculationModeSymbolCellType:
-      return k_numberOfCalculationTitleCells;
-    case k_seriesTitleCellType:
-      return k_numberOfSeriesTitleCells;
-    default:
-      assert(type == k_calculationCellType);
-      return k_numberOfCalculationCells;
+  if (type == k_calculationModeTitleCellType ||
+      type == k_calculationModeSymbolCellType) {
+    return k_maxNumberOfDisplayableRows;
   }
+  return DoublePairTableController::reusableCellCount(type);
 }
 
 int CalculationController::typeAtLocation(int column, int row) {
-  assert(column >= 0 && column < numberOfColumns());
-  assert(row >= 0 && row < numberOfRows());
-  if (column <= 1 && row == 0) {
-    return k_hideableCellType;
-  }
-  if (column <= 1) {
-    assert(row > 0);
-    if (row < fixedNumberOfRows() ||
-        (showModeFrequency() && row == numberOfRows() - 1)) {
-      return column == 0 ? k_calculationTitleCellType
-                         : k_calculationSymbolCellType;
-    }
+  if (column <= 1 && fixedNumberOfRows() <= row && row <= numberOfRows() - 2) {
+    assert(showModeFrequency());
     return column == 0 ? k_calculationModeTitleCellType
                        : k_calculationModeSymbolCellType;
   }
-  if (row == 0) {
-    return k_seriesTitleCellType;
-  }
-  return k_calculationCellType;
-}
-
-KDCoordinate CalculationController::separatorBeforeColumn(int column) {
-  return typeAtLocation(column, 0) == k_seriesTitleCellType
-             ? Escher::Metric::TableSeparatorThickness
-             : 0;
+  return DoublePairTableController::typeAtLocation(column, row);
 }
 
 int CalculationController::findCellIndex(int i) const {
@@ -268,8 +218,8 @@ int CalculationController::fixedNumberOfRows() const {
              : k_fixedMaxNumberOfRows - 1;
 }
 
-void CalculationController::resetMemoization(bool force) {
-  DoublePairTableController::resetMemoization(force);
+void CalculationController::resetSizeMemoization() {
+  DoublePairTableController::resetSizeMemoization();
   for (int i = 0; i < Store::k_numberOfSeries; i++) {
     for (int j = 0; j < k_numberOfCalculations; j++) {
       m_memoizedCellContent[i][j] = NAN;

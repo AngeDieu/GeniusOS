@@ -23,10 +23,8 @@ class CalculationController : public Escher::ViewController,
                               public Shared::ParameterTextFieldDelegate,
                               public Escher::DropdownCallback {
  public:
-  CalculationController(
-      Escher::StackViewController* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      Distribution* distribution, Calculation* calculation);
+  CalculationController(Escher::StackViewController* parentResponder,
+                        Distribution* distribution, Calculation* calculation);
 
   void reinitCalculation();
 
@@ -50,16 +48,12 @@ class CalculationController : public Escher::ViewController,
   Escher::HighlightCell* reusableCell(int index, int type) override;
   int reusableCellCount(int type) override { return 1; }
   int typeAtLocation(int column, int row) override { return column; }
-  void fillCellForLocation(Escher::HighlightCell* cell, int column,
-                           int row) override;
 
   /* TextField delegate */
-  bool textFieldDidHandleEvent(Escher::AbstractTextField* textField,
-                               bool returnValue, bool textDidChange) override;
+  void textFieldDidHandleEvent(Escher::AbstractTextField* textField) override;
   bool textFieldShouldFinishEditing(Escher::AbstractTextField* textField,
                                     Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
 
   void reload();
@@ -71,7 +65,7 @@ class CalculationController : public Escher::ViewController,
 
  private:
   constexpr static int k_numberOfCalculationCells = 3;
-  constexpr static KDCoordinate k_tableMargin = 3;
+  constexpr static KDMargins k_tableMargins = KDMargins(3);
   constexpr static const char* k_unknownParameterBannerText = "%s=%*.*ed";
   constexpr static const char* k_parameterTitle = "%s = %*.*ed ";
 
@@ -82,6 +76,9 @@ class CalculationController : public Escher::ViewController,
   void updateTitle();
   void setCalculationAccordingToIndex(int index,
                                       bool forceReinitialisation = false);
+  void updateCells();
+  void updateCellsValues();
+
   class ContentView : public Escher::View {
    public:
     ContentView(Escher::SelectableTableView* selectableTableView,

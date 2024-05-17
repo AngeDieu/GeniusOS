@@ -42,9 +42,12 @@ Expression SimplificationHelper::defaultShallowReduce(
     Expression e, ReductionContext* reductionContext,
     BooleanReduction booleanParameter, UnitReduction unitParameter,
     MatrixReduction matrixParameter, ListReduction listParameter,
-    PointReduction pointParameter) {
+    PointReduction pointParameter, UndefReduction undefParameter) {
+  Expression res;
   // Step 1: Shallow reduce undefined
-  Expression res = shallowReduceUndefined(e);
+  if (undefParameter == UndefReduction::BubbleUpUndef) {
+    res = shallowReduceUndefined(e);
+  }
   if (!res.isUninitialized()) {
     return res;
   }
@@ -118,13 +121,8 @@ Expression SimplificationHelper::shallowReduceUndefined(Expression e) {
 
 Expression SimplificationHelper::shallowReduceBanningUnits(Expression e) {
   // Generically, an Expression does not accept any Unit in its children.
-  const int childrenCount = e.numberOfChildren();
-  for (int i = 0; i < childrenCount; i++) {
-    Expression unit;
-    Expression childI = e.childAtIndex(i).removeUnit(&unit);
-    if (childI.isUndefined() || !unit.isUninitialized()) {
-      return e.replaceWithUndefinedInPlace();
-    }
+  if (e.hasUnit()) {
+    return e.replaceWithUndefinedInPlace();
   }
   return Expression();
 }
@@ -138,8 +136,7 @@ Expression SimplificationHelper::shallowReduceKeepingUnitsFromFirstChild(
     Multiplication mul = Multiplication::Builder(unit);
     e.replaceWithInPlace(mul);
     Expression value = e.shallowReduce(reductionContext);
-    if (value.type() == ExpressionNode::Type::Nonreal ||
-        value.type() == ExpressionNode::Type::Undefined) {
+    if (value.isUndefined()) {
       // Undefined * _unit is Undefined. Same with Nonreal.
       mul.replaceWithInPlace(value);
       return value;

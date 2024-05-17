@@ -24,7 +24,6 @@ class FunctionModelsParameterController
   void viewWillAppear() override;
   bool handleEvent(Ion::Events::Event event) override;
   int numberOfRows() const override;
-  void fillCellForRow(Escher::HighlightCell* cell, int row) override;
   Escher::HighlightCell* cell(int index) override;
   static int DefaultName(char buffer[], size_t bufferSize);
   /* Tell if the country prefers y=x or f(x)=x */
@@ -104,8 +103,8 @@ class FunctionModelsParameterController
   // Expression cells
   constexpr static I18n::Message
       k_modelDescriptions[k_numberOfExpressionModels] = {
-          I18n::Message::LineEquationTitle,
-          I18n::Message::CartesianNamedTemplate,
+          I18n::Message::Equation,
+          I18n::Message::Function,
           I18n::Message::LineType,
           I18n::Message::LineType,
           I18n::Message::InequalityType,

@@ -13,13 +13,14 @@ class CategoricalTableViewDataSource : public Escher::TableViewDataSource {
  public:
   // TableViewDataSource
   template <typename TextHolder>
-  void willDisplayValueCellAtLocation(TextHolder* textHolder,
-                                      Escher::EvenOddCell* evenOddCell,
-                                      int column, int row, Table* tableModel) {
+  void fillValueCellForLocation(TextHolder* textHolder,
+                                Escher::EvenOddCell* evenOddCell, int column,
+                                int row, Table* tableModel) {
     double p = tableModel->parameterAtPosition(row, column);
     PrintValueInTextHolder(p, textHolder);
     evenOddCell->setEven(row % 2 == 1);
   }
+  bool canStoreCellAtLocation(int column, int row) override { return row > 0; }
 
   constexpr static int k_rowHeight = Escher::Metric::SmallEditableCellHeight;
   constexpr static int k_maxNumberOfReusableRows =
@@ -37,7 +38,7 @@ class CategoricalTableViewDataSource : public Escher::TableViewDataSource {
 
   constexpr static int k_borderBetweenColumns = 1;
   constexpr static int k_columnWidth =
-      (Ion::Display::Width - 2 * Escher::Metric::CommonLeftMargin -
+      (Ion::Display::Width - 2 * Escher::Metric::CommonMargins.left() -
        k_borderBetweenColumns) /
       2;
 

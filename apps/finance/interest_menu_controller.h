@@ -19,7 +19,7 @@ class InterestMenuController : public Escher::ListWithTopAndBottomController {
  public:
   InterestMenuController(Escher::StackViewController* parentResponder,
                          ParametersController* interestController);
-  void didBecomeFirstResponder() override;
+  void viewWillAppear() override;
   bool handleEvent(Ion::Events::Event e) override;
   const char* title() override;
   ViewController::TitlesDisplay titlesDisplay() override {
@@ -34,6 +34,7 @@ class InterestMenuController : public Escher::ListWithTopAndBottomController {
     assert(i >= 0 && i < InterestData::k_maxNumberOfUnknowns);
     return &m_cells[i];
   }
+  KDCoordinate nonMemoizedRowHeight(int row) override;
 
  private:
   uint8_t paramaterAtIndex(int index) const;

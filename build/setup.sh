@@ -9,8 +9,7 @@ set -o pipefail
 INSTALL_ARM_GCC=1
 if [[ "${1-}" == "--only-simulator" ]]; then
   INSTALL_ARM_GCC=0
-fi
-if [ -x "$(command -v arm-none-eabi-gcc)" ]; then
+elif [ -x "$(command -v arm-none-eabi-gcc)" ]; then
   # We don't reinstall arm-none-eabi-gcc as the user may want to use a custom
   # version. For example, this is what the setup-arm-toolchain action will do on
   # GitHub.
@@ -36,12 +35,18 @@ install_binary_deps() {
 }
 
 install_python_deps() {
-  python3 -m venv .venv
+  if [[ $OSTYPE == "msys" ]]; then
+    # using system lz4 since pip install fails
+    python3 -m venv .venv --system-site-packages
+  else
+    python3 -m venv .venv
+    .venv/bin/pip3 install lz4
+  fi
   .venv/bin/pip3 install \
-    lz4 \
     pyelftools \
     pypng \
-    stringcase
+    stringcase \
+    black
 }
 
 install_macos_binary_deps() {
@@ -96,16 +101,18 @@ install_windows_binary_deps() {
     mingw-w64-x86_64-freetype \
     mingw-w64-x86_64-gcc \
     mingw-w64-x86_64-imagemagick \
-    mingw-w64-x86_64-inkscape \
     mingw-w64-x86_64-libjpeg-turbo \
     mingw-w64-x86_64-libpng \
     mingw-w64-x86_64-librsvg \
     mingw-w64-x86_64-pkg-config \
     mingw-w64-x86_64-python3 \
+    mingw-w64-x86_64-python3-lz4 \
     mingw-w64-x86_64-python3-pip
 
   if [[ "${INSTALL_ARM_GCC-0}" == "1" ]]; then
-    echo "Please head to https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads and download the latest Windows (mingw-w64-i686) hosted cross toolchains for AArch32 bare-metal targets (arm-none-eabi)"
+    pacman -S --noconfirm \
+      mingw-w64-x86_64-python-pyusb
+      mingw-w64-x86_64-arm-none-eabi-gcc
   fi
 }
 

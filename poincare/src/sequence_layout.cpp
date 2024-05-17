@@ -84,14 +84,13 @@ KDSize SequenceLayoutNode::lowerBoundSizeWithVariableEquals(KDFont::Size font) {
 
 KDSize SequenceLayoutNode::computeSize(KDFont::Size font) {
   KDSize totalLowerBoundSize = lowerBoundSizeWithVariableEquals(font);
-  KDSize upperBoundSize = upperBoundLayout()->layoutSize(font);
   KDSize argumentSize = argumentLayout()->layoutSize(font);
   KDSize argumentSizeWithParentheses = KDSize(
       argumentSize.width() + 2 * ParenthesisLayoutNode::k_parenthesisWidth,
-      ParenthesisLayoutNode::HeightGivenChildHeight(argumentSize.height()));
+      ParenthesisLayoutNode::Height(argumentSize.height()));
   KDSize result = KDSize(
       std::max({SymbolWidth(font), totalLowerBoundSize.width(),
-                upperBoundSize.width()}) +
+                upperBoundWidth(font)}) +
           ArgumentHorizontalMargin(font) + argumentSizeWithParentheses.width(),
       baseline(font) +
           std::max(SymbolHeight(font) / 2 + LowerBoundVerticalMargin(font) +
@@ -132,10 +131,7 @@ KDPoint SequenceLayoutNode::positionOfChild(LayoutNode *l, KDFont::Size font) {
     y = baseline(font) - (SymbolHeight(font) + 1) / 2 -
         UpperBoundVerticalMargin(font) - upperBoundSize.height();
   } else if (l == argumentLayout()) {
-    x = std::max({SymbolWidth(font),
-                  lowerBoundSizeWithVariableEquals(font).width(),
-                  upperBoundSize.width()}) +
-        ArgumentHorizontalMargin(font) +
+    x = leftParenthesisPosition(font).x() +
         ParenthesisLayoutNode::k_parenthesisWidth;
     y = baseline(font) - argumentLayout()->baseline(font);
   } else {
@@ -229,32 +225,41 @@ void SequenceLayoutNode::render(KDContext *ctx, KDPoint p,
 
   // Render the parentheses
   KDSize argumentSize = argumentLayout()->layoutSize(font);
-  KDPoint argumentPosition = positionOfChild(argumentLayout(), font);
-  KDCoordinate argumentBaseline = argumentLayout()->baseline(font);
-
-  KDPoint leftParenthesisPosition =
-      ParenthesisLayoutNode::PositionGivenChildHeightAndBaseline(
-          true, argumentSize, argumentBaseline)
-          .translatedBy(argumentPosition);
-  KDPoint rightParenthesisPosition =
-      ParenthesisLayoutNode::PositionGivenChildHeightAndBaseline(
-          false, argumentSize, argumentBaseline)
-          .translatedBy(argumentPosition);
   ParenthesisLayoutNode::RenderWithChildHeight(
-      true, argumentSize.height(), ctx, leftParenthesisPosition.translatedBy(p),
-      style.glyphColor, style.backgroundColor);
+      true, argumentSize.height(), ctx,
+      leftParenthesisPosition(font).translatedBy(p), style.glyphColor,
+      style.backgroundColor);
   ParenthesisLayoutNode::RenderWithChildHeight(
       false, argumentSize.height(), ctx,
-      rightParenthesisPosition.translatedBy(p), style.glyphColor,
-      style.backgroundColor);
+      rightParenthesisPosition(font, argumentSize).translatedBy(p),
+      style.glyphColor, style.backgroundColor);
+}
+
+KDPoint SequenceLayoutNode::leftParenthesisPosition(KDFont::Size font) {
+  KDSize argumentSize = argumentLayout()->layoutSize(font);
+  KDCoordinate argumentBaseline = argumentLayout()->baseline(font);
+  KDCoordinate lowerboundWidth = lowerBoundSizeWithVariableEquals(font).width();
+
+  KDCoordinate x =
+      std::max({SymbolWidth(font), lowerboundWidth, upperBoundWidth(font)}) +
+      ArgumentHorizontalMargin(font);
+  KDCoordinate y =
+      baseline(font) -
+      ParenthesisLayoutNode::Baseline(argumentSize.height(), argumentBaseline);
+  return {x, y};
+}
+
+KDPoint SequenceLayoutNode::rightParenthesisPosition(KDFont::Size font,
+                                                     KDSize argumentSize) {
+  return leftParenthesisPosition(font).translatedBy(KDPoint(
+      ParenthesisLayoutNode::k_parenthesisWidth + argumentSize.width(), 0));
 }
 
 KDCoordinate SequenceLayoutNode::completeLowerBoundX(KDFont::Size font) {
-  KDSize upperBoundSize = upperBoundLayout()->layoutSize(font);
   return std::max(
       {0,
        (SymbolWidth(font) - lowerBoundSizeWithVariableEquals(font).width()) / 2,
-       (upperBoundSize.width() -
+       (upperBoundWidth(font) -
         lowerBoundSizeWithVariableEquals(font).width()) /
            2});
 }

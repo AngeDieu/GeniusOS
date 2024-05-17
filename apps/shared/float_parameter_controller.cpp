@@ -6,7 +6,6 @@
 #include <cmath>
 
 #include "poincare_helpers.h"
-#include "text_field_delegate_app.h"
 
 using namespace Escher;
 using namespace Poincare;
@@ -15,8 +14,8 @@ namespace Shared {
 
 template <typename T>
 FloatParameterController<T>::FloatParameterController(
-    Responder *parentResponder)
-    : ListWithTopAndBottomController(parentResponder),
+    Responder *parentResponder, View *topView)
+    : ListWithTopAndBottomController(parentResponder, topView),
       m_okButton(
           &m_selectableListView, I18n::Message::Ok,
           Invocation::Builder<FloatParameterController>(
@@ -36,8 +35,8 @@ bool FloatParameterController<T>::handleEvent(Ion::Events::Event event) {
 }
 
 template <typename T>
-int FloatParameterController<T>::typeAtRow(int index) const {
-  if (index == numberOfRows() - 1) {
+int FloatParameterController<T>::typeAtRow(int row) const {
+  if (row == numberOfRows() - 1) {
     return k_buttonCellType;
   }
   return k_parameterCellType;
@@ -77,10 +76,8 @@ void FloatParameterController<T>::fillCellForRow(HighlightCell *cell, int row) {
 
 template <typename T>
 KDCoordinate FloatParameterController<T>::nonMemoizedRowHeight(int row) {
-  if (typeAtRow(row) == k_buttonCellType) {
-    return m_okButton.minimalSizeForOptimalDisplay().height();
-  }
-  return ListViewDataSource::nonMemoizedRowHeight(row);
+  assert(typeAtRow(row) == k_buttonCellType);
+  return m_okButton.minimalSizeForOptimalDisplay().height();
 }
 
 template <typename T>
@@ -89,19 +86,18 @@ bool FloatParameterController<T>::textFieldShouldFinishEditing(
   return (event == Ion::Events::Down &&
           innerSelectedRow() < numberOfRows() - 1) ||
          (event == Ion::Events::Up && innerSelectedRow() > 0) ||
-         TextFieldDelegate::textFieldShouldFinishEditing(textField, event);
+         MathTextFieldDelegate::textFieldShouldFinishEditing(textField, event);
 }
 
 template <typename T>
 bool FloatParameterController<T>::textFieldDidFinishEditing(
-    AbstractTextField *textField, const char *text, Ion::Events::Event event) {
-  T floatBody =
-      textFieldDelegateApp()->template parseInputtedFloatValue<T>(text);
+    AbstractTextField *textField, Ion::Events::Event event) {
+  char *text = textField->draftText();
+  T floatBody = ParseInputFloatValue<T>(text);
   if (hasUndefinedValue(text, floatBody) ||
       !setParameterAtIndex(innerSelectedRow(), floatBody)) {
     return false;
   }
-  resetMemoization();
   m_selectableListView.reloadSelectedCell();
   m_selectableListView.reloadData();
   if (event == Ion::Events::EXE || event == Ion::Events::OK) {
@@ -123,9 +119,9 @@ template <typename T>
 bool FloatParameterController<T>::hasUndefinedValue(const char *text,
                                                     T floatValue) const {
   InfinityTolerance infTolerance = infinityAllowanceForRow(innerSelectedRow());
-  return textFieldDelegateApp()->hasUndefinedValue(
-      floatValue, infTolerance == InfinityTolerance::PlusInfinity,
-      infTolerance == InfinityTolerance::MinusInfinity);
+  return HasUndefinedValue(floatValue,
+                           infTolerance == InfinityTolerance::PlusInfinity,
+                           infTolerance == InfinityTolerance::MinusInfinity);
 }
 
 template class FloatParameterController<float>;

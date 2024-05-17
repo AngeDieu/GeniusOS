@@ -12,57 +12,25 @@ namespace Escher {
  * with a long or dynamic cell count. */
 class ExplicitListViewDataSource : public ListViewDataSource {
  public:
-  ExplicitListViewDataSource() : ListViewDataSource(), m_heightManager(this) {}
+  ExplicitListViewDataSource() : ListViewDataSource() {}
 
   int typeAtRow(int row) const override final { return row; }
   int reusableCellCount(int type) override final { return 1; }
   HighlightCell* reusableCell(int index, int type) override final {
     return cell(type);
   }
-  // HighlightCell * selectedCell() { return cell(selectedRow()); }
-  void initCellSize(TableView* view) override;
+  /* Cells are not reusable: they are filled only directly in constructor and
+   * viewWillAppear or other methods than can modify them like handleEvent. */
+  void fillCellForRow(Escher::HighlightCell* cell, int row) override final {}
+
+  void initWidth(TableView* tableView) override;
 
  protected:
   virtual HighlightCell* cell(int index) = 0;
-  virtual void fillCell(HighlightCell* cell) {}
-  // This method fills the cell.
-  KDCoordinate nonMemoizedRowHeight(int row) override final {
-    return protectedNonMemoizedRowHeight(cell(row), row);
-  }
+  KDCoordinate nonMemoizedRowHeight(int row) override final;
 
  private:
-  /* This size manager leverages the fact that each cell object
-   * is only used by one explicit cell. Once the cell has been filled with its
-   * content, it's not very costly to call minimalSizeForOptimalDisplay. */
-  class ExplicitListRowHeightManager : public TableSize1DManager {
-   public:
-    ExplicitListRowHeightManager(ExplicitListViewDataSource* dataSource)
-        : m_dataSource(dataSource), m_sizesAreComputed(false) {}
-    KDCoordinate computeSizeAtIndex(int i) override;
-    KDCoordinate computeCumulatedSizeBeforeIndex(
-        int i, KDCoordinate defaultSize) override {
-      return k_undefinedSize;
-    }
-    int computeIndexAfterCumulatedSize(KDCoordinate offset,
-                                       KDCoordinate defaultSize) override {
-      return k_undefinedSize;
-    }
-
-    void resetMemoization(bool force = true) override {
-      m_sizesAreComputed = false;
-    }
-
-   private:
-    ExplicitListViewDataSource* m_dataSource;
-    bool m_sizesAreComputed;
-  };
-
-  bool cellAtLocationIsSelectable(HighlightCell* cell, int column,
-                                  int row) override;
-
-  TableSize1DManager* rowHeightManager() override { return &m_heightManager; }
-
-  ExplicitListRowHeightManager m_heightManager;
+  bool canSelectCellAtRow(int row) override;
 };
 
 }  // namespace Escher

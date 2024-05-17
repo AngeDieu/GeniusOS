@@ -44,8 +44,9 @@ bool StoreParameterController::handleEvent(Ion::Events::Event event) {
     bool canSwitchHideStatus =
         m_storeColumnHelper->switchSelectedColumnHideStatus();
     if (!canSwitchHideStatus) {
-      Container::activeApp()->displayWarning(I18n::Message::DataNotSuitable);
+      App::app()->displayWarning(I18n::Message::DataNotSuitable);
     } else {
+      updateHideCellSwitch();
       m_selectableListView.reloadSelectedCell();
     }
   } else {
@@ -66,12 +67,9 @@ AbstractMenuCell* StoreParameterController::cell(int index) {
   return cells[index];
 }
 
-void StoreParameterController::fillCellForRow(Escher::HighlightCell* cell,
-                                              int row) {
-  if (cell == &m_hideCell) {
-    m_hideCell.accessory()->setState(
-        m_storeColumnHelper->selectedSeriesIsActive());
-  }
+void StoreParameterController::viewWillAppear() {
+  updateHideCellSwitch();
+  ColumnParameterController::viewWillAppear();
 }
 
 ColumnNameHelper* StoreParameterController::columnNameHelper() {

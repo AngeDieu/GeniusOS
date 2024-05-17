@@ -57,52 +57,61 @@ Expression CalculationStore::ansExpression(Context *context) const {
     return defaultAns;
   }
   ExpiringPointer<Calculation> mostRecentCalculation = calculationAtIndex(0);
-  Expression exactOutput = mostRecentCalculation->exactOutput();
   Expression input = mostRecentCalculation->input();
-  if (exactOutput.isUninitialized() || input.isUninitialized()) {
-    return defaultAns;
-  }
-  if (input.recursivelyMatches(Expression::IsApproximate, context)) {
-    Expression approximate = mostRecentCalculation->approximateOutput(
-        Calculation::NumberOfSignificantDigits::Maximal);
-    if (approximate.isUninitialized()) {
-      return defaultAns;
-    }
-    return approximate;
-  }
-  /* Special case: If exact output was hidden, it should not be accessible using
-   * ans, unless it is equal to an approximation that is neither undefined nor
-   * nonreal. */
-  const char *exactOutputText = mostRecentCalculation->exactOutputText();
-  const char *approximateOutputText =
-      mostRecentCalculation->approximateOutputText(
-          Calculation::NumberOfSignificantDigits::UserDefined);
+  Expression exactOutput = mostRecentCalculation->exactOutput();
+  Expression approxOutput = mostRecentCalculation->approximateOutput(
+      Calculation::NumberOfSignificantDigits::Maximal);
+  Expression ansExpr;
   if (mostRecentCalculation->displayOutput(context) ==
           Calculation::DisplayOutput::ApproximateOnly &&
-      (strcmp(approximateOutputText, exactOutputText) != 0 ||
-       exactOutput.type() == ExpressionNode::Type::Nonreal ||
-       exactOutput.type() == ExpressionNode::Type::Undefined)) {
-    return input;
+      (strcmp(mostRecentCalculation->approximateOutputText(
+                  Calculation::NumberOfSignificantDigits::Maximal),
+              mostRecentCalculation->exactOutputText()) != 0 ||
+       exactOutput.isUndefined())) {
+    /* Case 1.
+     * If exact output was hidden, is   should not be accessible using Ans.
+     * Return input instead so that no precision is lost.
+     * Except if the exact output is equal to its approximation and is neither
+     * Nonreal nor Undefined, in which case the exact output can be used as Ans
+     * since it's exactly the approx (this happens mainly with units).
+     * */
+    ansExpr = input;
+    if (ansExpr.type() == ExpressionNode::Type::Store) {
+      /* Case 1.1 If the input is a store expression, keep only the first child
+       * of the input in Ans because the whole store can't be used in a
+       * calculation. */
+      ansExpr = ansExpr.childAtIndex(0);
+    }
+  } else if (input.recursivelyMatches(Expression::IsApproximate, context) &&
+             mostRecentCalculation->equalSign(context) ==
+                 Calculation::EqualSign::Equal) {
+    /* Case 2.
+     * If the user used a decimal in the input and the exact output is equal to
+     * the approximation, prefer using the approximation too keep the decimal
+     * form. */
+    ansExpr = approxOutput;
+  } else {
+    /* Case 3.
+     * Default to the exact output.*/
+    ansExpr = exactOutput;
   }
-  return exactOutput;
+  assert(ansExpr.isUninitialized() ||
+         ansExpr.type() != ExpressionNode::Type::Store);
+  return ansExpr.isUninitialized() ? defaultAns : ansExpr;
 }
 
 ExpiringPointer<Calculation> CalculationStore::push(
-    const char *text, Poincare::Context *context,
-    HeightComputer heightComputer) {
+    const char *text, Poincare::Context *context) {
   /* TODO: we could refine this UserCircuitBreaker. When interrupted during
    * simplification, we could still try to display the approximate result? When
    * interrupted during approximation, we could at least display the exact
    * result. If we do so, don't forget to force the Calculation sign to be
    * approximative to avoid long computation to determine it.
    */
-  constexpr int maxNumberOfDigits =
-      PrintFloat::k_numberOfStoredSignificantDigits;
-
   m_inUsePreferences = *Preferences::sharedPreferences;
   char *cursor = endOfCalculations();
-  Expression inputExpression, exactOutputExpression,
-      approximateOutputExpression, storeExpression;
+  Expression exactOutputExpression, approximateOutputExpression,
+      storeExpression;
 
   {
     CircuitBreakerCheckpoint checkpoint(
@@ -119,25 +128,33 @@ ExpiringPointer<Calculation> CalculationStore::push(
                                                 Symbol::Ans());
 
       // Push a new, empty Calculation
-      cursor = pushEmptyCalculation(cursor);
+      cursor = pushEmptyCalculation(
+          cursor, Poincare::Preferences::sharedPreferences->complexFormat(),
+          Poincare::Preferences::sharedPreferences->angleUnit());
       assert(cursor != k_pushError);
 
       // Push the input
-      inputExpression = Expression::Parse(text, &ansContext);
+      Expression inputExpression = Expression::Parse(text, &ansContext);
       inputExpression = enhancePushedExpression(inputExpression, &ansContext);
-      cursor =
-          pushSerializedExpression(cursor, inputExpression, maxNumberOfDigits);
+      cursor = pushSerializedExpression(
+          cursor, inputExpression, PrintFloat::k_maxNumberOfSignificantDigits);
       if (cursor == k_pushError) {
-        return errorPushUndefined(heightComputer);
+        return errorPushUndefined();
       }
       /* Recompute the location of the input text in case a calculation was
        * deleted. */
       char *const inputText = endOfCalculations() + sizeof(Calculation);
 
       // Parse and compute the expression
-      PoincareHelpers::ParseAndSimplifyAndApproximate(
-          inputText, &inputExpression, &exactOutputExpression,
-          &approximateOutputExpression, context);
+      inputExpression = Expression::Parse(inputText, context, false);
+      assert(!inputExpression.isUninitialized());
+      PoincareHelpers::CloneAndSimplifyAndApproximate(
+          inputExpression, &exactOutputExpression, &approximateOutputExpression,
+          context,
+          {.symbolicComputation = SymbolicComputation::
+               ReplaceAllSymbolsWithDefinitionsOrUndefined});
+      assert(!exactOutputExpression.isUninitialized() &&
+             !approximateOutputExpression.isUninitialized());
 
       // Post-processing of store expression
       exactOutputExpression = enhancePushedExpression(exactOutputExpression);
@@ -208,13 +225,13 @@ ExpiringPointer<Calculation> CalculationStore::push(
     Expression e = i == 0 ? exactOutputExpression : approximateOutputExpression;
     int digits = i == Calculation::k_numberOfExpressions - 2
                      ? m_inUsePreferences.numberOfSignificantDigits()
-                     : maxNumberOfDigits;
+                     : PrintFloat::k_maxNumberOfSignificantDigits;
 
     char *nextCursor = pushSerializedExpression(cursor, e, digits);
     if (nextCursor == k_pushError) {
       nextCursor = pushUndefined(cursor);
       if (nextCursor == k_pushError) {
-        return errorPushUndefined(heightComputer);
+        return errorPushUndefined();
       }
     }
     cursor = nextCursor;
@@ -224,11 +241,8 @@ ExpiringPointer<Calculation> CalculationStore::push(
    * calculation. */
   assert(cursor < pointerArea() - sizeof(Calculation *));
   pointerArray()[-1] = cursor;
-
-  // Compute the calculation heights
   Calculation *newCalculation =
       reinterpret_cast<Calculation *>(endOfCalculations());
-  SetCalculationHeights(newCalculation, heightComputer, context);
 
   /* Now that the calculation is fully built, we can finally update
    * m_numberOfCalculations. As that is the only variable tracking the state
@@ -239,24 +253,19 @@ ExpiringPointer<Calculation> CalculationStore::push(
   return ExpiringPointer(newCalculation);
 }
 
-void CalculationStore::recomputeHeightsIfPreferencesHaveChanged(
-    Poincare::Preferences *preferences, HeightComputer heightComputer) {
+bool CalculationStore::preferencesHaveChanged() {
   // Track settings that might invalidate HistoryCells heights
+  Preferences *preferences = Preferences::sharedPreferences;
   if (m_inUsePreferences.combinatoricSymbols() ==
           preferences->combinatoricSymbols() &&
       m_inUsePreferences.numberOfSignificantDigits() ==
           preferences->numberOfSignificantDigits() &&
       m_inUsePreferences.logarithmBasePosition() ==
           preferences->logarithmBasePosition()) {
-    return;
+    return false;
   }
   m_inUsePreferences = *preferences;
-  for (int i = 0; i < numberOfCalculations(); i++) {
-    /* The void context is used since there is no reasons for the
-     * heightComputer to resolve symbols */
-    SetCalculationHeights(calculationAtIndex(i).pointer(), heightComputer,
-                          nullptr);
-  }
+  return true;
 }
 
 // Private
@@ -290,41 +299,39 @@ size_t CalculationStore::privateDeleteCalculationAtIndex(
   return deletedSize;
 }
 
-ExpiringPointer<Calculation> CalculationStore::errorPushUndefined(
-    HeightComputer heightComputer) {
+ExpiringPointer<Calculation> CalculationStore::errorPushUndefined() {
   assert(numberOfCalculations() == 0);
   char *cursor = pushUndefined(m_buffer);
   assert(m_buffer < cursor &&
          cursor <= m_buffer + m_bufferSize - sizeof(Calculation *));
   *(pointerArray() - 1) = cursor;
-  Calculation *ptr = reinterpret_cast<Calculation *>(m_buffer);
-  /* The void context is used since there is no reasons for the
-   * heightComputer to resolve symbols */
-  SetCalculationHeights(ptr, heightComputer, nullptr);
+  Calculation *calculation = reinterpret_cast<Calculation *>(m_buffer);
   m_numberOfCalculations = 1;
-  return ExpiringPointer<Calculation>(ptr);
+  return ExpiringPointer(calculation);
 }
 
-char *CalculationStore::pushEmptyCalculation(char *location) {
-  while (spaceForNewCalculations(location) < Calculation::k_minimalSize) {
+char *CalculationStore::pushEmptyCalculation(
+    char *location, Poincare::Preferences::ComplexFormat complexFormat,
+    Poincare::Preferences::AngleUnit angleUnit) {
+  while (spaceForNewCalculations(location) < k_calculationMinimalSize) {
     if (numberOfCalculations() == 0) {
       return k_pushError;
     }
     location -= deleteOldestCalculation(location);
   }
-  new (location) Calculation();
+  new (location) Calculation(complexFormat, angleUnit);
   return location + sizeof(Calculation);
 }
 
 char *CalculationStore::pushSerializedExpression(
     char *location, Expression e, int numberOfSignificantDigits) {
   while (true) {
-    int availableSize = spaceForNewCalculations(location);
+    size_t availableSize = spaceForNewCalculations(location);
     int length = availableSize > 0
                      ? PoincareHelpers::Serialize(e, location, availableSize,
                                                   numberOfSignificantDigits)
                      : 0;
-    if (length + 1 < availableSize) {
+    if (static_cast<size_t>(length) + 1 < availableSize) {
       assert(location[length] == '\0');
       return location + length + 1;
     }

@@ -18,9 +18,8 @@ MenuController::MenuController(
     std::initializer_list<std::initializer_list<I18n::Message>> messages,
     std::initializer_list<const Escher::Image *> images,
     MenuControllerDelegate *delegate)
-    : Escher::SelectableCellListPage<
-          Escher::SubappCell, k_numberOfCells,
-          Escher::StandardMemoizedListViewDataSource>(parentResponder),
+    : Escher::UniformSelectableListController<Escher::SubappCell,
+                                              k_numberOfCells>(parentResponder),
       m_delegate(delegate) {
   selectRow(0);
 
@@ -31,11 +30,11 @@ MenuController::MenuController(
   i = 0;
   for (std::initializer_list<I18n::Message> mess : messages) {
     assert(mess.end() - mess.begin() == 2);
-    cellAtIndex(i++)->setMessages(*mess.begin(), *(mess.begin() + 1));
+    cell(i++)->setMessages(*mess.begin(), *(mess.begin() + 1));
   }
   i = 0;
   for (const Escher::Image *img : images) {
-    cellAtIndex(i++)->setImage(img);
+    cell(i++)->setImage(img);
   }
 
   centerTable(Escher::Metric::DisplayHeightWithoutTitleBar);
@@ -48,7 +47,7 @@ void MenuController::stackOpenPage(Escher::ViewController *nextPage) {
 
 void MenuController::didBecomeFirstResponder() {
   m_delegate->selectSubApp(-1);
-  m_selectableListView.reloadData(true);
+  m_selectableListView.reloadData();
 }
 
 bool MenuController::handleEvent(Ion::Events::Event event) {

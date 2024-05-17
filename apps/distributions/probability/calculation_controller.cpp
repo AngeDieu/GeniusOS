@@ -26,7 +26,7 @@ CalculationController::ContentView::ContentView(
     : m_selectableTableView(selectableTableView),
       m_distributionCurveView(distribution, calculation),
       m_unknownParameterBanner(
-          {.style = {.backgroundColor = Escher::Palette::WallScreen},
+          {.style = {.backgroundColor = Palette::WallScreen},
            .horizontalAlignment = KDGlyph::k_alignCenter}) {}
 
 View *CalculationController::ContentView::subviewAtIndex(int index) {
@@ -61,10 +61,9 @@ void CalculationController::ContentView::layoutSubviews(bool force) {
 }
 
 CalculationController::CalculationController(
-    Escher::StackViewController *parentResponder,
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
-    Distribution *distribution, Calculation *calculation)
-    : Escher::ViewController(parentResponder),
+    StackViewController *parentResponder, Distribution *distribution,
+    Calculation *calculation)
+    : ViewController(parentResponder),
       m_calculation(calculation),
       m_distribution(distribution),
       m_contentView(&m_selectableTableView, distribution, calculation),
@@ -73,7 +72,7 @@ CalculationController::CalculationController(
       m_dropdown(&m_selectableTableView, &m_imagesDataSource, this) {
   assert(distribution != nullptr);
   assert(calculation != nullptr);
-  m_selectableTableView.setMargins(k_tableMargin);
+  m_selectableTableView.setMargins(k_tableMargins);
   m_selectableTableView.setVerticalCellOverlap(0);
   m_selectableTableView.hideScrollBars();
   m_selectableTableView.setBackgroundColor(KDColorWhite);
@@ -81,8 +80,7 @@ CalculationController::CalculationController(
   for (int i = 0; i < k_numberOfCalculationCells; i++) {
     m_calculationCells[i].editableTextCell()->setParentResponder(
         &m_selectableTableView);
-    m_calculationCells[i].editableTextCell()->textField()->setDelegates(
-        inputEventHandlerDelegate, this);
+    m_calculationCells[i].editableTextCell()->textField()->setDelegate(this);
   }
 }
 
@@ -108,6 +106,7 @@ bool CalculationController::handleEvent(Ion::Events::Event event) {
 
 void CalculationController::viewWillAppear() {
   m_dropdown.selectRow(static_cast<int>(m_calculation->type()));
+  updateCells();
   ViewController::viewWillAppear();
   selectCellAtLocation(1, 0);
 }
@@ -150,71 +149,37 @@ HighlightCell *CalculationController::reusableCell(int index, int type) {
   }
 }
 
-void CalculationController::fillCellForLocation(HighlightCell *cell, int column,
-                                                int row) {
-  if (column > 0) {
-    CalculationCell *myCell = static_cast<CalculationCell *>(cell);
-    myCell->messageTextView()->setMessage(
-        m_calculation->legendForParameterAtIndex(column - 1));
-    bool calculationCellIsResponder = true;
-    if (((!m_distribution->isSymmetrical() ||
-          !m_distribution->isContinuous()) &&
-         column == 3) ||
-        (m_calculation->type() == Calculation::Type::Discrete && column == 2)) {
-      calculationCellIsResponder = false;
-    }
-    myCell->setResponder(calculationCellIsResponder);
-    TextField *field =
-        static_cast<CalculationCell *>(cell)->editableTextCell()->textField();
-    if (field->isEditing()) {
-      return;
-    }
-    constexpr int bufferSize = Constants::k_largeBufferSize;
-    char buffer[bufferSize];
-    /* FIXME: It has not been decided yet if we should use the prefered mode
-     * instead of always using scientific mode */
-    Shared::PoincareHelpers::ConvertFloatToTextWithDisplayMode(
-        m_calculation->parameterAtIndex(column - 1), buffer, bufferSize,
-        Poincare::Preferences::VeryLargeNumberOfSignificantDigits,
-        Poincare::Preferences::PrintFloatMode::Decimal);
-    field->setText(buffer);
-  }
-}
-
-bool CalculationController::textFieldDidHandleEvent(
-    ::AbstractTextField *textField, bool returnValue, bool textDidChange) {
-  if (returnValue && textDidChange) {
-    /* We do not reload the responder because it would setEditing(false)
-     * the textField and the input would not be handled properly. */
-    m_selectableTableView.reloadData(false);
-    /* The textField frame might have increased which forces to reload the
-     * textField scroll */
-    textField->scrollToCursor();
-  }
-  return returnValue;
+void CalculationController::textFieldDidHandleEvent(
+    ::AbstractTextField *textField) {
+  /* We do not reload the responder because it would setEditing(false)
+   * the textField and the input would not be handled properly. */
+  m_selectableTableView.reloadData(false);
+  /* The textField frame might have increased which forces to reload the
+   * textField scroll */
+  textField->scrollToCursor();
 }
 
 bool CalculationController::textFieldShouldFinishEditing(
     AbstractTextField *textField, Ion::Events::Event event) {
-  return TextFieldDelegate::textFieldShouldFinishEditing(textField, event) ||
+  return MathTextFieldDelegate::textFieldShouldFinishEditing(textField,
+                                                             event) ||
          (event == Ion::Events::Right &&
-          textField->cursorLocation() ==
-              textField->text() + textField->draftTextLength() &&
+          textField->cursorLocation() == textField->draftTextEnd() &&
           selectedColumn() < m_calculation->numberOfParameters()) ||
          (event == Ion::Events::Left &&
           textField->cursorLocation() == textField->text());
 }
 
 bool CalculationController::textFieldDidFinishEditing(
-    AbstractTextField *textField, const char *text, Ion::Events::Event event) {
+    AbstractTextField *textField, Ion::Events::Event event) {
   assert(selectedColumn() != 0);
-  double floatBody =
-      textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
-  if (textFieldDelegateApp()->hasUndefinedValue(floatBody)) {
+  double floatBody = ParseInputFloatValue<double>(textField->draftText());
+  if (HasUndefinedValue(floatBody)) {
     return false;
   }
+  Calculation::Type calculationType = m_calculation->type();
   int resultColumn =
-      m_calculation->type() == Calculation::Type::FiniteIntegral ? 3 : 2;
+      calculationType == Calculation::Type::FiniteIntegral ? 3 : 2;
   if (selectedColumn() == resultColumn) {
     if (floatBody < 0.0) {
       floatBody = 0.0;
@@ -226,24 +191,25 @@ bool CalculationController::textFieldDidFinishEditing(
              floatBody != std::round(floatBody)) {
     assert(selectedColumn() == 1 ||
            (selectedColumn() == 2 &&
-            m_calculation->type() == Calculation::Type::FiniteIntegral));
-    Calculation::Type calculationType = m_calculation->type();
+            calculationType == Calculation::Type::FiniteIntegral));
+
     if (calculationType == Calculation::Type::Discrete) {
       floatBody = std::round(floatBody);
     } else if (calculationType == Calculation::Type::LeftIntegral ||
-               (m_calculation->type() == Calculation::Type::FiniteIntegral &&
+               (calculationType == Calculation::Type::FiniteIntegral &&
                 selectedColumn() == 2)) {
       // X <= floatBody is equivalent to X <= floor(floatBody) when discrete
       floatBody = std::floor(floatBody);
     } else {
       assert(calculationType == Calculation::Type::RightIntegral ||
-             (m_calculation->type() == Calculation::Type::FiniteIntegral &&
+             (calculationType == Calculation::Type::FiniteIntegral &&
               selectedColumn() == 1));
       // X >= floatBody is equivalent to X >= ceil(floatBody) when discrete
       floatBody = std::ceil(floatBody);
     }
   }
   m_calculation->setParameterAtIndex(floatBody, selectedColumn() - 1);
+  updateCellsValues();
   if (event == Ion::Events::Right || event == Ion::Events::Left) {
     m_selectableTableView.handleEvent(event);
   }
@@ -276,6 +242,39 @@ void CalculationController::setCalculationAccordingToIndex(
     int index, bool forceReinitialisation) {
   Calculation::Initialize(m_calculation, static_cast<Calculation::Type>(index),
                           m_distribution, forceReinitialisation);
+  updateCells();
+}
+
+void CalculationController::updateCells() {
+  int numberOfColumns = m_calculation->numberOfParameters();
+  for (int i = 0; i < numberOfColumns; i++) {
+    // Update messages
+    m_calculationCells[i].messageTextView()->setMessage(
+        m_calculation->legendForParameterAtIndex(i));
+    // Update editability
+    bool notEditable =
+        ((!m_distribution->isSymmetrical() ||
+          !m_distribution->isContinuous()) &&
+         i == 2) ||
+        (m_calculation->type() == Calculation::Type::Discrete && i == 1);
+    m_calculationCells[i].setEditable(!notEditable);
+  }
+  updateCellsValues();
+}
+
+void CalculationController::updateCellsValues() {
+  int numberOfColumns = m_calculation->numberOfParameters();
+  for (int i = 0; i < numberOfColumns; i++) {
+    constexpr int bufferSize = Constants::k_largeBufferSize;
+    char buffer[bufferSize];
+    /* FIXME: It has not been decided yet if we should use the prefered mode
+     * instead of always using scientific mode */
+    PoincareHelpers::ConvertFloatToTextWithDisplayMode(
+        m_calculation->parameterAtIndex(i), buffer, bufferSize,
+        Poincare::Preferences::VeryLargeNumberOfSignificantDigits,
+        Poincare::Preferences::PrintFloatMode::Decimal);
+    m_calculationCells[i].editableTextCell()->textField()->setText(buffer);
+  }
 }
 
 void CalculationController::onDropdownSelected(int selectedRow) {

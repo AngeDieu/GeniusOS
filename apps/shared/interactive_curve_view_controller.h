@@ -26,13 +26,13 @@ class InteractiveCurveViewController
  public:
   constexpr static int k_graphControllerStackDepth = 1;
 
-  InteractiveCurveViewController(
-      Escher::Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      Escher::ButtonRowController* header,
-      InteractiveCurveViewRange* interactiveRange, AbstractPlotView* curveView,
-      CurveViewCursor* cursor, I18n::Message calculusButtonMessage,
-      int* selectedCurveIndex);
+  InteractiveCurveViewController(Escher::Responder* parentResponder,
+                                 Escher::ButtonRowController* header,
+                                 InteractiveCurveViewRange* interactiveRange,
+                                 AbstractPlotView* curveView,
+                                 CurveViewCursor* cursor,
+                                 I18n::Message calculusButtonMessage,
+                                 int* selectedCurveIndex);
 
   // Responder
   bool handleEvent(Ion::Events::Event event) override;
@@ -50,7 +50,6 @@ class InteractiveCurveViewController
   bool textFieldDidReceiveEvent(Escher::AbstractTextField* textField,
                                 Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
 
   // ButtonRowController
@@ -64,7 +63,7 @@ class InteractiveCurveViewController
   Escher::Responder* responderWhenEmpty() override;
 
   virtual void openMenuForCurveAtIndex(int curveIndex) = 0;
-  virtual void moveCursorAndCenterIfNeeded(double t);
+  void moveCursorAndCenterIfNeeded(double t);
   RangeParameterController* rangeParameterController();
   ViewController* zoomParameterController();
 

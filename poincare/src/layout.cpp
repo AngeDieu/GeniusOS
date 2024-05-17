@@ -48,7 +48,7 @@ bool Layout::isCodePointsString() const {
 }
 
 void Layout::draw(KDContext *ctx, KDPoint p, KDGlyph::Style style,
-                  LayoutSelection selection, KDColor selectionColor) {
+                  const LayoutSelection &selection, KDColor selectionColor) {
   node()->draw(ctx, p, style, selection, selectionColor);
 }
 
@@ -130,29 +130,6 @@ Layout Layout::childAtIndex(int i) const {
   assert(i >= 0 && i < numberOfChildren());
   TreeHandle c = TreeHandle::childAtIndex(i);
   return static_cast<Layout &>(c);
-}
-
-bool Layout::privateHasTopLevelComparisonSymbol(
-    bool includingNotEqualSymbol) const {
-  if (type() != Poincare::LayoutNode::Type::HorizontalLayout) {
-    return false;
-  }
-  const int childrenCount = numberOfChildren();
-  for (int i = 0; i < childrenCount; i++) {
-    Poincare::Layout child = childAtIndex(i);
-    if ((child.type() == Poincare::LayoutNode::Type::CodePointLayout &&
-         static_cast<Poincare::CodePointLayout &>(child)
-             .codePoint()
-             .isEquationOperator()) ||
-        (includingNotEqualSymbol &&
-         child.type() == Poincare::LayoutNode::Type::CombinedCodePointsLayout &&
-         static_cast<Poincare::CombinedCodePointsLayout &>(child)
-             .node()
-             ->isNotEqualOperator())) {
-      return true;
-    }
-  }
-  return false;
 }
 
 }  // namespace Poincare

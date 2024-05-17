@@ -24,7 +24,7 @@ class MenuController : public Escher::ViewController,
                        public Escher::ButtonRowDelegate {
  public:
   MenuController(Escher::Responder *parentResponder, App *pythonDelegate,
-                 ScriptStore *scriptStore, Escher::ButtonRowController *footer);
+                 Escher::ButtonRowController *footer);
   ConsoleController *consoleController();
   Escher::StackViewController *stackViewController();
   void willExitResponderChain(Escher::Responder *nextFirstResponder) override;
@@ -54,8 +54,6 @@ class MenuController : public Escher::ViewController,
   Escher::HighlightCell *reusableCell(int index, int type) override;
   int reusableCellCount(int type) override;
   int typeAtLocation(int column, int row) override;
-  void willDisplayScriptTitleCellForIndex(Escher::HighlightCell *cell,
-                                          int index);
   KDCoordinate defaultRowHeight() override {
     return Escher::Metric::StoreRowHeight;
   }
@@ -69,18 +67,12 @@ class MenuController : public Escher::ViewController,
   /* TextFieldDelegate */
   bool textFieldShouldFinishEditing(Escher::AbstractTextField *textField,
                                     Ion::Events::Event event) override;
-  bool textFieldDidReceiveEvent(Escher::AbstractTextField *textField,
-                                Ion::Events::Event event) override {
-    return false;
-  }
   bool textFieldDidFinishEditing(Escher::AbstractTextField *textField,
-                                 const char *text,
                                  Ion::Events::Event event) override;
-  bool textFieldDidAbortEditing(Escher::AbstractTextField *textField) override {
-    return privateTextFieldDidAbortEditing(textField, true);
+  void textFieldDidAbortEditing(Escher::AbstractTextField *textField) override {
+    privateTextFieldDidAbortEditing(textField, true);
   }
-  bool textFieldDidHandleEvent(Escher::AbstractTextField *textField,
-                               bool returnValue, bool textDidChange) override;
+  void textFieldDidHandleEvent(Escher::AbstractTextField *textField) override;
 
   /* ButtonRowDelegate */
   int numberOfButtons(
@@ -108,13 +100,12 @@ class MenuController : public Escher::ViewController,
   void configureScript();
   void editScriptAtIndex(int scriptIndex);
   void updateAddScriptRowDisplay();
-  bool privateTextFieldDidAbortEditing(
+  void privateTextFieldDidAbortEditing(
       Escher::AbstractTextField *textField,
       bool menuControllerStaysInResponderChain);
   void forceTextFieldEditionToAbort(bool menuControllerStaysInResponderChain);
   void privateModalViewAltersFirstResponder(
       FirstResponderAlteration alteration) override;
-  ScriptStore *m_scriptStore;
   ScriptNameCell m_scriptCells[k_maxNumberOfDisplayableScriptCells];
   Escher::EvenOddCellWithEllipsis
       m_scriptParameterCells[k_maxNumberOfDisplayableScriptCells];

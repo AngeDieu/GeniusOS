@@ -7,6 +7,7 @@
 #include <escher/even_odd_editable_text_cell.h>
 #include <escher/even_odd_expression_cell.h>
 #include <escher/even_odd_message_text_cell.h>
+#include <escher/prefaced_twice_table_view.h>
 #include <escher/tab_view_controller.h>
 
 #include "editable_cell_table_view_controller.h"
@@ -14,15 +15,13 @@
 #include "function_store.h"
 #include "interval.h"
 #include "interval_parameter_controller.h"
-#include "prefaced_twice_table_view.h"
 #include "values_parameter_controller.h"
 
 namespace Shared {
 
 class ValuesController : public EditableCellTableViewController,
                          public Escher::ButtonRowDelegate,
-                         public Escher::AlternateEmptyViewDelegate,
-                         public Escher::SelectableTableViewDelegate {
+                         public Escher::AlternateEmptyViewDelegate {
  public:
   ValuesController(Escher::Responder* parentResponder,
                    Escher::ButtonRowController* header);
@@ -45,6 +44,7 @@ class ValuesController : public EditableCellTableViewController,
   Escher::HighlightCell* reusableCell(int index, int type) override;
   int reusableCellCount(int type) override;
   int typeAtLocation(int column, int row) override;
+  bool canStoreCellAtLocation(int column, int row) override { return row > 0; }
 
   // ButtonRowDelegate
   int numberOfButtons(Escher::ButtonRowController::Position) const override {
@@ -56,12 +56,6 @@ class ValuesController : public EditableCellTableViewController,
 
   // EditableCellTableViewController
   int numberOfRowsAtColumn(int i) const override;
-
-  // SelectableTableViewDelegate
-  bool canStoreContentOfCellAtLocation(Escher::SelectableTableView* t, int col,
-                                       int row) const override {
-    return row > 0;
-  }
 
   virtual IntervalParameterController* intervalParameterController() = 0;
   void initializeInterval();
@@ -80,10 +74,10 @@ class ValuesController : public EditableCellTableViewController,
   bool setDataAtLocation(double floatBody, int column, int row) override;
   void didChangeCell(int column, int row) override;
   int numberOfElementsInColumn(int column) const override;
+  KDCoordinate defaultColumnWidth() override;
 
   // Constructor helper
-  void setupSelectableTableViewAndCells(
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate);
+  void setupSelectableTableViewAndCells();
 
   // Parent controller getters
   Escher::StackViewController* stackController() const override;
@@ -112,6 +106,7 @@ class ValuesController : public EditableCellTableViewController,
   virtual Poincare::Layout* memoizedLayoutAtIndex(int i) = 0;
   // Coordinates of memoizedLayoutForCell refer to the absolute table
   Poincare::Layout memoizedLayoutForCell(int i, int j);
+  virtual void rowWasDeleted(int row, int colum);
 
   Escher::SelectableViewController* columnParameterController() override;
   Shared::ColumnParameters* columnParameters() override;
@@ -136,7 +131,7 @@ class ValuesController : public EditableCellTableViewController,
     return numberOfColumns() - numberOfAbscissaColumns();
   }
 
-  PrefacedTwiceTableView m_prefacedTwiceTableView;
+  Escher::PrefacedTwiceTableView m_prefacedTwiceTableView;
 
  private:
   // Specialization depending on the abscissa names (x, n, t...)

@@ -13,10 +13,8 @@ namespace Shared {
 
 class SingleRangeController : public FloatParameterController<float> {
  public:
-  SingleRangeController(
-      Escher::Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      MessagePopUpController* confirmPopUpController);
+  SingleRangeController(Escher::Responder* parentResponder,
+                        MessagePopUpController* confirmPopUpController);
   void viewWillAppear() override;
 
   int numberOfRows() const override { return k_numberOfTextCells + 2; }
@@ -35,7 +33,6 @@ class SingleRangeController : public FloatParameterController<float> {
 
   bool handleEvent(Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
 
  protected:
@@ -54,6 +51,7 @@ class SingleRangeController : public FloatParameterController<float> {
   void setAutoStatus(bool autoParam);
   virtual void setAutoRange() = 0;
   bool setParameterAtIndex(int parameterIndex, float f) override;
+  void setRange(float min, float max);
   virtual float limit() const = 0;
   virtual void confirmParameters() = 0;
   virtual void pop(bool onConfirmation) = 0;

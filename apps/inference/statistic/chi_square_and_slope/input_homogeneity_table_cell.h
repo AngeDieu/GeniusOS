@@ -33,17 +33,15 @@ class InputHomogeneityTableCell
   int innerNumberOfColumns() const override { return m_numberOfColumns; }
   void fillCellForLocation(Escher::HighlightCell* cell, int column,
                            int row) override;
+  bool canStoreCellAtLocation(int column, int row) override {
+    return column > 0 && row > 0;
+  }
 
   // DynamicCellsDataSource
   Escher::SelectableTableView* tableView() override {
     return &m_selectableTableView;
   }
-
-  // SelectableTableViewDelegate
-  bool canStoreContentOfCellAtLocation(Escher::SelectableTableView* t, int col,
-                                       int row) const override {
-    return col > 0 && row > 0;
-  }
+  void createCells() override;
 
  private:
   // ClearColumnHelper
@@ -58,12 +56,11 @@ class InputHomogeneityTableCell
         InferenceEvenOddEditableCell,
         k_homogeneityTableNumberOfReusableInnerCells>::cell(i);
   }
-  void willDisplayInnerCellAtLocation(Escher::HighlightCell* cell, int column,
-                                      int row) override;
+  void fillInnerCellForLocation(Escher::HighlightCell* cell, int column,
+                                int row) override;
   CategoricalController* categoricalController() override;
 
   // DynamicCellsDataSource
-  void createCells() override;
   void destroyCells() override;
   InputHomogeneityController* m_inputHomogeneityController;
 };

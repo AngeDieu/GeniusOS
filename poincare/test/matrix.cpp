@@ -11,10 +11,7 @@ static inline void assert_has_rank(const char *exp, int rank) {
   Expression e = parse_expression(exp, &context, false);
   quiz_assert(e.type() == ExpressionNode::Type::Matrix);
   Matrix *m = reinterpret_cast<Matrix *>(&e);
-  quiz_assert(rank == m->rank(&context, Preferences::ComplexFormat::Cartesian,
-                              Preferences::AngleUnit::Radian,
-                              Preferences::UnitFormat::Metric,
-                              ReductionTarget::SystemForApproximation, true));
+  quiz_assert(rank == m->rank(&context));
 }
 
 QUIZ_CASE(poincare_matrix_rank) {
@@ -23,6 +20,8 @@ QUIZ_CASE(poincare_matrix_rank) {
   assert_has_rank("[[1,0,0][0,1,0][0,0,0][0,0,0][1,1,1][0,0,1]]", 3);
   assert_has_rank("[[1,-1,0][0,1,2][0,1,2][0,1,2][0,1,2][0,1,2]]", 2);
   assert_has_rank("[[1,0,0,0,0,0][-1,1,1,1,1,1][0,2,2,2,2,2]]", 2);
+  // Can't canonize if a child cannot be approximated
+  assert_has_rank("[[1,2,3][1,3,x][1,4,6]]", -1);
 }
 
 QUIZ_CASE(poincare_matrix_undef) {

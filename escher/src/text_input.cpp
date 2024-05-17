@@ -8,22 +8,16 @@
 namespace Escher {
 /* TextInput::ContentView */
 
-void TextInput::ContentView::setFont(KDFont::Size font) {
-  m_font = font;
-  markWholeFrameAsDirty();
-}
-
 void TextInput::ContentView::setCursorLocation(const char* location) {
   assert(location != nullptr);
-  assert(location >= editedText());
-  const char* adjustedLocation =
-      std::min(location, editedText() + editedTextLength());
+  assert(location >= draftText());
+  const char* adjustedLocation = std::min(location, draftTextEnd());
   m_cursorLocation = adjustedLocation;
   layoutSubviews();
 }
 
 KDRect TextInput::ContentView::cursorRect() const {
-  return glyphFrameAtPosition(editedText(), m_cursorLocation);
+  return glyphFrameAtPosition(draftText(), m_cursorLocation);
 }
 
 void TextInput::ContentView::updateSelection(
@@ -52,13 +46,6 @@ bool TextInput::ContentView::resetSelection() {
 
 bool TextInput::ContentView::selectionIsEmpty() const {
   return m_selectionStart == nullptr;
-}
-
-void TextInput::ContentView::setAlignment(float horizontalAlignment,
-                                          float verticalAlignment) {
-  m_horizontalAlignment = horizontalAlignment;
-  m_verticalAlignment = verticalAlignment;
-  markWholeFrameAsDirty();
 }
 
 void TextInput::ContentView::reloadRectFromPosition(
@@ -144,11 +131,6 @@ void TextInput::deleteSelection() {
   layoutSubviews(
       true);  // Set the cursor frame by calling the subviews relayouting
   scrollToCursor();
-}
-
-void TextInput::setAlignment(float horizontalAlignment,
-                             float verticalAlignment) {
-  contentView()->setAlignment(horizontalAlignment, verticalAlignment);
 }
 
 bool TextInput::insertTextAtLocation(const char* text, char* location) {

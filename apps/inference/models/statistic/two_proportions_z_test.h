@@ -1,8 +1,6 @@
 #ifndef INFERENCE_MODELS_STATISTIC_TWO_PROPORTIONS_Z_TEST_H
 #define INFERENCE_MODELS_STATISTIC_TWO_PROPORTIONS_Z_TEST_H
 
-#include "interfaces/distributions.h"
-#include "interfaces/significance_tests.h"
 #include "test.h"
 
 namespace Inference {
@@ -18,9 +16,6 @@ class TwoProportionsZTest : public Test {
     return DistributionType::Z;
   }
   I18n::Message title() const override { return TwoProportions::Title(); }
-  I18n::Message graphTitleFormat() const override {
-    return DistributionZ::GraphTitleFormat();
-  }
   void tidy() override { m_p1p2Layout = m_p2Layout = Poincare::Layout(); }
 
   // Significance Test: TwoProportions
@@ -46,22 +41,6 @@ class TwoProportionsZTest : public Test {
   Poincare::Layout estimateLayout(int index) const override;
   I18n::Message estimateDescription(int index) override;
 
-  // Distribution: z
-  Poincare::Layout testCriticalValueSymbol() override {
-    return DistributionZ::TestCriticalValueSymbol();
-  }
-  float canonicalDensityFunction(float x) const override {
-    return DistributionZ::CanonicalDensityFunction(x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveFunctionAtAbscissa(double x) const override {
-    return DistributionZ::CumulativeNormalizedDistributionFunction(
-        x, m_degreesOfFreedom);
-  }
-  double cumulativeDistributiveInverseForProbability(double p) const override {
-    return DistributionZ::CumulativeNormalizedInverseDistributionFunction(
-        p, m_degreesOfFreedom);
-  }
-
  private:
   // Significance Test: TwoProportions
   bool validateInputs() override {
@@ -75,10 +54,6 @@ class TwoProportionsZTest : public Test {
     return TwoProportions::ParameterRepresentationAtIndex(i);
   }
   double* parametersArray() override { return m_params; }
-  // Distribution: z
-  float computeYMax() const override {
-    return DistributionZ::YMax(m_degreesOfFreedom);
-  }
 
   double m_params[TwoProportions::k_numberOfParams];
   enum class EstimatesOrder { P1, P2, Pooled };

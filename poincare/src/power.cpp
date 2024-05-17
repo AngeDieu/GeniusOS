@@ -90,27 +90,26 @@ TrinaryBoolean PowerNode::isNull(Context *context) const {
 
 int PowerNode::polynomialDegree(Context *context,
                                 const char *symbolName) const {
-  int deg = ExpressionNode::polynomialDegree(context, symbolName);
-  if (deg == 0) {
-    return deg;
+  if (ExpressionNode::polynomialDegree(context, symbolName) == 0) {
+    return 0;
   }
   int op0Deg = childAtIndex(0)->polynomialDegree(context, symbolName);
   if (op0Deg < 0) {
     return -1;
   }
-  if (childAtIndex(1)->type() == ExpressionNode::Type::Rational) {
-    RationalNode *r = static_cast<RationalNode *>(childAtIndex(1));
-    if (!r->isInteger() || Number(r).isPositive() == TrinaryBoolean::False) {
-      return -1;
-    }
-    Integer numeratorInt = r->signedNumerator();
-    if (!numeratorInt.isExtractable()) {
-      return -1;
-    }
-    op0Deg *= numeratorInt.extractedInt();
-    return op0Deg;
+  if (childAtIndex(1)->type() != ExpressionNode::Type::Rational) {
+    return -1;
   }
-  return -1;
+  RationalNode *r = static_cast<RationalNode *>(childAtIndex(1));
+  if (!r->isInteger() || Number(r).isPositive() == TrinaryBoolean::False) {
+    return -1;
+  }
+  Integer numeratorInt = r->signedNumerator();
+  if (!numeratorInt.isExtractable()) {
+    return -1;
+  }
+  op0Deg *= numeratorInt.extractedInt();
+  return op0Deg;
 }
 
 Expression PowerNode::removeUnit(Expression *unit) {
@@ -181,7 +180,7 @@ double PowerNode::degreeForSortingAddition(bool symbolsOnly) const {
 // Private
 
 template <typename T>
-Complex<T> PowerNode::computeNotPrincipalRealRootOfRationalPow(
+std::complex<T> PowerNode::computeNotPrincipalRealRootOfRationalPow(
     const std::complex<T> c, T p, T q) {
   // Assert p and q are in fact integers
   assert(std::round(p) == p);
@@ -199,21 +198,21 @@ Complex<T> PowerNode::computeNotPrincipalRealRootOfRationalPow(
     std::complex<T> absc = c;
     absc.real(std::fabs(absc.real()));
     // compute |c|^(p/q) which is a real
-    Complex<T> absCPowD = PowerNode::computeOnComplex<T>(
+    std::complex<T> absCPowD = PowerNode::computeOnComplex<T>(
         absc, std::complex<T>(p / q), Preferences::ComplexFormat::Real);
     /* As q is odd, c^(p/q) = (sign(c)^(1/q))^p * |c|^(p/q)
      *                      = sign(c)^p         * |c|^(p/q)
      *                      = -|c|^(p/q) iff c < 0 and p odd */
     return c.real() < static_cast<T>(0.0) &&
                    std::pow(static_cast<T>(-1.0), p) < static_cast<T>(0.0)
-               ? Complex<T>::Builder(-absCPowD.complexAtIndex(0))
+               ? -absCPowD
                : absCPowD;
   }
-  return Complex<T>::Undefined();
+  return complexNAN<T>();
 }
 
 template <typename T>
-Complex<T> PowerNode::computeOnComplex(
+std::complex<T> PowerNode::computeOnComplex(
     const std::complex<T> c, const std::complex<T> d,
     Preferences::ComplexFormat complexFormat) {
   if (c.imag() == static_cast<T>(0.0) && c.real() < static_cast<T>(0.0) &&
@@ -221,7 +220,7 @@ Complex<T> PowerNode::computeOnComplex(
        (d.real() == -INFINITY && c.real() >= static_cast<T>(-1.0)))) {
     /* x^inf with x <= -1 and x^(-inf) with -1 <= x <= 0 are approximated to
      * complex infinity, which we don't handle. We decide to return undef. */
-    return Complex<T>::Undefined();
+    return complexNAN<T>();
   }
   std::complex<T> result;
   if (c.imag() == static_cast<T>(0.0) && d.imag() == static_cast<T>(0.0) &&
@@ -232,7 +231,7 @@ Complex<T> PowerNode::computeOnComplex(
         std::fabs(d.real()) == INFINITY) {
       /* On simulator, std::pow(1,Inf) is approximated to 1, which is not the
        * behavior we want. */
-      return Complex<T>::RealUndefined();
+      return complexRealNAN<T>();
     }
 #endif
     /* pow: (R+, R) -> R+ (2^1.3 ~ 2.46)
@@ -267,13 +266,12 @@ Complex<T> PowerNode::computeOnComplex(
      * Neglecting it could cause visual artefacts when plotting x^x with a
      * cartesian complex format. The issue is still visible when x is so small
      * that result is 0, which is plotted even though it is "complex". */
-    return Complex<T>::Builder(result);
+    return result;
   }
   std::complex<T> precision =
       d.real() < static_cast<T>(0.0) ? std::pow(c, static_cast<T>(-1.0)) : c;
-  return Complex<T>::Builder(
-      ApproximationHelper::NeglectRealOrImaginaryPartIfNeglectable(
-          result, precision, d, false));
+  return ApproximationHelper::NeglectRealOrImaginaryPartIfNeglectable(
+      result, precision, d, false);
 }
 
 // Layout
@@ -300,24 +298,26 @@ Layout PowerNode::createLayout(Preferences::PrintFloatMode floatDisplayMode,
 
 bool PowerNode::childNeedsSystemParenthesesAtSerialization(
     const TreeNode *child) const {
+  const ExpressionNode *childE = static_cast<const ExpressionNode *>(child);
   if (childAtIndex(0)->type() == Type::ConstantMaths &&
       static_cast<const ConstantNode *>(childAtIndex(0))->isExponentialE() &&
-      indexOfChild(child) == 1) {
-    return static_cast<const ExpressionNode *>(child)->type() !=
-           Type::Parenthesis;
+      indexOfChild(childE) == 1) {
+    return childE->type() != Type::Parenthesis;
   }
-  if (static_cast<const ExpressionNode *>(child)->isNumber() &&
-      Number(static_cast<const NumberNode *>(child)).isPositive() ==
+  if (childE->isNumber() &&
+      Number(static_cast<const NumberNode *>(childE)).isPositive() ==
           TrinaryBoolean::False) {
     return true;
   }
-  if (static_cast<const ExpressionNode *>(child)->type() == Type::Rational &&
-      !static_cast<const RationalNode *>(child)->isInteger()) {
+  if (childE->type() == Type::Rational &&
+      !static_cast<const RationalNode *>(childE)->isInteger()) {
     return true;
   }
-  return static_cast<const ExpressionNode *>(child)->isOfType(
-      {Type::Power, Type::Subtraction, Type::Opposite, Type::Multiplication,
-       Type::Division, Type::Addition, Type::MixedFraction});
+  return childE->isOfType({Type::Power, Type::Subtraction, Type::Opposite,
+                           Type::Multiplication, Type::Division, Type::Addition,
+                           Type::MixedFraction, Type::PercentAddition,
+                           Type::PercentSimple, Type::Comparison,
+                           Type::BinaryLogicalOperator});
 }
 
 int PowerNode::serialize(char *buffer, int bufferSize,
@@ -404,16 +404,13 @@ MatrixComplex<T> PowerNode::computeOnMatrixAndComplex(
 template <typename T>
 Evaluation<T> PowerNode::templatedApproximate(
     const ApproximationContext &approximationContext) const {
+  Evaluation<T> base = childAtIndex(0)->approximate(T(), approximationContext);
   /* Special case: c^(p/q) with p, q integers
    * In real mode, c^(p/q) might have a real root which is not the principal
    * root. We return this value in that case to avoid returning "nonreal". */
   if (approximationContext.complexFormat() ==
-      Preferences::ComplexFormat::Real) {
-    Evaluation<T> base =
-        childAtIndex(0)->approximate(T(), approximationContext);
-    if (base.type() != EvaluationNode<T>::Type::Complex) {
-      goto defaultApproximation;
-    }
+          Preferences::ComplexFormat::Real &&
+      base.type() == EvaluationNode<T>::Type::Complex) {
     std::complex<T> c = base.complexAtIndex(0);
     T p = NAN;
     T q = NAN;
@@ -447,14 +444,17 @@ Evaluation<T> PowerNode::templatedApproximate(
     if (std::isnan(p) || std::isnan(q)) {
       goto defaultApproximation;
     }
-    Complex<T> result = computeNotPrincipalRealRootOfRationalPow(c, p, q);
+    Complex<T> result =
+        Complex<T>::Builder(computeNotPrincipalRealRootOfRationalPow(c, p, q));
     if (!result.isUndefined()) {
       return std::move(result);
     }
   }
 defaultApproximation:
-  return ApproximationHelper::MapReduce<T>(this, approximationContext,
-                                           Compute<T>);
+  Evaluation<T> result =
+      Compute<T>(base, childAtIndex(1)->approximate(T(), approximationContext),
+                 approximationContext.complexFormat());
+  return result.isUndefined() ? Complex<T>::Undefined() : result;
 }
 
 // Power
@@ -462,31 +462,22 @@ defaultApproximation:
 int Power::getPolynomialCoefficients(Context *context, const char *symbolName,
                                      Expression coefficients[]) const {
   int deg = polynomialDegree(context, symbolName);
-  if (deg <= 0) {
-    return Expression::defaultGetPolynomialCoefficients(context, symbolName,
-                                                        coefficients);
+  if (deg <= 0 || deg > Expression::k_maxPolynomialDegree) {
+    return defaultGetPolynomialCoefficients(deg, context, symbolName,
+                                            coefficients);
   }
-  /* Here we only consider the case x^4 as privateGetPolynomialCoefficients is
-   * supposed to be called after reducing the expression. */
-  if (childAtIndex(0).type() == ExpressionNode::Type::Symbol &&
-      strcmp(childAtIndex(0).convert<Symbol>().name(), symbolName) == 0 &&
-      childAtIndex(1).type() == ExpressionNode::Type::Rational) {
-    Rational r = childAtIndex(1).convert<Rational>();
-    if (!r.isInteger() || r.isPositive() == TrinaryBoolean::False) {
-      return -1;
+  assert(childAtIndex(1).type() == ExpressionNode::Type::Rational);
+  if (childAtIndex(0).type() == ExpressionNode::Type::Symbol) {
+    assert(strcmp(childAtIndex(0).convert<Symbol>().name(), symbolName) == 0);
+    assert(childAtIndex(1)
+               .convert<Rational>()
+               .unsignedIntegerNumerator()
+               .extractedInt() == deg);
+    for (int i = 0; i < deg; i++) {
+      coefficients[i] = Rational::Builder(0);
     }
-    Integer num = r.unsignedIntegerNumerator();
-    if (!num.isExtractable()) {
-      return -1;
-    }
-    int n = num.extractedInt();
-    if (n <= k_maxPolynomialDegree) {
-      for (int i = 0; i < n; i++) {
-        coefficients[i] = Rational::Builder(0);
-      }
-      coefficients[n] = Rational::Builder(1);
-      return n;
-    }
+    coefficients[deg] = Rational::Builder(1);
+    return deg;
   }
   return -1;
 }
@@ -555,6 +546,7 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
   }
 
   Context *context = reductionContext.context();
+  ApproximationContext approximationContext(reductionContext, true);
   Expression base = childAtIndex(0);
   Expression index = childAtIndex(1);
   ExpressionNode::Type baseType = base.type();
@@ -832,9 +824,7 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
   if (baseType == ExpressionNode::Type::Rational &&
       indexType == ExpressionNode::Type::Addition &&
       index.childAtIndex(0).type() == ExpressionNode::Type::Rational) {
-    /* Clone base and index since PowerRationalRational could alter base and/or
-     * index, and make this corrupted when escaping because reduction failed. */
-    Rational rationalIndex = index.childAtIndex(0).clone().convert<Rational>();
+    Rational rationalIndex = index.childAtIndex(0).convert<Rational>();
     if (rationalIndex.unsignedIntegerNumerator().isOne() &&
         !rationalIndex.isInteger()) {
       /* Escape here to avoid infinite loops with the multiplication.
@@ -846,9 +836,8 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
        *   this rule in that case */
       return *this;
     }
-    Rational rationalBase = base.clone().convert<Rational>();
-    Expression p1 =
-        PowerRationalRational(rationalBase, rationalIndex, reductionContext);
+    Expression p1 = SafePowerRationalRational(base.convert<Rational>(),
+                                              rationalIndex, reductionContext);
     if (p1.isUninitialized()) {
       return *this;
     }
@@ -865,28 +854,69 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
     return m.shallowReduce(reductionContext);
   }
 
+  /* Step 8
+   * Merge with the base if it is a power: (a^b)^c -> a^(b*c) */
+  if (baseType == ExpressionNode::Type::Power) {
+    Expression a = base.childAtIndex(0);
+    Expression b = base.childAtIndex(1);
+    /* This rule is not generally true: ((-2)^2)^(1/2) != (-2)^(2*1/2) = -2
+     * This rule is true only if a > 0 OR c is integer */
+    if ((index.isNumber() && static_cast<Number &>(index).isInteger()) ||
+        a.isPositive(context) == TrinaryBoolean::True ||
+        a.approximateToScalar<double>(approximationContext) >
+            Float<double>::EpsilonLax()) {
+      Multiplication m =
+          Multiplication::Builder(base.childAtIndex(1).clone(), index);
+      replaceChildAtIndexInPlace(0, base.childAtIndex(0).clone());
+      replaceChildAtIndexInPlace(1, m);
+      m.shallowReduce(reductionContext);
+      /* Add dependency if needed.
+       * We should add a dependency if (a^b) is a type of power that
+       * needs dependency and if the newly created power does not need
+       * the same dependency (in which case it does not need to be created
+       * since the dependency info is still contained in the expression).
+       * For example:
+       * - x^(1/2)^4 needs a dependency since x^2 loses the info of x
+       *   needing to be positive (in real mode).
+       * - x^(1/2)^3 does not need a dependency since x^(3/2) keeps the
+       *   same interval of definition as x^(1/2) */
+      List listOfDependencies = List::Builder();
+      AddPowerToListOfDependenciesIfNeeded(base, *this, listOfDependencies,
+                                           reductionContext, false);
+      if (listOfDependencies.numberOfChildren() > 0) {
+        Dependency dep =
+            Dependency::Builder(Undefined::Builder(), listOfDependencies);
+        replaceWithInPlace(dep);
+        dep.replaceChildAtIndexInPlace(0, *this);
+        shallowReduce(reductionContext);
+        return dep.shallowReduce(reductionContext);
+      }
+      return shallowReduce(reductionContext);
+    }
+    return *this;
+  }
+
   /* From this point onward, all simplifications assume index is rational. */
   if (indexType != ExpressionNode::Type::Rational) {
     return *this;
   }
   Rational rationalIndex = static_cast<Rational &>(index);
 
-  /* Step 8
+  /* Step 9
    * Handle the case of base being a number */
   if (base.isNumber()) {
-    /* Step 8.1
+    /* Step 9.1
      * Handle the simple case of r^s, whith r and s rational. */
     if (baseType == ExpressionNode::Type::Rational) {
-      Rational rationalBase = static_cast<Rational &>(base);
-      Expression e =
-          PowerRationalRational(rationalBase, rationalIndex, reductionContext);
+      Expression e = SafePowerRationalRational(base.convert<Rational>(),
+                                               rationalIndex, reductionContext);
       if (e.isUninitialized()) {
         return *this;
       }
       replaceWithInPlace(e);
       return e;
     }
-    /* Step 8.2
+    /* Step 9.2
      * Other cases */
     Expression e = Number::Power(static_cast<Number &>(base), rationalIndex);
     if (e.isUninitialized()) {
@@ -896,7 +926,7 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
     return e;
   }
 
-  /* Step 9
+  /* Step 10
    * Depending on the target, the constant i is not always reduced to a
    * cartesian, but its rational power can be simplified nonetheless. */
   if (baseType == ExpressionNode::Type::ConstantMaths &&
@@ -927,7 +957,7 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
     }
   }
 
-  /* Step 10
+  /* Step 11
    * Distribute power over the multiplication */
   int baseChildren = base.numberOfChildren();
   if (baseType == ExpressionNode::Type::Multiplication) {
@@ -946,95 +976,51 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
      * a is a number or a is positive.
      * This is mainly to avoid infinite loop where a.setSign(positive)
      * would create the expression -1*a which would be reduced here again.*/
-    Multiplication multiplicationBase = static_cast<Multiplication &>(base);
-    for (int i = 0; i < baseChildren; i++) {
+    Multiplication mResult = Multiplication::Builder();
+    int i = 0;
+    while (base.type() == ExpressionNode::Type::Multiplication &&
+           i < baseChildren) {
+      Multiplication multiplicationBase = static_cast<Multiplication &>(base);
       Expression child = base.childAtIndex(i);
-      TrinaryBoolean childSign = child.isPositive(context);
       if (child.isMinusOne()) {
         // a can't be -1
+        i += 1;
         continue;
       }
-      if (childSign == TrinaryBoolean::True ||
-          (childSign == TrinaryBoolean::False && child.isNumber())) {
-        if (childSign == TrinaryBoolean::False) {
-          multiplicationBase.replaceChildAtIndexInPlace(i,
-                                                        Rational::Builder(-1));
-        } else {
-          multiplicationBase.removeChildAtIndexInPlace(i);
-        }
-        multiplicationBase.shallowReduce(reductionContext);
-        Power p = Power::Builder(child, index.clone());
-        child.setSign(true, reductionContext);
-        Multiplication m = Multiplication::Builder(p);
-        p.shallowReduce(reductionContext);
-        Power thisRef = *this;
-        replaceWithInPlace(m);
-        m.addChildAtIndexInPlace(thisRef, 1, 1);
-        thisRef.shallowReduce(reductionContext);
-        return m.shallowReduce(reductionContext);
-      }
-    }
-  }
 
-  /* Step 11
-   * Merge with the base if it is a power: (a^b)^c -> a^(b*c)
-   * This rule is not generally true: ((-2)^2)^(1/2) != (-2)^(2*1/2) = -2
-   * This rule is true if a > 0
-   * OR c is integer
-   *
-   * Note: We also apply if c = -1
-   * If we did not apply this rule on expressions of the form (a^b)^(-1),
-   * we would end up in infinite loop when factorizing an addition on the same
-   * denominator. For ex:
-   * 1+[tan(2)^1/2]^(-1) -->
-   * (tan(2)^1/2+tan(2)^1/2*[tan(2)^1/2]^(-1))/tan(2)^1/2
-   *                     --> tan(2)+tan(2)*[tan(2)^1/2]^(-1)/tan(2)
-   *                     -->
-   * tan(2)^(3/2)+tan(2)^(3/2)*[tan(2)^1/2]^(-1)/tan(2)^3/2
-   *                     --> ...
-   * Indeed, we have to apply the rule (a^b)^c -> a^(b*c) as soon as c is -1. */
-  if (baseType == ExpressionNode::Type::Power) {
-    Expression a = base.childAtIndex(0);
-    Expression b = base.childAtIndex(1);
-    /* For (a^b)^c, apply the rule :
-     * if c = -1
-     * OR a > 0
-     * OR c is integer */
-    if (rationalIndex.isMinusOne() ||
-        a.isPositive(context) == TrinaryBoolean::True ||
-        a.approximateToScalar<double>(context, reductionContext.complexFormat(),
-                                      reductionContext.angleUnit(),
-                                      true) > Float<double>::EpsilonLax() ||
-        rationalIndex.isInteger()) {
-      Multiplication m =
-          Multiplication::Builder(base.childAtIndex(1).clone(), index);
-      replaceChildAtIndexInPlace(0, base.childAtIndex(0).clone());
-      replaceChildAtIndexInPlace(1, m);
-      m.shallowReduce(reductionContext);
-      /* Add dependency if needed.
-       * We should add a dependency if (a^b) is a type of power that
-       * needs dependency and if the newly created power does not need
-       * the same dependency (in which case it does not need to be created
-       * since the dependency info is still contained in the expression).
-       * For example:
-       * - x^(1/2)^4 needs a dependency since x^2 loses the info of x
-       *   needing to be positive (in real mode).
-       * - x^(1/2)^3 does not need a dependency since x^(3/2) keeps the
-       *   same interval of definition as x^(1/2) */
-      List listOfDependencies = List::Builder();
-      AddPowerToListOfDependenciesIfNeeded(base, *this, listOfDependencies,
-                                           reductionContext, false);
-      if (listOfDependencies.numberOfChildren() > 0) {
-        Dependency dep =
-            Dependency::Builder(Undefined::Builder(), listOfDependencies);
-        replaceWithInPlace(dep);
-        dep.replaceChildAtIndexInPlace(0, *this);
-        shallowReduce(reductionContext);
-        return dep.shallowReduce(reductionContext);
+      TrinaryBoolean childSign = child.isPositive(context);
+      if (childSign != TrinaryBoolean::True &&
+          (childSign != TrinaryBoolean::False || !child.isNumber())) {
+        i += 1;
+        continue;
       }
-      return shallowReduce(reductionContext);
+
+      if (childSign == TrinaryBoolean::False) {
+        multiplicationBase.replaceChildAtIndexInPlace(i, Rational::Builder(-1));
+      } else {
+        multiplicationBase.removeChildAtIndexInPlace(i);
+      }
+      multiplicationBase.shallowReduce(reductionContext);
+
+      Power p = Power::Builder(child, index.clone());
+      child.setSign(true, reductionContext);
+      mResult.addChildAtIndexInPlace(p, mResult.numberOfChildren(),
+                                     mResult.numberOfChildren());
+      p.shallowReduce(reductionContext);
+
+      base = childAtIndex(0);
+      i = 0;
+      baseChildren = base.numberOfChildren();
     }
-    return *this;
+
+    if (mResult.numberOfChildren() > 0) {
+      Power thisRef = *this;
+      replaceWithInPlace(mResult);
+      mResult.addChildAtIndexInPlace(thisRef, mResult.numberOfChildren(),
+                                     mResult.numberOfChildren());
+      thisRef.shallowReduce(reductionContext);
+      return mResult.shallowReduce(reductionContext);
+    }
   }
 
   /* Step 12
@@ -1168,6 +1154,9 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
                 Integer::Multiplication(Integer::Power(n2, Integer(2)),
                                         Integer::Power(d1, Integer(2))),
                 Integer::Multiplication(p2, q1)));
+        if (denominator.isOverflow() || denominator.isZero()) {
+          return *this;
+        }
 
         // Compute the numerator
         Integer pq1 = Integer::Multiplication(p1, q1);
@@ -1193,8 +1182,8 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
         } else {
           numerator = Subtraction::Builder(m1, m2);
         }
-        if (denominator.isOverflow() || factor1.isOverflow() ||
-            factor2.isOverflow() || pq1.isOverflow() || pq2.isOverflow()) {
+        if (factor1.isOverflow() || factor2.isOverflow() || pq1.isOverflow() ||
+            pq2.isOverflow()) {
           return *this;  // Escape
         }
         numerator = numerator.deepReduce(reductionContext);
@@ -1249,9 +1238,7 @@ Expression Power::shallowReduce(ReductionContext reductionContext) {
         return *this;
       }
       Expression result = Addition::Builder(firstTerm, secondTerm);
-      if (result.approximateToScalar<float>(
-              context, reductionContext.complexFormat(),
-              reductionContext.angleUnit(), true) < 0.f) {
+      if (result.approximateToScalar<float>(approximationContext) < 0.f) {
         Multiplication m =
             Multiplication::Builder(Rational::Builder(-1), result);
         result.shallowReduce(reductionContext);
@@ -1275,16 +1262,14 @@ Expression Power::shallowBeautify(const ReductionContext &reductionContext) {
   Expression p = denominator(reductionContext);
   // If the denominator is initialized, the index of the power is of form -y
   if (!p.isUninitialized()) {
-    if (Trigonometry::isDirectTrigonometryFunction(p) &&
+    if (Trigonometry::IsDirectTrigonometryFunction(p) &&
         (p.type() != ExpressionNode::Type::Tangent ||
-         !p.approximate<float>(reductionContext.context(),
-                               reductionContext.complexFormat(),
-                               reductionContext.angleUnit(), true)
+         !p.approximate<float>(ApproximationContext(reductionContext, true))
               .isUndefined())) {
       /* Replace this inverse with denominator's advanced equivalent.
        * except if it's 1/tan(x) and tan(x) = undef.
        * Because 1/tan(pi/2) = undef but cot(pi/2) = 0 */
-      return Trigonometry::replaceWithAdvancedFunction(*this, p);
+      return Trigonometry::ReplaceWithAdvancedFunction(*this, p);
     }
     Division d = Division::Builder(Rational::Builder(1), p);
     replaceWithInPlace(d);
@@ -1465,37 +1450,35 @@ Expression Power::denominator(const ReductionContext &reductionContext) const {
   return pow;
 }
 
-Expression Power::PowerRationalRational(
+Expression Power::SafePowerRationalRational(
+    const Rational base, const Rational index,
+    const ReductionContext &reductionContext) {
+  /* Clone base and index since this method could alter base and/or
+   * index, and make this corrupted when escaping because reduction failed. */
+  Rational rationalBase = base.clone().convert<Rational>();
+  Rational rationalIndex = index.clone().convert<Rational>();
+  return UnsafePowerRationalRational(rationalBase, rationalIndex,
+                                     reductionContext);
+}
+
+Expression Power::UnsafePowerRationalRational(
     Rational base, Rational index, const ReductionContext &reductionContext) {
   assert(!base.numeratorOrDenominatorIsInfinity() &&
          !index.numeratorOrDenominatorIsInfinity());
   /* Handle this case right now to always reduce to Nonreal if needed. */
   if (base.isNegative()) {
-    Multiplication res = Multiplication::Builder();
-    /* Compute -1^(a/b) */
-    if (reductionContext.complexFormat() == Preferences::ComplexFormat::Real) {
-      /* On real numbers (-1)^(a/b) =
-       * - 1 if a is even
-       * - -1 if a and b are odd
-       * - has no real solution otherwise */
-      if (!index.unsignedIntegerNumerator().isEven()) {
-        if (index.integerDenominator().isEven()) {
-          return Nonreal::Builder();
-        } else {
-          res.addChildAtIndexInPlace(Rational::Builder(-1), 0,
-                                     res.numberOfChildren());
-        }
-      }
-    } else {
-      // On complex numbers, we pick the first root (-1)^(a/b) = e^(i*pi*a/b)
-      Rational indexClone = index.clone().convert<Rational>();
-      Expression exp = CreateComplexExponent(indexClone, reductionContext);
-      res.addChildAtIndexInPlace(exp, res.numberOfChildren(),
-                                 res.numberOfChildren());
-      exp.shallowReduce(reductionContext);
+    Expression exp = MinusOnePowerRational(index, reductionContext);
+    if (base.isMinusOne()) {
+      /* TODO: Generalize to (-a)^big -> (-1)^big * a^big with (-1)^big reduced?
+       * What about in complex mode ? We might not want e^iπ * a^big. */
+      return exp;
     }
+    Multiplication res = Multiplication::Builder();
+    res.addChildAtIndexInPlace(exp, res.numberOfChildren(),
+                               res.numberOfChildren());
     base.setSign(true);
-    Expression res2 = PowerRationalRational(base, index, reductionContext);
+    Expression res2 =
+        UnsafePowerRationalRational(base, index, reductionContext);
     if (res2.isUninitialized()) {
       return Expression();
     } else {
@@ -1524,7 +1507,7 @@ Expression Power::PowerRationalRational(
       return std::move(base);
     }
     index.setSign(true);
-    return PowerRationalRational(base, index, reductionContext);
+    return UnsafePowerRationalRational(base, index, reductionContext);
   }
   assert(!index.isNegative());
   /* We are handling an expression of the form (p/q)^(a/b), with a and b
@@ -1546,14 +1529,14 @@ Expression Power::PowerRationalRational(
   }
   d.setNegative(true);
   Rational f1 = Rational::IntegerPower(Rational::Builder(q), d);
-  Expression f2 = PowerIntegerRational(p, index, reductionContext);
+  Expression f2 = UnsafePowerIntegerRational(p, index, reductionContext);
   Expression f3 =
-      PowerIntegerRational(q, Rational::Builder(c, b), reductionContext);
+      UnsafePowerIntegerRational(q, Rational::Builder(c, b), reductionContext);
   Multiplication m = Multiplication::Builder({f1, f2, f3});
   return m.shallowReduce(reductionContext);
 }
 
-Expression Power::PowerIntegerRational(
+Expression Power::UnsafePowerIntegerRational(
     Integer base, Rational index, const ReductionContext &reductionContext) {
   assert(!index.isNegative());
   if (base.isZero()) {
@@ -1725,6 +1708,28 @@ Expression Power::ReduceLogarithmLinearCombination(
   return linearCombination;
 }
 
+Expression Power::MinusOnePowerRational(
+    const Rational index, const ReductionContext &reductionContext) {
+  /* Compute -1^(a/b) */
+  if (reductionContext.complexFormat() == Preferences::ComplexFormat::Real) {
+    /* On real numbers (-1)^(a/b) =
+     * - 1 if a is even
+     * - -1 if a and b are odd
+     * - has no real solution otherwise */
+    if (index.unsignedIntegerNumerator().isEven()) {
+      return Rational::Builder(1);
+    } else if (!index.integerDenominator().isEven()) {
+      return Rational::Builder(-1);
+    } else {
+      return Nonreal::Builder();
+    }
+  }
+  // On complex numbers, we pick the first root (-1)^(a/b) = e^(i*pi*a/b)
+  Rational indexClone = index.clone().convert<Rational>();
+  Expression exp = CreateComplexExponent(indexClone, reductionContext);
+  return exp.shallowReduce(reductionContext);
+}
+
 bool Power::isNthRootOfUnity() const {
   /* Nth roots of unity are expression of the form exp(i*pi) or exp(r*i*pi)
    * with r rational.  */
@@ -1802,14 +1807,15 @@ bool Power::RationalExponentShouldNotBeReduced(const Rational &b,
          powerNumerator > FLT_MAX || powerDenominator > FLT_MAX;
 }
 
-template Complex<float> PowerNode::computeOnComplex<float>(
+template std::complex<float> PowerNode::computeOnComplex<float>(
     std::complex<float>, std::complex<float>, Preferences::ComplexFormat);
-template Complex<double> PowerNode::computeOnComplex<double>(
+template std::complex<double> PowerNode::computeOnComplex<double>(
     std::complex<double>, std::complex<double>, Preferences::ComplexFormat);
 
-template Complex<double> PowerNode::computeNotPrincipalRealRootOfRationalPow<
-    double>(std::complex<double>, double, double);
-template Complex<float>
+template std::complex<double>
+PowerNode::computeNotPrincipalRealRootOfRationalPow<double>(
+    std::complex<double>, double, double);
+template std::complex<float>
 PowerNode::computeNotPrincipalRealRootOfRationalPow<float>(std::complex<float>,
                                                            float, float);
 

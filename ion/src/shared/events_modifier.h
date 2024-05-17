@@ -10,23 +10,17 @@ namespace Events {
 class ModifierState {
  public:
   ModifierState()
-      : m_shiftAlphaStatus(ShiftAlphaStatus::Default),
+      : m_shiftAlphaStatus(),
         m_shiftIsHeldAndUsed(false),
         m_alphaIsHeldAndUsed(false),
         m_longPressCounter(0),
         m_repetitionCounter(0) {}
-  void removeShift();
-  void removeAlpha();
-  bool isShiftActive();
-  bool isAlphaActive();
-  bool isLockActive();
-  ShiftAlphaStatus shiftAlphaStatus() const { return m_shiftAlphaStatus; }
-  void setShiftAlphaStatus(ShiftAlphaStatus s);
+  ShiftAlphaStatus* shiftAlphaStatus() { return &m_shiftAlphaStatus; }
   bool wasShiftReleased(Keyboard::State state);
   bool wasAlphaReleased(Keyboard::State state);
   void updateModifiersFromEvent(Event e, Keyboard::State state);
-  int longPressCounter() { return m_longPressCounter; }
-  int repetitionFactor() { return m_repetitionCounter; }
+  int longPressCounter() const { return m_longPressCounter; }
+  int repetitionFactor() const { return m_repetitionCounter; }
   void resetLongPress() { m_longPressCounter = 0; }
   void incrementLongPress() { m_longPressCounter++; }
   void incrementOrResetRepetition(bool increment);
@@ -35,10 +29,10 @@ class ModifierState {
   ShiftAlphaStatus m_shiftAlphaStatus;
   bool m_shiftIsHeldAndUsed;
   bool m_alphaIsHeldAndUsed;
-  int m_longPressCounter;   // How long the event has been pressed (Computed
-                            // value)
-  int m_repetitionCounter;  // How much the event has been repeatedly pressed
-                            // (Raw value)
+  // How long the event has been pressed (Computed value)
+  int m_longPressCounter;
+  // How much the event has been repeatedly pressed (Raw value)
+  int m_repetitionCounter;
 };
 
 extern OMG::GlobalBox<ModifierState> SharedModifierState;

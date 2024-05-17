@@ -32,8 +32,7 @@ class Controller : public Escher::ViewController,
   int reusableCellCount() const override { return k_numberOfReusableCells; }
   void fillCellForLocation(Escher::HighlightCell* cell, int column,
                            int row) override;
-  bool cellAtLocationIsSelectable(Escher::HighlightCell* cell, int column,
-                                  int row) override {
+  bool canSelectCellAtLocation(int column, int row) override {
     assert(column >= 0 && column < numberOfColumns() && row >= 0 &&
            row < numberOfRows());
     return row < numberOfRows() - 1 || column <= columnOfLastIcon();
@@ -87,7 +86,7 @@ class Controller : public Escher::ViewController,
     void layoutSubviews(bool force = false) override;
     Escher::SelectableTableView m_selectableTableView;
   };
-  constexpr static KDCoordinate k_sideMargin = 4;
+  constexpr static KDMargins k_margins = {4, 4, 0, 0};
   constexpr static KDCoordinate k_bottomMargin = 14;
   constexpr static KDCoordinate k_indicatorMargin = 61;
   constexpr static int k_numberOfColumns = 3;

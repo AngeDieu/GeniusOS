@@ -2,25 +2,20 @@
 #define ESCHER_TEXT_INPUT_H
 
 #include <assert.h>
+#include <escher/editable_field.h>
 #include <escher/scrollable_view.h>
 #include <escher/text_cursor_view.h>
 #include <omg/directions.h>
 #include <string.h>
 
-// See TODO in EditableField
-
 namespace Escher {
 
-class TextInput : public TextCursorView::WithBlinkingCursor<
-                      ScrollableView<ScrollView::NoDecorator>>,
-                  public ScrollViewDataSource {
+class TextInput : public EditableField {
   friend class LayoutField;
 
  public:
-  TextInput(Responder *parentResponder, View *contentView)
-      : TextCursorView::WithBlinkingCursor<ScrollableView>(parentResponder,
-                                                           contentView, this) {}
-  void setFont(KDFont::Size font) { contentView()->setFont(font); }
+  using EditableField::EditableField;
+
   const char *text() const { return nonEditableContentView()->text(); }
   bool removePreviousGlyph();
   const char *cursorLocation() const {
@@ -34,25 +29,19 @@ class TextInput : public TextCursorView::WithBlinkingCursor<
   }
   void resetSelection() { contentView()->resetSelection(); }
   void deleteSelection();
-  // Alignment
-  void setAlignment(float horizontalAlignment, float verticalAlignment);
 
  protected:
   class ContentView : public TextCursorView::CursorFieldView {
    public:
-    ContentView(KDFont::Size font,
-                float horizontalAlignment = KDGlyph::k_alignLeft,
-                float verticalAlignment = KDGlyph::k_alignCenter)
+    ContentView(KDGlyph::Format format)
         : TextCursorView::CursorFieldView(),
           m_cursorLocation(nullptr),
           m_selectionStart(nullptr),
-          m_horizontalAlignment(horizontalAlignment),
-          m_verticalAlignment(verticalAlignment),
-          m_font(font) {}
+          m_format(format) {}
 
-    // Font
-    void setFont(KDFont::Size font);
-    KDFont::Size font() const { return m_font; }
+    // Format
+    KDFont::Size font() const { return m_format.style.font; }
+    float horizontalAlignment() const { return m_format.horizontalAlignment; }
 
     // Cursor location
     const char *cursorLocation() const {
@@ -81,13 +70,13 @@ class TextInput : public TextCursorView::WithBlinkingCursor<
     bool selectionIsEmpty() const;
     virtual size_t deleteSelection() = 0;
 
-    // Alignment
-    void setAlignment(float horizontalAlignment, float verticalAlignment);
-    float horizontalAlignment() const { return m_horizontalAlignment; }
-
     // Reload
     void reloadRectFromPosition(const char *position,
                                 bool includeFollowingLines = false);
+
+    virtual const char *draftText() const = 0;
+    size_t draftTextLength() const { return strlen(draftText()); }
+    const char *draftTextEnd() const { return draftText() + draftTextLength(); }
 
    protected:
     void reloadRectFromAndToPositions(const char *start, const char *end);
@@ -95,15 +84,10 @@ class TextInput : public TextCursorView::WithBlinkingCursor<
                                         const char *position) const = 0;
     virtual KDRect dirtyRectFromPosition(const char *position,
                                          bool includeFollowingLines) const;
+
     const char *m_cursorLocation;
     const char *m_selectionStart;
-    float m_horizontalAlignment;
-    float m_verticalAlignment;
-    KDFont::Size m_font;
-
-   private:
-    virtual const char *editedText() const = 0;
-    virtual size_t editedTextLength() const = 0;
+    KDGlyph::Format m_format;
   };
 
   /* If the text to be appended is too long to be added without overflowing the

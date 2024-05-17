@@ -6,17 +6,22 @@ int ListWithTopAndBottomDataSource::numberOfRows() const {
   return m_innerDataSource->numberOfRows() + hasTopView() + hasBottomView();
 }
 
-KDCoordinate ListWithTopAndBottomDataSource::separatorBeforeRow(int index) {
-  assert(0 <= index && index < numberOfRows());
-  if (hasTopView() && index == 0) {
+void ListWithTopAndBottomDataSource::initWidth(TableView* tableView) {
+  m_innerDataSource->initWidth(tableView);
+  StandardMemoizedListViewDataSource::initWidth(tableView);
+}
+
+KDCoordinate ListWithTopAndBottomDataSource::separatorBeforeRow(int row) {
+  assert(0 <= row && row < numberOfRows());
+  if (hasTopView() && row == 0) {
     return 0;
   }
-  if ((hasTopView() && index == 1) ||
-      (hasBottomView() && index == numberOfRows() - 1)) {
+  if ((hasTopView() && row == 1) ||
+      (hasBottomView() && row == numberOfRows() - 1)) {
     return Metric::CommonLargeMargin;
   }
-  assert(index >= hasTopView());
-  return m_innerDataSource->separatorBeforeRow(index - hasTopView());
+  assert(row >= hasTopView());
+  return m_innerDataSource->separatorBeforeRow(row - hasTopView());
 }
 
 HighlightCell* ListWithTopAndBottomDataSource::reusableCell(int index,
@@ -54,24 +59,40 @@ KDCoordinate ListWithTopAndBottomDataSource::nonMemoizedRowHeight(int j) {
 }
 
 void ListWithTopAndBottomDataSource::fillCellForRow(HighlightCell* cell,
-                                                    int index) {
-  int type = typeAtRow(index);
+                                                    int row) {
+  int type = typeAtRow(row);
   if (type == k_topCellType || type == k_bottomCellType) {
     return;
   }
-  m_innerDataSource->fillCellForRow(cell, index - hasTopView());
+  m_innerDataSource->fillCellForRow(cell, row - hasTopView());
 }
 
-int ListWithTopAndBottomDataSource::typeAtRow(int index) const {
-  assert(0 <= index && index < numberOfRows());
-  if (hasTopView() && index == 0) {
+int ListWithTopAndBottomDataSource::typeAtRow(int row) const {
+  assert(0 <= row && row < numberOfRows());
+  if (hasTopView() && row == 0) {
     return k_topCellType;
   }
-  if (hasBottomView() && index == numberOfRows() - 1) {
+  if (hasBottomView() && row == numberOfRows() - 1) {
     return k_bottomCellType;
   }
-  assert(index >= hasTopView());
-  return m_innerDataSource->typeAtRow(index - hasTopView()) + k_cellTypeOffset;
+  assert(row >= hasTopView());
+  return m_innerDataSource->typeAtRow(row - hasTopView()) + k_cellTypeOffset;
+}
+
+bool ListWithTopAndBottomDataSource::canSelectCellAtRow(int row) {
+  if (typeAtRow(row) == k_topCellType || typeAtRow(row) == k_bottomCellType) {
+    return false;
+  }
+  assert(row >= hasTopView());
+  return m_innerDataSource->canSelectCellAtRow(row - hasTopView());
+}
+
+bool ListWithTopAndBottomDataSource::canStoreCellAtRow(int row) {
+  if (typeAtRow(row) == k_topCellType || typeAtRow(row) == k_bottomCellType) {
+    return false;
+  }
+  assert(row >= hasTopView());
+  return m_innerDataSource->canStoreCellAtRow(row - hasTopView());
 }
 
 ListWithTopAndBottomController::ListWithTopAndBottomController(
@@ -79,8 +100,8 @@ ListWithTopAndBottomController::ListWithTopAndBottomController(
     : SelectableViewController(parentResponder),
       m_selectableListView(this, &m_outerDataSource, this, this),
       m_outerDataSource(this, topView, bottomView) {
-  m_selectableListView.setTopMargin(Metric::CommonLargeMargin);
-  m_selectableListView.setBottomMargin(Metric::CommonLargeMargin);
+  m_selectableListView.margins()->setVertical(
+      {Metric::CommonLargeMargin, Metric::CommonLargeMargin});
 }
 
 void ListWithTopAndBottomController::listViewDidChangeSelectionAndDidScroll(
@@ -104,10 +125,17 @@ void ListWithTopAndBottomController::listViewDidChangeSelectionAndDidScroll(
 }
 
 void ListWithTopAndBottomController::didBecomeFirstResponder() {
-  resetMemoization();
-  selectFirstCell();
+  if (selectedRow() < firstCellIndex()) {
+    selectFirstCell();
+  }
+  App::app()->setFirstResponder(&m_selectableListView);
+}
+
+void ListWithTopAndBottomController::viewWillAppear() {
+  selectRow(-1);
   setOffset(KDPointZero);
-  m_selectableListView.reloadData();
+  m_selectableListView.reloadData(false);
+  ViewController::viewWillAppear();
 }
 
 }  // namespace Escher

@@ -1,18 +1,16 @@
 #include "input_categorical_cell.h"
 
+using namespace Escher;
+
 namespace Inference {
 
-InputCategoricalCell::InputCategoricalCell(
-    Responder* parentResponder,
-    InputEventHandlerDelegate* inputEventHandlerDelegate,
-    TextFieldDelegate* textFieldDelegate)
-    : HighlightCell(),
-      m_innerCell(parentResponder, inputEventHandlerDelegate,
-                  textFieldDelegate) {}
+InputCategoricalCell::InputCategoricalCell(Responder* parentResponder,
+                                           TextFieldDelegate* textFieldDelegate)
+    : HighlightCell(), m_innerCell(parentResponder, textFieldDelegate) {}
 
 KDSize InputCategoricalCell::minimalSizeForOptimalDisplay() const {
   KDSize innerSize = m_innerCell.minimalSizeForOptimalDisplay();
-  return KDSize(innerSize.width() + 2 * Metric::CommonMargin,
+  return KDSize(innerSize.width() + Metric::CommonMargins.width(),
                 innerSize.height());
 }
 
@@ -21,11 +19,11 @@ void InputCategoricalCell::drawRect(KDContext* ctx, KDRect rect) const {
   KDCoordinate height = bounds().height();
 
   // Draw horizontal margins
-  ctx->fillRect(KDRect(0, 0, Metric::CommonMargin, height),
+  ctx->fillRect(KDRect(0, 0, Metric::CommonMargins.left(), height),
                 Palette::WallScreenDark);
-  ctx->fillRect(
-      KDRect(width - Metric::CommonMargin, 0, Metric::CommonMargin, height),
-      Escher::Palette::WallScreenDark);
+  ctx->fillRect(KDRect(width - Metric::CommonMargins.right(), 0,
+                       Metric::CommonMargins.right(), height),
+                Escher::Palette::WallScreenDark);
 }
 
 void InputCategoricalCell::setHighlighted(bool highlight) {
@@ -42,10 +40,10 @@ void InputCategoricalCell::setMessages(I18n::Message labelMessage,
 void InputCategoricalCell::layoutSubviews(bool force) {
   KDCoordinate width = bounds().width();
   KDCoordinate height = bounds().height();
-  setChildFrame(
-      &m_innerCell,
-      KDRect(Metric::CommonMargin, 0, width - 2 * Metric::CommonMargin, height),
-      force);
+  setChildFrame(&m_innerCell,
+                KDRect(Metric::CommonMargins.left(), 0,
+                       width - Metric::CommonMargins.width(), height),
+                force);
 }
 
 }  // namespace Inference

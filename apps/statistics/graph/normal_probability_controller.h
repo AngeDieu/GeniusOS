@@ -32,7 +32,6 @@ class NormalProbabilityController : public PlotController,
   }
 
   // PlotController
-  void moveCursorToSelectedIndex() override;
   int totalValues(int series) const override {
     return m_store->totalNormalProbabilityValues(series);
   }
@@ -73,6 +72,7 @@ class NormalProbabilityController : public PlotController,
     return I18n::Message::StatisticsNormalProbabilityZScore;
   }
   PlotBannerView *bannerView() override { return &m_simpleBannerView; }
+
   Shared::RingCursorView m_cursorView;
   SimplePlotBannerView m_simpleBannerView;
 };

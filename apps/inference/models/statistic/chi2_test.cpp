@@ -5,7 +5,6 @@
 
 #include "goodness_test.h"
 #include "homogeneity_test.h"
-#include "interfaces/significance_tests.h"
 
 namespace Inference {
 
@@ -37,7 +36,7 @@ double Chi2Test::computeChi2() {
   double z = 0;
   int n = numberOfValuePairs();
   for (int i = 0; i < n; i++) {
-    z += std::pow(expectedValue(i) - observedValue(i), 2) / expectedValue(i);
+    z += computeContribution(i);
   }
   return z;
 }
@@ -47,6 +46,10 @@ bool Chi2Test::authorizedParameterAtIndex(double p, int i) const {
     return false;
   }
   return Inference::authorizedParameterAtIndex(p, i);
+}
+
+double Chi2Test::computeContribution(int i) const {
+  return std::pow(expectedValue(i) - observedValue(i), 2) / expectedValue(i);
 }
 
 }  // namespace Inference

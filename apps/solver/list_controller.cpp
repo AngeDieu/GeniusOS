@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <poincare/circuit_breaker_checkpoint.h>
 #include <poincare/code_point_layout.h>
+#include <poincare/comparison.h>
 #include <poincare/variable_context.h>
 
 #include "app.h"
@@ -12,15 +13,14 @@ using namespace Escher;
 
 namespace Solver {
 
-ListController::ListController(
-    Responder *parentResponder,
-    InputEventHandlerDelegate *inputEventHandlerDelegate,
-    EquationStore *equationStore, ButtonRowController *footer)
+ListController::ListController(Responder *parentResponder,
+                               EquationStore *equationStore,
+                               ButtonRowController *footer)
     : ExpressionModelListController(parentResponder,
                                     I18n::Message::AddEquation),
       ButtonRowDelegate(nullptr, footer),
       m_equationListView(this),
-      m_editableCell(this, inputEventHandlerDelegate, this),
+      m_editableCell(this, this),
       m_resolveButton(this,
                       equationStore->numberOfDefinedModels() > 1
                           ? I18n::Message::ResolveSystem
@@ -37,8 +37,8 @@ ListController::ListController(
                               StackViewController::Style::PurpleWhite) {
   m_addNewModelCell.setLeftMargin(k_newModelMargin);
   for (int i = 0; i < k_maxNumberOfRows; i++) {
-    m_expressionCells[i].setLeftMargin(EquationListView::k_braceTotalWidth +
-                                       Metric::BigCellMargin);
+    m_expressionCells[i].setMargins(
+        {EquationListView::k_braceTotalWidth + Metric::CellMargins.left(), 0});
     m_expressionCells[i].setEven(true);
   }
 }
@@ -88,19 +88,11 @@ void ListController::fillCellForRow(HighlightCell *cell, int row) {
   }
 }
 
-KDCoordinate ListController::nonMemoizedRowHeight(int row) {
-  if (row == m_editedCellIndex) {
-    return ExpressionRowHeightFromLayoutHeight(
-        m_editableCell.minimalSizeForOptimalDisplay().height());
-  }
-  return expressionRowHeight(row);
-}
-
 bool ListController::handleEvent(Ion::Events::Event event) {
   if (event == Ion::Events::Up && selectedRow() == -1) {
     footer()->setSelectedButton(-1);
     selectableListView()->selectCell(numberOfRows() - 1);
-    Container::activeApp()->setFirstResponder(selectableListView());
+    App::app()->setFirstResponder(selectableListView());
     return true;
   }
   if (event == Ion::Events::Down) {
@@ -116,15 +108,15 @@ bool ListController::handleEvent(Ion::Events::Event event) {
 
 void ListController::didBecomeFirstResponder() {
   if (selectedRow() == -1) {
-    selectCell(0);
+    selectRow(0);
   } else {
-    selectCell(selectedRow());
+    selectRow(selectedRow());
   }
   if (selectedRow() >= numberOfRows()) {
-    selectCell(numberOfRows() - 1);
+    selectRow(numberOfRows() - 1);
   }
   footer()->setSelectedButton(-1);
-  Container::activeApp()->setFirstResponder(selectableListView());
+  App::app()->setFirstResponder(selectableListView());
 }
 
 void ListController::didEnterResponderChain(Responder *previousFirstResponder) {
@@ -133,24 +125,9 @@ void ListController::didEnterResponderChain(Responder *previousFirstResponder) {
   reloadBrace();
 }
 
-// TODO factorize with Graph?
-bool ListController::layoutFieldDidReceiveEvent(LayoutField *layoutField,
-                                                Ion::Events::Event event) {
-  if (layoutField->isEditing() && layoutField->shouldFinishEditing(event)) {
-    // TODO: do like for textField: parse and and check is type is comparison
-    if (!layoutField->layout().hasTopLevelComparisonSymbol()) {
-      layoutField->putCursorOnOneSide(OMG::Direction::Right());
-      if (!layoutField->handleEventWithText("=0")) {
-        Container::activeApp()->displayWarning(I18n::Message::RequireEquation);
-        return true;
-      }
-    }
-  }
-  if (Shared::LayoutFieldDelegate::layoutFieldDidReceiveEvent(layoutField,
-                                                              event)) {
-    return true;
-  }
-  return false;
+bool ListController::completeEquation(LayoutField *equationField) {
+  equationField->putCursorOnOneSide(OMG::Direction::Right());
+  return equationField->handleEventWithText("=0");
 }
 
 void ListController::layoutFieldDidChangeSize(LayoutField *layoutField) {
@@ -159,13 +136,15 @@ void ListController::layoutFieldDidChangeSize(LayoutField *layoutField) {
 }
 
 bool ListController::layoutFieldDidFinishEditing(LayoutField *layoutField,
-                                                 Poincare::Layout layout,
                                                  Ion::Events::Event event) {
-  ExpressionModelListController::layoutFieldDidFinishEditing(layoutField,
-                                                             layout, event);
-  reloadBrace();
-  reloadButtonMessage();
-  return true;
+  assert(!layoutField->isEditing());
+  if (ExpressionModelListController::layoutFieldDidFinishEditing(layoutField,
+                                                                 event)) {
+    reloadBrace();
+    reloadButtonMessage();
+    return true;
+  }
+  return false;
 }
 
 void ListController::layoutFieldDidAbortEditing(
@@ -173,6 +152,13 @@ void ListController::layoutFieldDidAbortEditing(
   ExpressionModelListController::layoutFieldDidAbortEditing(layoutField);
   reloadBrace();
   reloadButtonMessage();
+}
+
+bool ListController::isAcceptableExpression(const Poincare::Expression exp) {
+  /* Complete SharedApp acceptable conditions by only accepting
+   * the Equal OperatorType in the list of equations. */
+  return MathLayoutFieldDelegate::isAcceptableExpression(exp) &&
+         Poincare::ComparisonNode::IsBinaryEquality(exp);
 }
 
 void ListController::editExpression(Ion::Events::Event event) {
@@ -183,7 +169,7 @@ void ListController::editExpression(Ion::Events::Event event) {
 
 void ListController::resolveEquations() {
   if (modelStore()->numberOfDefinedModels() == 0) {
-    Container::activeApp()->displayWarning(I18n::Message::EnterEquation);
+    App::app()->displayWarning(I18n::Message::EnterEquation);
     return;
   }
   // Tidy model before checkpoint, during which older TreeNodes can't be altered
@@ -196,17 +182,20 @@ void ListController::resolveEquations() {
         App::app()->system()->exactSolve(App::app()->localContext());
     switch (e) {
       case SystemOfEquations::Error::EquationUndefined:
-        Container::activeApp()->displayWarning(
-            I18n::Message::UndefinedEquation);
+        App::app()->displayWarning(I18n::Message::UndefinedEquation);
         return;
       case SystemOfEquations::Error::EquationNonreal:
-        Container::activeApp()->displayWarning(I18n::Message::NonrealEquation);
+        App::app()->displayWarning(I18n::Message::NonrealEquation);
         return;
       case SystemOfEquations::Error::TooManyVariables:
-        Container::activeApp()->displayWarning(I18n::Message::TooManyVariables);
+        App::app()->displayWarning(I18n::Message::TooManyVariables);
         return;
       case SystemOfEquations::Error::NonLinearSystem:
-        Container::activeApp()->displayWarning(I18n::Message::NonLinearSystem);
+        App::app()->displayWarning(I18n::Message::NonLinearSystem);
+        return;
+      case SystemOfEquations::Error::DisabledInExamMode:
+        App::app()->displayWarning(I18n::Message::DisabledFeature1,
+                                   I18n::Message::DisabledFeatureInExamMode2);
         return;
       default: {
         assert(e == SystemOfEquations::Error::NoError ||
@@ -214,7 +203,7 @@ void ListController::resolveEquations() {
         stackController()->push(
             e == SystemOfEquations::Error::RequireApproximateSolution
                 ? App::app()->intervalController()
-                : App::app()->solutionsControllerStack());
+                : App::app()->solutionsController());
       }
     }
   } else {
@@ -232,9 +221,8 @@ void ListController::reloadButtonMessage() {
 }
 
 void ListController::addModel() {
-  Container::activeApp()->displayModalViewController(
-      &m_modelsStackController, 0.f, 0.f, Metric::PopUpTopMargin,
-      Metric::PopUpRightMargin, 0, Metric::PopUpLeftMargin);
+  App::app()->displayModalViewController(&m_modelsStackController, 0.f, 0.f,
+                                         Metric::PopUpMarginsNoBottom);
 }
 
 bool ListController::removeModelRow(Ion::Storage::Record record) {
@@ -247,23 +235,23 @@ bool ListController::removeModelRow(Ion::Storage::Record record) {
 void ListController::reloadBrace() {
   if (modelStore()->numberOfModels() <= 1) {
     m_equationListView.setBraceStyle(EquationListView::BraceStyle::None);
-    m_expressionCells[0].setLeftMargin(k_newModelMargin);
+    m_expressionCells[0].setMargins({k_newModelMargin, 0});
     // Set editable cell margins to keep the text at the same place when editing
-    m_editableCell.layoutField()->setLeftMargin(k_newModelMargin -
-                                                k_expressionMargin);
-    m_editableCell.setMargins(k_expressionMargin, k_expressionMargin);
+    m_editableCell.layoutField()->margins()->setLeft(k_newModelMargin -
+                                                     k_expressionMargin);
+    m_editableCell.setMargins({k_expressionMargin, k_expressionMargin});
   } else {
     m_equationListView.setBraceStyle(
         modelStore()->numberOfModels() == modelStore()->maxNumberOfModels()
             ? EquationListView::BraceStyle::Full
             : EquationListView::BraceStyle::OneRowShort);
-    m_expressionCells[0].setLeftMargin(EquationListView::k_braceTotalWidth +
-                                       Metric::BigCellMargin);
-    m_editableCell.layoutField()->setLeftMargin(Metric::BigCellMargin -
-                                                k_expressionMargin);
+    m_expressionCells[0].setMargins(
+        {EquationListView::k_braceTotalWidth + Metric::CellMargins.left(), 0});
+    m_editableCell.layoutField()->margins()->setLeft(
+        Metric::CellMargins.left() - k_expressionMargin);
     m_editableCell.setMargins(
-        EquationListView::k_braceTotalWidth + k_expressionMargin,
-        k_expressionMargin);
+        {EquationListView::k_braceTotalWidth + k_expressionMargin,
+         k_expressionMargin});
   }
 }
 

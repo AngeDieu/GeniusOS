@@ -15,7 +15,6 @@ class ValuesController : public Shared::ValuesController,
                          Escher::RegularTableSize1DManager {
  public:
   ValuesController(Escher::Responder *parentResponder,
-                   Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
                    Escher::ButtonRowController *header);
 
   // ButtonRowDelegate
@@ -41,10 +40,6 @@ class ValuesController : public Shared::ValuesController,
   }
 
  private:
-  constexpr static int k_valuesCellBufferSize =
-      Poincare::PrintFloat::charSizeForFloatsWithPrecision(
-          Poincare::Preferences::VeryLargeNumberOfSignificantDigits);
-
   // TableViewDataSource
   Escher::TableSize1DManager *columnWidthManager() override {
     return &m_widthManager;
@@ -114,7 +109,8 @@ class ValuesController : public Shared::ValuesController,
       m_sequenceTitleCells[k_maxNumberOfDisplayableColumns];
   Escher::EvenOddExpressionCell m_valueCells[k_maxNumberOfDisplayableCells];
   Escher::EvenOddMessageTextCell m_abscissaTitleCell;
-  Escher::EvenOddEditableTextCell<>
+  Escher::EvenOddEditableTextCell<
+      Poincare::PrintFloat::k_maxNumberOfSignificantDigits>
       m_abscissaCells[k_maxNumberOfDisplayableRows];
 
   IntervalParameterController m_intervalParameterController;

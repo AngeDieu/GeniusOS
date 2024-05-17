@@ -20,11 +20,11 @@
 namespace Inference {
 
 void Test::setGraphTitle(char* buffer, size_t bufferSize) const {
-  const char* format = I18n::translate(graphTitleFormat());
   Poincare::Print::CustomPrintf(
-      buffer, bufferSize, format, testCriticalValue(),
-      Poincare::Preferences::PrintFloatMode::Decimal,
-      Poincare::Preferences::ShortNumberOfSignificantDigits, pValue(),
+      buffer, bufferSize, "%s=%*.*ed %s=%*.*ed", criticalValueSymbol(),
+      testCriticalValue(), Poincare::Preferences::PrintFloatMode::Decimal,
+      Poincare::Preferences::ShortNumberOfSignificantDigits,
+      I18n::translate(I18n::Message::PValue), pValue(),
       Poincare::Preferences::PrintFloatMode::Decimal,
       Poincare::Preferences::ShortNumberOfSignificantDigits);
 }
@@ -85,7 +85,7 @@ void Test::resultAtIndex(int index, double* value, Poincare::Layout* message,
   switch (index) {
     case ResultOrder::Z:
       *value = testCriticalValue();
-      *message = testCriticalValueSymbol();
+      *message = criticalValueSymbolLayout();
       *subMessage = I18n::Message::TestStatistic;
       break;
     case ResultOrder::PValue:
@@ -119,21 +119,24 @@ bool Test::computeCurveViewRange(float transition, bool zoomSide) {
   // Transition goes from 0 (default view) to 1 (zoomed view)
   float alpha;
   float z = testCriticalValue();
-  if (hypothesisParams()->comparisonOperator() !=
+  if (hypothesisParams()->comparisonOperator() ==
       Poincare::ComparisonNode::OperatorType::NotEqual) {
-    alpha = thresholdAbscissa(hypothesisParams()->comparisonOperator());
-  } else if (zoomSide) {
-    alpha = thresholdAbscissa(Poincare::ComparisonNode::OperatorType::Superior,
-                              0.5);
+    if (zoomSide) {
+      alpha = thresholdAbscissa(
+          Poincare::ComparisonNode::OperatorType::Superior, 0.5);
+      z = std::abs(z);
+    } else {
+      alpha = thresholdAbscissa(
+          Poincare::ComparisonNode::OperatorType::Inferior, 0.5);
+      z = -std::abs(z);
+    }
   } else {
-    alpha = thresholdAbscissa(Poincare::ComparisonNode::OperatorType::Inferior,
-                              0.5);
-    z *= -1;
+    alpha = thresholdAbscissa(hypothesisParams()->comparisonOperator());
   }
   float margin = std::abs(alpha - z) * k_displayZoomedInHorizontalMarginRatio;
   if (std::abs(alpha) > k_displayWidthToSTDRatio ||
-      std::abs(z) > k_displayWidthToSTDRatio) {
-    // Alpha or z is out of the view, don't try to zoom
+      std::abs(z) > k_displayWidthToSTDRatio || alpha * z < 0) {
+    // Alpha or z is out of the view or their signs differ, don't try to zoom
     Shared::Inference::computeCurveViewRange();
     return false;
   }
@@ -174,9 +177,13 @@ bool Test::computeCurveViewRange(float transition, bool zoomSide) {
     xMax = FLT_MAX;
   }
   assert(std::isfinite(yMin) && std::isfinite(yMax));
-  protectedSetX(Poincare::Range1D(xMin, xMax));
-  protectedSetY(Poincare::Range1D(yMin, yMax));
+  protectedSetXRange(xMin, xMax);
+  protectedSetYRange(yMin, yMax);
   return true;
+}
+
+const char* Test::criticalValueSymbol() const {
+  return distribution()->criticalValueSymbol();
 }
 
 }  // namespace Inference

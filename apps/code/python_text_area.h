@@ -16,7 +16,7 @@ class PythonTextArea : public Escher::TextArea {
   };
   PythonTextArea(Escher::Responder* parentResponder, App* pythonDelegate,
                  KDFont::Size font)
-      : Escher::TextArea(parentResponder, &m_contentView, font),
+      : Escher::TextArea(parentResponder, &m_contentView),
         m_contentView(pythonDelegate, font),
         m_autocompletionResultIndex(0),
         m_wasAutocompleting(false) {}
@@ -24,6 +24,7 @@ class PythonTextArea : public Escher::TextArea {
   void unloadSyntaxHighlighter() { m_contentView.unloadSyntaxHighlighter(); }
   void didBecomeFirstResponder() override;
   bool handleEvent(Ion::Events::Event event) override;
+  bool handleSpecialEvent(Ion::Events::Event event);
   bool handleEventWithText(const char* text, bool indentation = false,
                            bool forceCursorRightOfText = false) override;
   /* autocompletionType returns:
@@ -39,6 +40,9 @@ class PythonTextArea : public Escher::TextArea {
       const char** autocompletionLocationBeginning = nullptr,
       const char** autocompletionLocationEnd = nullptr) const;
   bool isAutocompleting() const { return m_contentView.isAutocompleting(); }
+
+  // Just removes the suggested text, not the autocompletion mode
+  void removeAutocompletionText();
 
  protected:
   class ContentView : public Escher::TextArea::ContentView {
@@ -73,9 +77,8 @@ class PythonTextArea : public Escher::TextArea {
   };
 
  private:
+  void prepareVariableBoxBeforeOpening();
   void removeAutocompletion();
-  // Just removes the suggested text, not the autocompletion mode
-  void removeAutocompletionText();
   void addAutocompletion(int index = 0);
   // Assumes the var box is already loaded
   bool addAutocompletionTextAtIndex(int nextIndex,

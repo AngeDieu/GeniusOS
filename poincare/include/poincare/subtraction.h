@@ -21,7 +21,6 @@ class SubtractionNode final : public ExpressionNode {
 
   // Properties
   Type type() const override { return Type::Subtraction; }
-  int polynomialDegree(Context* context, const char* symbolName) const override;
   bool childAtIndexNeedsUserParentheses(const Expression& child,
                                         int childIndex) const override;
   Expression removeUnit(Expression* unit) override {
@@ -31,10 +30,10 @@ class SubtractionNode final : public ExpressionNode {
 
   // Approximation
   template <typename T>
-  static Complex<T> computeOnComplex(const std::complex<T> c,
-                                     const std::complex<T> d,
-                                     Preferences::ComplexFormat complexFormat) {
-    return Complex<T>::Builder(c - d);
+  static std::complex<T> computeOnComplex(
+      const std::complex<T> c, const std::complex<T> d,
+      Preferences::ComplexFormat complexFormat) {
+    return c - d;
   }
 
   template <typename T>

@@ -19,7 +19,7 @@ class PressToTestController : public Escher::ListWithTopAndBottomController {
   }
   bool handleEvent(Ion::Events::Event event) override;
   TELEMETRY_ID("PressToTest");
-  void didBecomeFirstResponder() override;
+  void viewWillAppear() override;
   int numberOfRows() const override;
   int typeAtRow(int row) const override;
   Escher::HighlightCell* reusableCell(int index, int type) override;
@@ -37,8 +37,8 @@ class PressToTestController : public Escher::ListWithTopAndBottomController {
   constexpr static int k_switchCellType = 0;
   constexpr static int k_buttonCellType = 1;
   /* Switch cells count */
-  constexpr static int k_numberOfSwitchCells = 9;
-  constexpr static int k_numberOfReusableSwitchCells = 6;
+  constexpr static int k_numberOfSwitchCells = 10;
+  constexpr static int k_numberOfReusableSwitchCells = 7;
 
   // Switch Cells
   void setParamAtIndex(int index, bool value);

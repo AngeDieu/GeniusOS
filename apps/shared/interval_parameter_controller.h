@@ -13,9 +13,7 @@ namespace Shared {
 
 class IntervalParameterController : public FloatParameterController<double> {
  public:
-  IntervalParameterController(
-      Escher::Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate);
+  IntervalParameterController(Escher::Responder* parentResponder);
   Interval* interval() {
     assert(m_interval);
     return m_interval;
@@ -23,8 +21,8 @@ class IntervalParameterController : public FloatParameterController<double> {
   void setInterval(Interval* interval);
   const char* title() override;
   void setTitle(I18n::Message title) { m_title = title; }
-  void fillCellForRow(Escher::HighlightCell* cell, int row) override;
   int numberOfRows() const override;
+  KDCoordinate nonMemoizedRowHeight(int row) override;
   void setStartEndMessages(I18n::Message startMessage,
                            I18n::Message endMessage);
 
@@ -45,8 +43,6 @@ class IntervalParameterController : public FloatParameterController<double> {
   Escher::MenuCellWithEditableText<Escher::MessageTextView>
       m_intervalCells[k_totalNumberOfCell];
   I18n::Message m_title;
-  I18n::Message m_startMessage;
-  I18n::Message m_endMessage;
   MessagePopUpController m_confirmPopUpController;
 };
 

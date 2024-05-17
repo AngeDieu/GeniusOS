@@ -18,10 +18,10 @@ class InputGoodnessController;
 class InputHomogeneityController;
 
 class CategoricalTypeController
-    : public Escher::SelectableCellListPage<
+    : public Escher::UniformSelectableListController<
           Escher::MenuCell<Escher::MessageTextView, Escher::EmptyCellWidget,
                            Escher::ChevronView>,
-          2, Escher::RegularListViewDataSource> {
+          2> {
  public:
   CategoricalTypeController(
       Escher::StackViewController* parent, Chi2Test* statistic,
@@ -31,7 +31,7 @@ class CategoricalTypeController
     return ViewController::TitlesDisplay::DisplayLastTitle;
   }
   const char* title() override {
-    return I18n::translate(I18n::Message::CategoricalTypeControllerTitle);
+    return I18n::translate(I18n::Message::Chi2Test);
   }
   void stackOpenPage(Escher::ViewController* nextPage) override;
   bool handleEvent(Ion::Events::Event event) override;

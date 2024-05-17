@@ -23,26 +23,28 @@ class ResultsController
       public DynamicCellsDataSource<ResultCell, k_maxNumberOfResultCells>,
       public DynamicCellsDataSourceDelegate<ResultCell> {
  public:
-  ResultsController(Escher::StackViewController* parent, Statistic* statistic,
+  ResultsController(Escher::Responder* parent, Statistic* statistic,
                     TestGraphController* testGraphController,
-                    IntervalGraphController* intervalGraphController);
+                    IntervalGraphController* intervalGraphController,
+                    bool enableHeadline = true);
 
   static bool ButtonAction(ResultsController* controller, void* s);
 
   // ViewController
   ViewController::TitlesDisplay titlesDisplay() override;
   const char* title() override;
+  void initView() override;
 
   // StandardMemoizedListViewDataSource
   int numberOfRows() const override;
-  KDCoordinate defaultColumnWidth() override;
-  void fillCellForRow(Escher::HighlightCell* cell, int i) override;
+  void fillCellForRow(Escher::HighlightCell* cell, int row) override;
   Escher::HighlightCell* reusableCell(int index, int type) override;
   int reusableCellCount(int type) override;
-  int typeAtRow(int index) const override;
-  KDCoordinate separatorBeforeRow(int index) override {
-    return typeAtRow(index) == k_buttonCellType ? k_defaultRowSeparator : 0;
+  int typeAtRow(int row) const override;
+  KDCoordinate separatorBeforeRow(int row) override {
+    return typeAtRow(row) == k_buttonCellType ? k_defaultRowSeparator : 0;
   }
+  KDCoordinate nonMemoizedRowHeight(int row) override;
 
   // DynamicCellsDataSourceDelegate
   Escher::SelectableListView* tableView() override {

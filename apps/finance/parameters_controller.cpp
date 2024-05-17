@@ -9,14 +9,14 @@ using namespace Escher;
 namespace Finance {
 
 ParametersController::ParametersController(StackViewController *parent,
-                                           InputEventHandlerDelegate *handler,
                                            ResultController *resultController)
-    : Shared::FloatParameterController<double>(parent),
+    : Shared::FloatParameterController<double>(parent, &m_messageView),
       m_dropdown(&m_selectableListView, &m_dropdownDataSource, this),
-      m_resultController(resultController) {
+      m_resultController(resultController),
+      m_messageView(I18n::Message::DefineParameters, k_messageFormat) {
   for (size_t i = 0; i < k_numberOfReusableInputs; i++) {
     m_cells[i].setParentResponder(&m_selectableListView);
-    m_cells[i].setDelegates(handler, this);
+    m_cells[i].setDelegate(this);
   }
   m_dropdownCell.accessory()->setDropdown(&m_dropdown);
 }
@@ -39,15 +39,15 @@ const char *ParametersController::title() {
   return m_titleBuffer;
 }
 
-void ParametersController::didBecomeFirstResponder() {
+void ParametersController::viewWillAppear() {
   // Init from data
   m_dropdownDataSource.setMessages(
       App::GetInterestData()->dropdownMessageAtIndex(0),
       App::GetInterestData()->dropdownMessageAtIndex(1));
   m_dropdown.selectRow(App::GetInterestData()->m_booleanParam ? 0 : 1);
   m_dropdown.init();
-  m_dropdown.reloadAllCells();
-  ListWithTopAndBottomController::didBecomeFirstResponder();
+  m_dropdown.reloadCell();
+  ListWithTopAndBottomController::viewWillAppear();
 }
 
 bool ParametersController::handleEvent(Ion::Events::Event event) {
@@ -68,6 +68,7 @@ void ParametersController::fillCellForRow(HighlightCell *cell, int row) {
         App::GetInterestData()->sublabelForParameter(param));
     return;
   }
+  assert(type == k_inputCellType);
   MenuCellWithEditableText<MessageTextView, MessageTextView> *myCell =
       static_cast<MenuCellWithEditableText<MessageTextView, MessageTextView> *>(
           cell);
@@ -88,7 +89,7 @@ KDCoordinate ParametersController::nonMemoizedRowHeight(int row) {
   int type = typeAtRow(row);
   if (type == k_inputCellType) {
     MenuCellWithEditableText<MessageTextView, MessageTextView> tempCell;
-    return nonMemoizedRowHeightWithWidthInit(&tempCell, row);
+    return protectedNonMemoizedRowHeight(&tempCell, row);
   } else if (type == k_dropdownCellType) {
     return protectedNonMemoizedRowHeight(&m_dropdownCell, row);
   }

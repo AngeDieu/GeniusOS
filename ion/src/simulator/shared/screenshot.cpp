@@ -1,8 +1,10 @@
 #include "screenshot.h"
 
+#include <ion.h>
 #include <ion/display.h>
 #include <ion/unicode/utf8_decoder.h>
 #include <kandinsky/font.h>
+#include <omg/print.h>
 
 #include <cstdio>
 
@@ -17,7 +19,7 @@ namespace Simulator {
 constexpr static KDFont::Size k_fontSize = KDFont::Size::Large;
 constexpr static int k_glyphHeight = KDFont::GlyphHeight(k_fontSize);
 constexpr static int k_margin = 6;
-#if DEBUG
+#if DEBUG && ESCHER_LOG_EVENTS_NAME
 constexpr static int k_glyphWidth = KDFont::GlyphWidth(k_fontSize);
 constexpr static KDColor k_backgroundColor = KDColorBlack;
 constexpr static KDColor k_glyphColor = KDColorWhite;
@@ -25,28 +27,25 @@ constexpr static KDColor k_glyphColor = KDColorWhite;
 
 Screenshot::Screenshot(const char* path) { init(path); }
 
-void Screenshot::init(const char* path, bool eachStep) {
-  if (path != m_path) {
-    // Hack flag to write to buffer without enabling the SDL
+void Screenshot::init(const char* path, bool eachStep, bool computeCRC32) {
+  if (path != m_path || computeCRC32) {
+    /* Hack flag to write to buffer without enabling the SDL.
+     * When computing CRC32, we don't need a path but we need to activate frame
+     * buffer. */
     Simulator::Framebuffer::setActive(true);
   }
 
   m_path = path;
   m_eachStep = eachStep;
-  m_stepNumber = 0;
+  m_stepNumber = -1;
+  m_computeCRC32 = computeCRC32;
 }
 
-void Screenshot::captureStep(Events::Event nextEvent) {
-  if (m_eachStep) {
-    capture(nextEvent);
-  }
-}
-
-#if DEBUG
+#if DEBUG && ESCHER_LOG_EVENTS_NAME
 static void drawEventNameInBuffer(Events::Event e, KDColor* pixelsBuffer,
                                   int width, int height, int abscissaOfDraw,
                                   int ordinateOfDraw) {
-  if (!e.name()) {
+  if (!e.name() || e == Events::None) {
     return;
   }
 
@@ -71,7 +70,23 @@ static void drawEventNameInBuffer(Events::Event e, KDColor* pixelsBuffer,
 }
 #endif
 
+static void printInConsole(uint32_t crc) {
+  char crcBuffer[OMG::Print::MaxLengthOfUInt32(OMG::Base::Hexadecimal) + 1];
+  size_t length = OMG::Print::UInt32(OMG::Base::Hexadecimal, crc,
+                                     OMG::Print::LeadingZeros::Keep, crcBuffer,
+                                     sizeof(crcBuffer));
+  crcBuffer[length] = 0;
+  Ion::Console::writeLine("CRC32 of all screenshots: ", false);
+  Ion::Console::writeLine(crcBuffer);
+}
+
 void Screenshot::capture(Events::Event nextEvent) {
+  m_stepNumber++;
+  bool isLastScreenshot = nextEvent == Events::None;
+  if (!isLastScreenshot && !m_eachStep) {
+    return;
+  }
+
   constexpr static int k_maxHeight =
       Display::Height + k_glyphHeight + 2 * k_margin;
   constexpr static int k_width = Display::Width;
@@ -82,8 +97,23 @@ void Screenshot::capture(Events::Event nextEvent) {
     pixelsBuffer[i] = Simulator::Framebuffer::address()[i];
   }
 
-#if DEBUG
-  if (nextEvent != Events::None) {
+  if (m_computeCRC32) {
+    uint32_t newCRC32 = Ion::crc32Word(
+        reinterpret_cast<const uint16_t*>(pixelsBuffer), height * k_width);
+    if (m_stepNumber == 0) {
+      m_CRC32 = newCRC32;
+    } else {
+      uint32_t crc32Results[2] = {m_CRC32, newCRC32};
+      m_CRC32 = Ion::crc32DoubleWord(crc32Results, 2);
+    }
+    if (isLastScreenshot) {
+      printInConsole(m_CRC32);
+    }
+    return;
+  }
+
+#if DEBUG && ESCHER_LOG_EVENTS_NAME
+  if (m_eachStep) {
     height = k_maxHeight;
     for (int i = Display::Height * k_width; i < height * k_width; i++) {
       pixelsBuffer[i] = k_backgroundColor;
@@ -96,7 +126,7 @@ void Screenshot::capture(Events::Event nextEvent) {
   if (m_path != nullptr) {
     constexpr size_t pathSize = 1024;
     char path[pathSize];
-    std::snprintf(path, pathSize, "%s/img-%04d.png", m_path, m_stepNumber++);
+    std::snprintf(path, pathSize, "%s/img-%04d.png", m_path, m_stepNumber);
 
     Simulator::Platform::saveImage(pixelsBuffer, k_width, height,
                                    m_eachStep ? path : m_path);

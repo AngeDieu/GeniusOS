@@ -171,6 +171,12 @@ void ContinuousFunctionProperties::update(
   if (reducedEquation.type() == ExpressionNode::Type::Dependency) {
     // Do not handle dependencies for now.
     analyzedExpression = reducedEquation.childAtIndex(0);
+
+    // If there is still a dependency, it means that the reduction failed.
+    if (analyzedExpression.type() == ExpressionNode::Type::Dependency) {
+      setErrorStatusAndUpdateCaption(Status::Unhandled);
+      return;
+    }
   }
 
   // Compute equation's degree regarding y.
@@ -192,7 +198,7 @@ void ContinuousFunctionProperties::update(
       }
       setCartesianFunctionProperties(analyzedExpression, context);
       if (genericCaptionOnly) {
-        setCaption(I18n::Message::FunctionType);
+        setCaption(I18n::Message::Function);
       }
       return;
     }
@@ -296,7 +302,7 @@ void ContinuousFunctionProperties::update(
   setCartesianEquationProperties(analyzedExpression, context, complexFormat,
                                  xDeg, yDeg, highestCoefficientIsPositive);
   if (genericCaptionOnly) {
-    setCaption(I18n::Message::EquationType);
+    setCaption(I18n::Message::Equation);
   }
 }
 
@@ -308,11 +314,8 @@ void ContinuousFunctionProperties::setCartesianFunctionProperties(
   setCurveParameterType(CurveParameterType::CartesianFunction);
 
   // f(x) = piecewise(...)
-  if (analyzedExpression.recursivelyMatches(
-          [](const Expression e, Context* context) {
-            return e.type() == ExpressionNode::Type::PiecewiseOperator;
-          },
-          context)) {
+  if (analyzedExpression.deepIsOfType({ExpressionNode::Type::PiecewiseOperator},
+                                      context)) {
     setCaption(I18n::Message::PiecewiseType);
     return;
   }
@@ -387,9 +390,7 @@ void ContinuousFunctionProperties::setCartesianFunctionProperties(
   if (userReducedExpression.isLinearCombinationOfFunction(
           context,
           [](const Expression& e, Context* context, const char* symbol) {
-            return (e.type() == ExpressionNode::Type::Cosine ||
-                    e.type() == ExpressionNode::Type::Sine ||
-                    e.type() == ExpressionNode::Type::Tangent) &&
+            return Poincare::Trigonometry::IsDirectTrigonometryFunction(e) &&
                    e.childAtIndex(0).polynomialDegree(context, symbol) == 1;
           },
           Function::k_unknownName)) {
@@ -398,7 +399,7 @@ void ContinuousFunctionProperties::setCartesianFunctionProperties(
   }
 
   // Others
-  setCaption(I18n::Message::FunctionType);
+  setCaption(I18n::Message::Function);
 }
 
 void ContinuousFunctionProperties::setCartesianEquationProperties(
@@ -424,11 +425,11 @@ void ContinuousFunctionProperties::setCartesianEquationProperties(
    * Other cases should have been escaped before.
    */
 
-  setCaption(I18n::Message::EquationType);
+  setCaption(I18n::Message::Equation);
 
   if (yDeg != 1 && yDeg != 2) {  // function is along Y
     setIsAlongY(true);
-    setCaption(I18n::Message::EquationType);
+    setCaption(I18n::Message::Equation);
     if (xDeg == 2) {
       setIsOfDegreeTwo(true);
     } else if (yDeg == 0) {
@@ -520,7 +521,7 @@ void ContinuousFunctionProperties::setPolarFunctionProperties(
       Trigonometry::DetectLinearPatternOfCosOrSin(
           denominator, reductionContext, Function::k_unknownName, false,
           nullptr, &coefficientBeforeTheta, &angle) &&
-      abs(coefficientBeforeTheta) == 1.0) {
+      std::abs(coefficientBeforeTheta) == 1.0) {
     double positiveAngle = std::fabs(angle);
     if (positiveAngle == 0.0 || positiveAngle == M_PI) {
       setCaption(I18n::Message::PolarVerticalLineType);
@@ -674,12 +675,13 @@ bool ContinuousFunctionProperties::HasNonNullCoefficients(
       SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition);
   // Degree should be >= 0 but reduction failure may result in a -1 degree.
   assert(degree <= Expression::k_maxPolynomialDegree);
+  ApproximationContext approximationContext(context, complexFormat, angleUnit);
   if (highestDegreeCoefficientIsPositive != nullptr && degree >= 0) {
     TrinaryBoolean isPositive = coefficients[degree].isPositive(context);
     if (isPositive == TrinaryBoolean::Unknown) {
       // Approximate for a better estimation. Nan if coefficient depends on x/y.
       double approximation = coefficients[degree].approximateToScalar<double>(
-          context, complexFormat, angleUnit);
+          approximationContext);
       if (!std::isnan(approximation) && approximation != 0.0) {
         isPositive = BinaryToTrinaryBool(approximation > 0.0);
       }
@@ -694,8 +696,8 @@ bool ContinuousFunctionProperties::HasNonNullCoefficients(
     }
     if (isNull == TrinaryBoolean::Unknown) {
       // Approximate for a better estimation. Nan if coefficient depends on x/y.
-      double approximation = coefficients[d].approximateToScalar<double>(
-          context, complexFormat, angleUnit);
+      double approximation =
+          coefficients[d].approximateToScalar<double>(approximationContext);
       if (!std::isnan(approximation) && approximation != 0.0) {
         return true;
       }

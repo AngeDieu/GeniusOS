@@ -1,11 +1,11 @@
 #include "app.h"
 
+#include <apps/apps_container.h>
 #include <apps/global_preferences.h>
+#include <apps/shared/global_context.h>
 
 #include <array>
 
-#include "../apps_container.h"
-#include "../shared/global_context.h"
 #include "sequence_icon.h"
 
 using namespace Poincare;
@@ -69,34 +69,21 @@ const App::Descriptor *App::Snapshot::descriptor() const {
   return &sDescriptor;
 }
 
-void App::Snapshot::tidy() {
-  m_graphRange.setDelegate(nullptr);
-  Shared::SharedApp::Snapshot::tidy();
-}
-
-bool App::isAcceptableExpression(Escher::EditableField *field,
-                                 const Poincare::Expression exp) {
-  /* Complete LayoutFieldDelegateApp acceptable conditions by not accepting
-   * any OperatorType. */
-  return LayoutFieldDelegateApp::isAcceptableExpression(field, exp) &&
-         exp.type() != ExpressionNode::Type::Comparison;
-}
-
 App::ListTab::ListTab()
     : Shared::FunctionApp::ListTab(&m_listController),
-      m_listController(&m_listFooter, app(), &m_listHeader, &m_listFooter) {}
+      m_listController(&m_listFooter, &m_listHeader, &m_listFooter) {}
 
 App::GraphTab::GraphTab()
     : Shared::FunctionApp::GraphTab(&m_graphController),
-      m_graphController(&m_graphAlternateEmptyViewController, app(),
-                        &m_graphHeader, app()->snapshot()->graphRange(),
+      m_graphController(&m_graphAlternateEmptyViewController, &m_graphHeader,
+                        app()->snapshot()->graphRange(),
                         app()->snapshot()->cursor(),
                         app()->snapshot()->selectedCurveIndex(),
                         app()->snapshot()->functionStore()) {}
 
 App::ValuesTab::ValuesTab()
     : Shared::FunctionApp::ValuesTab(&m_valuesController),
-      m_valuesController(&m_valuesAlternateEmptyViewController, app(),
+      m_valuesController(&m_valuesAlternateEmptyViewController,
                          &m_valuesHeader) {}
 
 }  // namespace Sequence

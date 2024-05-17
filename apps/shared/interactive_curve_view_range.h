@@ -49,10 +49,8 @@ class InteractiveCurveViewRange : public MemoizedCurveViewRange {
   float yGridUnit() const override;
 
   // CurveViewWindow
-  void setXMin(float f) override;
-  void setXMax(float f) override;
-  void setYMin(float f) override;
-  void setYMax(float f) override;
+  void setXRange(float min, float max) override;
+  void setYRange(float min, float max) override;
 
   float offscreenYAxis() const override { return m_offscreenYAxis; }
   void setOffscreenYAxis(float f);
@@ -102,12 +100,11 @@ class InteractiveCurveViewRange : public MemoizedCurveViewRange {
   InteractiveCurveViewRangeDelegate* m_delegate;
 
  private:
-  int normalizationSignificantBits() const;
   void privateSetZoomAuto(bool xAuto, bool yAuto);
   void privateComputeRanges(bool computeX, bool computeY);
 
   Poincare::Range2D m_memoizedAutoRange;
-  uint32_t m_checksumOfMemoizedAutoRange;
+  uint64_t m_checksumOfMemoizedAutoRange;
   float m_offscreenYAxis;
   bool m_xAuto;
   bool m_yAuto;

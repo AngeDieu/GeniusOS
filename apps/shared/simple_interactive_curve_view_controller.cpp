@@ -25,7 +25,7 @@ bool SimpleInteractiveCurveViewController::textFieldDidReceiveEvent(
       !textField->isEditing()) {
     return handleEnter();
   }
-  return TextFieldDelegate::textFieldDidReceiveEvent(textField, event);
+  return MathTextFieldDelegate::textFieldDidReceiveEvent(textField, event);
 }
 
 bool SimpleInteractiveCurveViewController::handleLeftRightEvent(

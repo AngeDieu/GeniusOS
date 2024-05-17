@@ -16,24 +16,11 @@ CategoricalController::CategoricalController(Responder *parent,
     : SelectableListViewController<ListViewDataSource>(parent, this),
       m_nextController(nextController),
       m_next(&m_selectableListView, I18n::Message::Next, invocation,
-             Palette::WallScreenDark, Metric::CommonMargin) {
-  m_selectableListView.setTopMargin(0);
-  m_selectableListView.setLeftMargin(0);
-  m_selectableListView.setRightMargin(0);
+             Palette::WallScreenDark, Metric::CommonMargins.left()) {
+  m_selectableListView.margins()->setTop(0);
+  m_selectableListView.margins()->setHorizontal({0, 0});
   m_selectableListView.setBackgroundColor(Palette::WallScreenDark);
   setScrollViewDelegate(this);
-}
-
-void CategoricalController::didBecomeFirstResponder() {
-  if (selectedRow() < 0) {
-    categoricalTableCell()->selectableTableView()->setContentOffset(
-        KDPointZero);
-  }
-  SelectableListViewController<ListViewDataSource>::didBecomeFirstResponder();
-}
-
-bool CategoricalController::handleEvent(Ion::Events::Event event) {
-  return popFromStackViewControllerOnLeftEvent(event);
 }
 
 bool CategoricalController::ButtonAction(CategoricalController *controller,
@@ -75,7 +62,7 @@ void CategoricalController::scrollViewDidChangeOffset(
       KDPoint(currentOffset.x(), newOffsetY));
   // Unset the ScrollViewDelegate to avoid infinite looping
   setScrollViewDelegate(nullptr);
-  m_selectableListView.setContentOffset(KDPointZero);
+  m_selectableListView.resetScroll();
   setScrollViewDelegate(this);
 }
 
@@ -120,10 +107,9 @@ void CategoricalController::listViewDidChangeSelectionAndDidScroll(
 HighlightCell *CategoricalController::reusableCell(int index, int type) {
   if (type == k_indexOfTableCell) {
     return categoricalTableCell();
-  } else {
-    assert(type == indexOfNextCell());
-    return &m_next;
   }
+  assert(type == indexOfNextCell());
+  return &m_next;
 }
 
 KDCoordinate CategoricalController::nonMemoizedRowHeight(int row) {
@@ -133,77 +119,39 @@ KDCoordinate CategoricalController::nonMemoizedRowHeight(int row) {
             categoricalTableCell()->selectableTableView()->contentOffset().y(),
         static_cast<int>(m_selectableListView.bounds().height()));
   }
-  return ListViewDataSource::nonMemoizedRowHeight(row);
+  assert(row == indexOfNextCell());
+  return m_next.minimalSizeForOptimalDisplay().height();
+}
+
+void CategoricalController::initView() {
+  createDynamicCells();
+  SelectableListViewController::initView();
 }
 
 InputCategoricalController::InputCategoricalController(
     StackViewController *parent, ViewController *nextController,
-    Statistic *statistic, InputEventHandlerDelegate *inputEventHandlerDelegate)
+    Statistic *statistic)
     : CategoricalController(
           parent, nextController,
           Invocation::Builder<InputCategoricalController>(
               &InputCategoricalController::ButtonAction, this)),
       m_statistic(statistic),
-      m_significanceCell(&m_selectableListView, inputEventHandlerDelegate,
-                         this) {}
+      m_significanceCell(&m_selectableListView, this) {}
 
 bool InputCategoricalController::textFieldShouldFinishEditing(
     AbstractTextField *textField, Ion::Events::Event event) {
-  return event == Ion::Events::OK || event == Ion::Events::EXE ||
+  return TextFieldDelegate::textFieldShouldFinishEditing(textField, event) ||
          event == Ion::Events::Up || event == Ion::Events::Down;
 }
 
 bool InputCategoricalController::textFieldDidFinishEditing(
-    AbstractTextField *textField, const char *text, Ion::Events::Event event) {
+    AbstractTextField *textField, Ion::Events::Event event) {
   // Parse and check significance level
-  double p = textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
-  if (textFieldDelegateApp()->hasUndefinedValue(p, false, false)) {
+  double p = ParseInputFloatValue<double>(textField->draftText());
+  if (HasUndefinedValue(p)) {
     return false;
   }
-  return handleEditedValue(
-      indexOfEditedParameterAtIndex(m_selectableListView.selectedRow()), p,
-      textField, event);
-}
-
-bool InputCategoricalController::ButtonAction(
-    InputCategoricalController *controller, void *s) {
-  if (!controller->m_statistic->validateInputs()) {
-    App::app()->displayWarning(I18n::Message::InvalidInputs);
-    return false;
-  }
-  controller->m_statistic->compute();
-  return CategoricalController::ButtonAction(controller, s);
-}
-
-void InputCategoricalController::viewWillAppear() {
-  categoricalTableCell()->selectableTableView()->setContentOffset(KDPointZero);
-  categoricalTableCell()->recomputeDimensions();
-  PrintValueInTextHolder(m_statistic->threshold(),
-                         m_significanceCell.textField(), true, true);
-  m_selectableListView.reloadData(false);
-  CategoricalController::viewWillAppear();
-}
-
-HighlightCell *InputCategoricalController::reusableCell(int index, int type) {
-  if (type == indexOfSignificanceCell()) {
-    return &m_significanceCell;
-  } else {
-    return CategoricalController::reusableCell(index, type);
-  }
-}
-
-void InputCategoricalController::fillCellForRow(Escher::HighlightCell *cell,
-                                                int row) {
-  if (row == indexOfSignificanceCell()) {
-    assert(cell == &m_significanceCell);
-    m_significanceCell.setMessages(m_statistic->thresholdName(),
-                                   m_statistic->thresholdDescription());
-  }
-}
-
-bool InputCategoricalController::handleEditedValue(int i, double p,
-                                                   AbstractTextField *textField,
-                                                   Ion::Events::Event event) {
+  int i = indexOfEditedParameterAtIndex(m_selectableListView.selectedRow());
   if (!m_statistic->authorizedParameterAtIndex(p, i)) {
     App::app()->displayWarning(I18n::Message::ForbiddenValue);
     return false;
@@ -218,6 +166,45 @@ bool InputCategoricalController::handleEditedValue(int i, double p,
   }
   m_selectableListView.handleEvent(event);
   return true;
+}
+
+bool InputCategoricalController::ButtonAction(
+    InputCategoricalController *controller, void *s) {
+  if (!controller->m_statistic->validateInputs()) {
+    App::app()->displayWarning(I18n::Message::InvalidInputs);
+    return false;
+  }
+  controller->m_statistic->compute();
+  return CategoricalController::ButtonAction(controller, s);
+}
+
+bool InputCategoricalController::handleEvent(Ion::Events::Event event) {
+  return popFromStackViewControllerOnLeftEvent(event);
+}
+
+void InputCategoricalController::viewWillAppear() {
+  // Significance cell
+  PrintValueInTextHolder(m_statistic->threshold(),
+                         m_significanceCell.textField(), true, true);
+  m_significanceCell.setMessages(m_statistic->thresholdName(),
+                                 m_statistic->thresholdDescription());
+  // Table cell
+  categoricalTableCell()->selectableTableView()->resetScroll();
+  categoricalTableCell()->recomputeDimensionsAndReload(true, true);
+}
+
+HighlightCell *InputCategoricalController::reusableCell(int index, int type) {
+  if (type == indexOfSignificanceCell()) {
+    return &m_significanceCell;
+  }
+  return CategoricalController::reusableCell(index, type);
+}
+
+KDCoordinate InputCategoricalController::nonMemoizedRowHeight(int row) {
+  if (row == indexOfSignificanceCell()) {
+    return m_significanceCell.minimalSizeForOptimalDisplay().height();
+  }
+  return CategoricalController::nonMemoizedRowHeight(row);
 }
 
 }  // namespace Inference

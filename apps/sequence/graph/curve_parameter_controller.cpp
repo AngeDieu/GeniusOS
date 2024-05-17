@@ -11,12 +11,10 @@ using namespace Escher;
 namespace Sequence {
 
 CurveParameterController::CurveParameterController(
-    InputEventHandlerDelegate *inputEventHandlerDelegate,
     GraphController *graphController, CobwebController *cobwebController,
     InteractiveCurveViewRange *graphRange, CurveViewCursor *cursor)
     : ExplicitSelectableListViewController(nullptr, nullptr),
-      m_goToParameterController(this, inputEventHandlerDelegate,
-                                graphController, graphRange, cursor),
+      m_goToParameterController(this, graphController, graphRange, cursor),
       m_cobwebController(cobwebController),
       m_graphController(graphController) {
   m_sumCell.label()->setMessage(I18n::Message::TermSum);
@@ -33,12 +31,12 @@ void CurveParameterController::setRecord(Ion::Storage::Record record) {
   m_goToParameterController.setRecord(record);
   m_cobwebController->setRecord(record);
   m_cobwebCell.setVisible(m_cobwebController->isRecordSuitable());
-  resetMemoization();
+  m_selectableListView.resetSizeAndOffsetMemoization();
 }
 
 void CurveParameterController::viewWillAppear() {
   if (selectedRow() < 0 || !selectedCell()->isVisible()) {
-    selectCell(0);
+    selectRow(0);
   }
   ExplicitSelectableListViewController::viewWillAppear();
   m_selectableListView.reloadData();

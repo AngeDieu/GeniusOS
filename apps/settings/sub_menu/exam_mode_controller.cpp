@@ -31,18 +31,12 @@ void ExamModeController::didEnterResponderChain(
   /* When a pop-up is dismissed, the exam mode status might have changed. We
    * reload the selection as the number of rows might have also changed. We
    * force to reload the entire data because they might have changed. */
-  selectCell(initialSelectedRow());
+  selectRow(initialSelectedRow());
   m_contentView.reload();
   // We add a message when the mode exam is on
-  if (Preferences::sharedPreferences->examMode().isActive()) {
-    I18n::Message deactivateMessages[] = {I18n::Message::ToDeactivateExamMode1,
-                                          I18n::Message::ToDeactivateExamMode2,
-                                          I18n::Message::ToDeactivateExamMode3};
-    m_contentView.setMessages(deactivateMessages,
-                              k_numberOfDeactivationMessageLines);
-  } else {
-    m_contentView.setMessages(nullptr, 0);
-  }
+  m_contentView.setMessage(Preferences::sharedPreferences->examMode().isActive()
+                               ? I18n::Message::ToDeactivateExamMode
+                               : I18n::Message::Default);
 }
 
 int ExamModeController::numberOfRows() const {
@@ -60,7 +54,9 @@ int ExamModeController::numberOfRows() const {
     case ExamMode::Ruleset::Portuguese:
     case ExamMode::Ruleset::English:
     case ExamMode::Ruleset::STAAR:
-    case ExamMode::Ruleset::Keystone:
+    case ExamMode::Ruleset::Pennsylvania:
+    case ExamMode::Ruleset::SouthCarolina:
+    case ExamMode::Ruleset::NorthCarolina:
       // Reactivation button
       return 1;
     default:
@@ -76,8 +72,8 @@ int ExamModeController::numberOfRows() const {
     case CountryPreferences::AvailableExamModes::EnglishOnly:
       return 1;
     case CountryPreferences::AvailableExamModes::AmericanAll:
-      // STAAR, Keystone and IB
-      return 3;
+      // STAAR, Pennsylvania, SouthCarolina, NorthCarolina and IB
+      return 5;
     default:
       assert(availableExamModes == CountryPreferences::AvailableExamModes::All);
   }
@@ -143,9 +139,10 @@ ExamMode::Ruleset ExamModeController::examModeRulesetAtIndex(
                  CountryPreferences::AvailableExamModes::AmericanAll ||
              availableExamModes == CountryPreferences::AvailableExamModes::All);
       constexpr ExamMode::Ruleset modes[] = {
-          ExamMode::Ruleset::Standard,   ExamMode::Ruleset::Dutch,
-          ExamMode::Ruleset::Portuguese, ExamMode::Ruleset::English,
-          ExamMode::Ruleset::STAAR,      ExamMode::Ruleset::Keystone,
+          ExamMode::Ruleset::Standard,      ExamMode::Ruleset::Dutch,
+          ExamMode::Ruleset::Portuguese,    ExamMode::Ruleset::English,
+          ExamMode::Ruleset::STAAR,         ExamMode::Ruleset::Pennsylvania,
+          ExamMode::Ruleset::SouthCarolina, ExamMode::Ruleset::NorthCarolina,
           ExamMode::Ruleset::IBTest};
       static_assert(std::size(modes) == k_maxNumberOfCells,
                     "modes must contain each available exam mode");
@@ -184,9 +181,15 @@ I18n::Message ExamModeController::examModeActivationMessage(
       // STAAR
       I18n::Message::ActivateSTAARExamMode,
       I18n::Message::ReactivateSTAARExamMode,
-      // Keystone
-      I18n::Message::ActivateKeystoneExamMode,
-      I18n::Message::ReactivateKeystoneExamMode,
+      // Pennsylvania
+      I18n::Message::ActivatePennsylvaniaExamMode,
+      I18n::Message::ReactivatePennsylvaniaExamMode,
+      // SouthCarolina
+      I18n::Message::ActivateSouthCarolinaExamMode,
+      I18n::Message::ReactivateSouthCarolinaExamMode,
+      // NorthCarolina
+      I18n::Message::ActivateNorthCarolinaExamMode,
+      I18n::Message::ReactivateNorthCarolinaExamMode,
   };
   static_assert(std::size(messages) == numberOfModes * messagesPerMode,
                 "messages size is invalid");

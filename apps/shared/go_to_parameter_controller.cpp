@@ -9,9 +9,8 @@ using namespace Escher;
 namespace Shared {
 
 GoToParameterController::GoToParameterController(
-    Responder *parentResponder,
-    InputEventHandlerDelegate *inputEventHandlerDelegate,
-    InteractiveCurveViewRange *graphRange, CurveViewCursor *cursor)
+    Responder *parentResponder, InteractiveCurveViewRange *graphRange,
+    CurveViewCursor *cursor)
     : FloatParameterController<double>(parentResponder),
       m_cursor(cursor),
       m_graphRange(graphRange),
@@ -19,7 +18,7 @@ GoToParameterController::GoToParameterController(
        * displayed anything. Set it to a dummy value that will be overriden in
        * viewWillAppear() anyway. */
       m_tempParameter(0.0),
-      m_parameterCell(&m_selectableListView, inputEventHandlerDelegate, this) {}
+      m_parameterCell(&m_selectableListView, this) {}
 
 HighlightCell *GoToParameterController::reusableParameterCell(int index,
                                                               int type) {
@@ -39,6 +38,15 @@ bool GoToParameterController::handleEvent(Ion::Events::Event event) {
     return true;
   }
   return false;
+}
+
+KDCoordinate GoToParameterController::nonMemoizedRowHeight(int row) {
+  int type = typeAtRow(row);
+  if (type == k_parameterCellType) {
+    return m_parameterCell.minimalSizeForOptimalDisplay().height();
+  }
+  assert(type == k_buttonCellType);
+  return Shared::FloatParameterController<double>::nonMemoizedRowHeight(row);
 }
 
 void GoToParameterController::viewWillAppear() {

@@ -1,6 +1,8 @@
 #include <assert.h>
 #include <poincare/helpers.h>
 #include <poincare/list.h>
+#include <poincare/list_complex.h>
+#include <poincare/point_evaluation.h>
 
 #include <cmath>
 
@@ -116,49 +118,39 @@ void Helpers::Sort(Swap swap, Compare compare, void *context,
   }
 }
 
-bool Helpers::FloatIsGreater(float xI, float xJ, bool nanIsGreatest) {
-  if (std::isnan(xI)) {
-    return nanIsGreatest;
+template <typename T>
+void Helpers::SwapInList(int i, int j, void *context, int numberOfElements) {
+  ListSortPack<float> *pack = static_cast<ListSortPack<float> *>(context);
+  List *list = reinterpret_cast<List *>(pack->list);
+  ListComplex<float> *listComplex =
+      reinterpret_cast<ListComplex<float> *>(pack->listComplex);
+  assert(listComplex->numberOfChildren() == numberOfElements);
+  assert(0 <= i && i < numberOfElements && 0 <= j && j < numberOfElements);
+  listComplex->swapChildrenInPlace(i, j);
+  if (list) {
+    assert(list->numberOfChildren() == listComplex->numberOfChildren());
+    list->swapChildrenInPlace(i, j);
   }
-  if (std::isnan(xJ)) {
-    return !nanIsGreatest;
-  }
-  return xI > xJ;
 }
 
-bool Helpers::ListEvaluationComparisonAtIndex(int i, int j, void *context,
-                                              int numberOfElements) {
-  void **c = reinterpret_cast<void **>(context);
-  ListNode *list = reinterpret_cast<ListNode *>(c[0]);
-  ApproximationContext *approximationContext =
-      reinterpret_cast<ApproximationContext *>(c[1]);
-  bool *nanIsGreatest = reinterpret_cast<bool *>(c[2]);
-
-  ExpressionNode *eI = list->childAtIndex(i);
-  ExpressionNode *eJ = list->childAtIndex(j);
-  if (eI->type() == ExpressionNode::Type::Point) {
-    if (eJ->isUndefined()) {
-      return !*nanIsGreatest;
-    } else if (eJ->type() == ExpressionNode::Type::Point) {
-      Point pI(static_cast<PointNode *>(eI));
-      Point pJ(static_cast<PointNode *>(eJ));
-      return pI
-          .approximate2D<float>(approximationContext->context(),
-                                approximationContext->complexFormat(),
-                                approximationContext->angleUnit(), true)
-          .isGreaterThan(
-              pJ.approximate2D<float>(approximationContext->context(),
-                                      approximationContext->complexFormat(),
-                                      approximationContext->angleUnit(), true),
-              *nanIsGreatest);
-    }
+template <typename T>
+bool Helpers::CompareInList(int i, int j, void *context, int numberOfElements) {
+  ListSortPack<T> *pack = static_cast<ListSortPack<T> *>(context);
+  ListComplex<T> *listComplex =
+      reinterpret_cast<ListComplex<T> *>(pack->listComplex);
+  Evaluation<T> eI = listComplex->childAtIndex(i);
+  Evaluation<T> eJ = listComplex->childAtIndex(j);
+  if (pack->scalars) {
+    assert(eI.isDefinedScalar() && eJ.isDefinedScalar());
+    float xI = eI.toScalar();
+    float xJ = eJ.toScalar();
+    assert(!std::isnan(xI) && !std::isnan(xJ));
+    return xI > xJ;
   }
-
-  float xI =
-      eI->approximate(static_cast<float>(0), *approximationContext).toScalar();
-  float xJ =
-      eJ->approximate(static_cast<float>(0), *approximationContext).toScalar();
-  return FloatIsGreater(xI, xJ, *nanIsGreatest);
+  assert(eI.isDefinedPoint() && eJ.isDefinedPoint());
+  Coordinate2D<float> cI = static_cast<PointEvaluation<T> &>(eI).xy();
+  Coordinate2D<float> cJ = static_cast<PointEvaluation<T> &>(eJ).xy();
+  return cI.isGreaterThan(cJ);
 }
 
 template <typename T>
@@ -172,5 +164,9 @@ bool Helpers::RelativelyEqual(T observed, T expected, T relativeThreshold) {
 
 template bool Helpers::RelativelyEqual<float>(float, float, float);
 template bool Helpers::RelativelyEqual<double>(double, double, double);
+template void Helpers::SwapInList<float>(int, int, void *, int);
+template void Helpers::SwapInList<double>(int, int, void *, int);
+template bool Helpers::CompareInList<float>(int, int, void *, int);
+template bool Helpers::CompareInList<double>(int, int, void *, int);
 
 }  // namespace Poincare

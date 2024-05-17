@@ -17,11 +17,10 @@ class CurveParameterController
     : public Escher::ExplicitSelectableListViewController,
       public Shared::WithRecord {
  public:
-  CurveParameterController(
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      GraphController* graphController, CobwebController* cobwebController,
-      Shared::InteractiveCurveViewRange* graphRange,
-      Shared::CurveViewCursor* cursor);
+  CurveParameterController(GraphController* graphController,
+                           CobwebController* cobwebController,
+                           Shared::InteractiveCurveViewRange* graphRange,
+                           Shared::CurveViewCursor* cursor);
   const char* title() override;
   TELEMETRY_ID("CurveParameter");
   void viewWillAppear() override;

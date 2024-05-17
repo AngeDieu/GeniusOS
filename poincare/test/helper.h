@@ -17,6 +17,12 @@ const char* BigOverflowedIntegerString();
 const char* MaxParsedIntegerString();
 const char* ApproximatedParsedIntegerString();
 
+/* TODO: With C++20, these can be simplified with:
+ * using enum Poincare::ReductionTarget;
+ * using enum Poincare::SymbolicComputation;
+ * ...
+ */
+
 constexpr Poincare::ReductionTarget SystemForApproximation =
     Poincare::ReductionTarget::SystemForApproximation;
 constexpr Poincare::ReductionTarget SystemForAnalysis =
@@ -76,8 +82,8 @@ void assert_parsed_expression_process_to(
     Poincare::Preferences::UnitFormat unitFormat,
     Poincare::SymbolicComputation symbolicComputation,
     Poincare::UnitConversion unitConversion, ProcessExpression process,
-    int numberOfSignifiantDigits =
-        Poincare::PrintFloat::k_numberOfStoredSignificantDigits);
+    int numberOfSignificantDigits =
+        Poincare::PrintFloat::k_maxNumberOfSignificantDigits);
 
 // Parsing
 
@@ -85,6 +91,11 @@ Poincare::Expression parse_expression(const char* expression,
                                       Poincare::Context* context,
                                       bool addParentheses,
                                       bool parseForAssignment = false);
+void assert_parsed_expression_is(
+    const char* expression, Poincare::Expression r, bool addParentheses = false,
+    bool parseForAssignment = false,
+    Poincare::Preferences::MixedFractions mixedFractionsParameter =
+        Poincare::Preferences::MixedFractions::Enabled);
 
 // Simplification
 
@@ -152,38 +163,39 @@ void assert_expression_approximates_to(
     Poincare::Preferences::AngleUnit angleUnit = Degree,
     Poincare::Preferences::UnitFormat unitFormat = MetricUnitFormat,
     Poincare::Preferences::ComplexFormat complexFormat = Cartesian,
-    int numberOfSignificantDigits = -1);
-void assert_expression_simplifies_and_approximates_to(
-    const char* expression, const char* approximation,
-    Poincare::Preferences::AngleUnit angleUnit = Degree,
-    Poincare::Preferences::UnitFormat unitFormat = MetricUnitFormat,
-    Poincare::Preferences::ComplexFormat complexFormat = Cartesian,
-    int numberOfSignificantDigits = -1);
+    int numberOfSignificantDigits =
+        Poincare::PrintFloat::SignificantDecimalDigits<T>());
+
 void assert_expression_approximates_keeping_symbols_to(
     const char* expression, const char* simplifiedExpression,
     Poincare::Preferences::AngleUnit angleUnit = Degree,
     Poincare::Preferences::UnitFormat unitFormat = MetricUnitFormat,
     Poincare::Preferences::ComplexFormat complexFormat = Cartesian,
-    int numberOfSignificantDigits = -1);
+    int numberOfSignificantDigits = 10);
+
 template <typename T>
 void assert_expression_simplifies_approximates_to(
     const char* expression, const char* approximation,
     Poincare::Preferences::AngleUnit angleUnit = Degree,
     Poincare::Preferences::UnitFormat unitFormat = MetricUnitFormat,
     Poincare::Preferences::ComplexFormat complexFormat = Cartesian,
-    int numberOfSignificantDigits = -1);
+    int numberOfSignificantDigits =
+        Poincare::PrintFloat::SignificantDecimalDigits<T>());
 
 // Expression serializing
 
-void assert_expression_serialize_to(
+void assert_expression_serializes_to(
     Poincare::Expression expression, const char* serialization,
     Poincare::Preferences::PrintFloatMode mode = ScientificMode,
     int numberOfSignificantDigits = 7);
 
+void assert_expression_serializes_and_parses_to_itself(
+    Poincare::Expression expression);
+
 // Layout serializing
 
-void assert_layout_serialize_to(Poincare::Layout layout,
-                                const char* serialization);
+void assert_layout_serializes_to(Poincare::Layout layout,
+                                 const char* serialization);
 
 // Expression layouting
 

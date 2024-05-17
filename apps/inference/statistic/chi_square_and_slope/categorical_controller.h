@@ -16,9 +16,10 @@
 namespace Inference {
 
 /* Common controller between InputHomogeneityController,
- * InputGoodnessController and ResultsHomogeneityTabController.
- * A CategoricalController is a table whose first cell is also a table of class
- * CategoricalTableCell. */
+ * ResultsHomogeneityTabController, InputGoodnessController,
+ * ResultsGoodnessController.
+ * A CategoricalController is a table whose first cell
+ * is also a table of class CategoricalTableCell. */
 
 class CategoricalController
     : public Escher::SelectableListViewController<Escher::ListViewDataSource>,
@@ -31,10 +32,6 @@ class CategoricalController
 
   static bool ButtonAction(CategoricalController* controller, void* s);
 
-  // Responder
-  void didBecomeFirstResponder() override;
-  bool handleEvent(Ion::Events::Event event) override;
-
   // ScrollViewDelegate
   void scrollViewDidChangeOffset(
       ScrollViewDataSource* scrollViewDataSource) override;
@@ -42,7 +39,7 @@ class CategoricalController
 
   // SelectableListViewDelegate
   void listViewDidChangeSelectionAndDidScroll(
-      SelectableListView* l, int previousRow, KDPoint previousOffset,
+      Escher::SelectableListView* l, int previousRow, KDPoint previousOffset,
       bool withinTemporarySelection = false) override;
 
   // ListViewDataSource
@@ -53,6 +50,8 @@ class CategoricalController
   KDCoordinate separatorBeforeRow(int row) override {
     return row == indexOfNextCell() ? k_defaultRowSeparator : 0;
   }
+
+  void initView() override;
 
  protected:
   constexpr static int k_marginVertical = 5;
@@ -65,6 +64,9 @@ class CategoricalController
 
   Escher::ViewController* m_nextController;
   Escher::ButtonCell m_next;
+
+ private:
+  virtual void createDynamicCells() = 0;
 };
 
 /* Common Controller between InputHomogeneityController and
@@ -73,19 +75,20 @@ class CategoricalController
 class InputCategoricalController : public CategoricalController,
                                    public Shared::ParameterTextFieldDelegate {
  public:
-  InputCategoricalController(
-      Escher::StackViewController* parent,
-      Escher::ViewController* resultsController, Statistic* statistic,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate);
+  InputCategoricalController(Escher::StackViewController* parent,
+                             Escher::ViewController* resultsController,
+                             Statistic* statistic);
 
   // TextFieldDelegate
   bool textFieldShouldFinishEditing(Escher::AbstractTextField* textField,
                                     Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
 
   static bool ButtonAction(InputCategoricalController* controller, void* s);
+
+  // Responder
+  bool handleEvent(Ion::Events::Event event) override;
 
   // ViewController
   void viewWillAppear() override;
@@ -95,20 +98,16 @@ class InputCategoricalController : public CategoricalController,
 
   // ListViewDataSource
   Escher::HighlightCell* reusableCell(int index, int type) override;
-  void fillCellForRow(Escher::HighlightCell* cell, int row) override;
 
  protected:
+  KDCoordinate nonMemoizedRowHeight(int row) override;
+
   InputCategoricalTableCell* categoricalTableCell() override = 0;
   virtual int indexOfSignificanceCell() const = 0;
   int indexOfNextCell() const override { return indexOfSignificanceCell() + 1; }
-  bool handleEditedValue(int i, double p, Escher::AbstractTextField* textField,
-                         Ion::Events::Event event);
   virtual int indexOfEditedParameterAtIndex(int index) const {
-    if (index == indexOfSignificanceCell()) {
-      return m_statistic->indexOfThreshold();
-    }
-    assert(false);
-    return -1;
+    assert(index == indexOfSignificanceCell());
+    return m_statistic->indexOfThreshold();
   }
 
   Statistic* m_statistic;

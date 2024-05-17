@@ -81,37 +81,36 @@ void replayFrom(Journal *l) { sSourceJournal = l; }
 void logTo(Journal *l) { sDestinationJournal = l; }
 
 Event getEvent(int *timeout) {
-  Event res = Events::None;
+  Event nextEvent = Events::None;
   // Replay
   if (sSourceJournal != nullptr) {
     if (sSourceJournal->isEmpty()) {
       sSourceJournal = nullptr;
 #if ESCHER_LOG_EVENTS_NAME
-      Ion::Console::writeLine("----- STATE FILE FULLY LOADED -----");
-#endif
-#if ION_SIMULATOR_FILES
-      // Save screenshot
-      Simulator::Screenshot::commandlineScreenshot()->capture();
+      if (Ion::Events::LogEvents()) {
+        Ion::Console::writeLine("----- STATE FILE FULLY LOADED -----");
+      }
 #endif
     } else {
-      res = sSourceJournal->popEvent();
+      nextEvent = sSourceJournal->popEvent();
 #if ESCHER_LOG_EVENTS_NAME
-      Ion::Console::writeLine("(From state file) ", false);
-#endif
-#if ION_SIMULATOR_FILES
-      // Save step screenshot
-      Simulator::Screenshot::commandlineScreenshot()->captureStep(res);
+      if (Ion::Events::LogEvents()) {
+        Ion::Console::writeLine("(From state file) ", false);
+      }
 #endif
     }
+#if ION_SIMULATOR_FILES
+    Simulator::Screenshot::commandlineScreenshot()->capture(nextEvent);
+#endif
   }
 
-  if (res == Events::None) {
-    res = sharedGetEvent(timeout);
+  if (nextEvent == Events::None) {
+    nextEvent = sharedGetEvent(timeout);
   }
   if (sDestinationJournal != nullptr) {
-    sDestinationJournal->pushEvent(res);
+    sDestinationJournal->pushEvent(nextEvent);
   }
-  return res;
+  return nextEvent;
 }
 
 #else

@@ -30,13 +30,11 @@ class PopupItemView : public HighlightCell, public Bordered {
   void drawRect(KDContext* ctx, KDRect rect) const override;
   void setPopping(bool popping) { m_isPoppingUp = popping; }
 
- protected:
-  bool m_isPoppingUp;
-
  private:
   constexpr static int k_marginCaretRight = 2;
   constexpr static int k_marginImageHorizontal = 3;
   constexpr static int k_marginImageVertical = 2;
+  bool m_isPoppingUp;
   HighlightCell* m_cell;
   TransparentImageView m_caret;
 };
@@ -54,14 +52,13 @@ class DropdownCallback {
  * choose from It requires a DropdownDataSource to provide a list of views */
 class Dropdown : public PopupItemView, public Responder {
  public:
-  Dropdown(Responder* parentResponder, ListViewDataSource* listDataSource,
+  Dropdown(Responder* parentResponder,
+           ExplicitListViewDataSource* listDataSource,
            DropdownCallback* callback = nullptr);
   Responder* responder() override { return this; }
   bool handleEvent(Ion::Events::Event e) override;
-  void reloadAllCells();
   void init();
-  int selectedRow() { return m_popup.selectedRow(); }
-  void selectRow(int row) { m_popup.selectRow(row); }
+  void selectRow(int row);
 
   void open();
   void close();
@@ -70,50 +67,35 @@ class Dropdown : public PopupItemView, public Responder {
   /* List of PopupViews shown in a modal view + Wraps a ListViewDataSource to
    * return PopupViews. */
 
-  class DropdownPopupController : public ViewController,
-                                  public StandardMemoizedListViewDataSource {
+  class DropdownPopupController : public ExplicitSelectableListViewController {
    public:
-    friend Dropdown;
     DropdownPopupController(Responder* parentResponder,
-                            ListViewDataSource* listDataSource,
+                            ExplicitListViewDataSource* listDataSource,
                             Dropdown* dropdown,
                             DropdownCallback* callback = nullptr);
 
     // View Controller
     View* view() override { return &m_borderingView; }
-    void didBecomeFirstResponder() override;
     bool handleEvent(Ion::Events::Event e) override;
-    int selectedRow() { return m_selectionDataSource.selectedRow(); }
-    void selectRow(int row);
-    void close();
 
     // MemoizedListViewDataSource
     int numberOfRows() const override {
       return m_listViewDataSource->numberOfRows();
     }
     KDCoordinate defaultColumnWidth() override;
-    int typeAtRow(int row) const override {
-      return m_listViewDataSource->typeAtRow(row);
-    }
-    KDCoordinate nonMemoizedRowHeight(int row) override;
-    int reusableCellCount(int type) override {
-      return m_listViewDataSource->reusableCellCount(type);
-    }
-    PopupItemView* reusableCell(int index, int type) override;
-    void fillCellForRow(HighlightCell* cell, int row) override;
-    void resetMemoization(bool force = true) override;
-    HighlightCell* innerCellAtIndex(int index);
+    HighlightCell* cell(int row) override { return &m_popupViews[row]; }
 
-    constexpr static int k_maxNumberOfPopupItems = 4;
+    HighlightCell* innerCellAtRow(int row);
+    void init();
+    void open();
+    void close();
 
    private:
-    KDPoint topLeftCornerForSelection(View* originView);
-
-    ListViewDataSource* m_listViewDataSource;
+    void resetSizeMemoization() override;
+    constexpr static int k_maxNumberOfPopupItems = 4;
+    ExplicitListViewDataSource* m_listViewDataSource;
     PopupItemView m_popupViews[k_maxNumberOfPopupItems];
     KDCoordinate m_memoizedCellWidth;
-    SelectableListViewDataSource m_selectionDataSource;
-    SelectableListView m_selectableListView;
     BorderingView m_borderingView;
     DropdownCallback* m_callback;
     Dropdown* m_dropdown;

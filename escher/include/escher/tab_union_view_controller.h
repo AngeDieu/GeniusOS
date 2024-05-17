@@ -42,15 +42,16 @@ class TabUnion : public AbstractTabUnion {
     switch (index) {
       case 0:
         new (&m_0) T0();
-        return;
+        break;
       case 1:
         new (&m_1) T1();
-        return;
+        break;
       default:
         assert(index == 2);
         new (&m_2) T2();
-        return;
+        break;
     }
+    tab()->top()->initView();
   }
 
   template <class T>
@@ -106,13 +107,15 @@ class TabUnionViewController : public TabViewController {
   const char* tabName(uint8_t index) override {
     return I18n::translate(m_titles[index]);
   };
-  void viewWillAppear() override;
 
  private:
   ViewController* children(uint8_t index) override {
     assert(index == m_tabs->activeTab());
     return m_tabs->tab()->top();
   }
+  void updateUnionActiveTab() override;
+  void addTabs() override {}
+
   I18n::Message m_titles[3];
   AbstractTabUnion* m_tabs;
 };

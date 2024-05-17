@@ -20,8 +20,8 @@ class TableSize1DManager {
                                              KDCoordinate defaultSize) = 0;
   virtual bool sizeAtIndexIsMemoized(int i) const { return false; }
 
-  virtual void resetMemoization(bool force = true) {}
-  virtual void lockMemoization(bool state) const {}
+  virtual void resetSizeMemoization(bool force) {}
+  virtual void lockSizeMemoization(bool state) const {}
 };
 
 /* Use RegularTableSize1DManager if the height or width is constant.
@@ -60,17 +60,19 @@ class MemoizedTableSize1DManager : public TableSize1DManager {
   int computeIndexAfterCumulatedSize(KDCoordinate offset,
                                      KDCoordinate defaultSize) override;
 
-  void resetMemoization(bool force = true) override;
-  void lockMemoization(bool state) const override;
+  void resetSizeMemoization(bool force) override;
+  void lockSizeMemoization(bool state) const override;
 
   bool sizeAtIndexIsMemoized(int i) const override {
     return i >= m_memoizedIndexOffset &&
            i < m_memoizedIndexOffset + memoizedLinesCount();
   }
 
+#if 0
   void updateMemoizationForIndex(int index, KDCoordinate previousSize,
                                  KDCoordinate newSize = k_undefinedSize);
   void deleteIndexFromMemoization(int index, KDCoordinate previousSize);
+#endif
 
  protected:
   virtual int numberOfLines() const = 0;  // Return number of rows or columns
@@ -86,8 +88,18 @@ class MemoizedTableSize1DManager : public TableSize1DManager {
   void setMemoizationIndex(int index);
   void shiftMemoization(bool lowerIndex);
   KDCoordinate m_memoizedCumulatedSizeOffset;
-  KDCoordinate m_memoizedTotalSize;
   int m_memoizedIndexOffset;
+  KDCoordinate m_memoizedTotalSize;
+  /* These two values store the last computed value of
+   * computeIndexAfterCumulatedSize. Indeed, this method is called a countless
+   * amount of time each time a table is layouted because it is used to know the
+   * numberOfDisplayableRows which is called by methods like cellAtLocation or
+   * numberOfSubviews.
+   * Most of the time, computeIndexAfterCumulatedSize is always called with the
+   * same offset argument, so we just need to memoize the last computed value to
+   * greatly improve the performances.*/
+  int m_lastIndexAfterCumulatedSize;
+  KDCoordinate m_lastCumulatedSize;
   mutable int m_memoizationLockedLevel;
 };
 
@@ -97,7 +109,7 @@ class TemplatedMemoizedTableSize1DManager : public MemoizedTableSize1DManager {
   TemplatedMemoizedTableSize1DManager(TableViewDataSource* tableViewDataSource)
       : MemoizedTableSize1DManager(tableViewDataSource) {
     // Must be done here since virtual functions are not virtual in constructors
-    resetMemoization(true);
+    resetSizeMemoization(true);
   }
 
  private:

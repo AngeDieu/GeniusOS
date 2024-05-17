@@ -64,18 +64,6 @@ void NAryExpression::mergeSameTypeChildrenInPlace() {
   }
 }
 
-bool NAryExpression::allChildrenAreReal(Context* context,
-                                        bool canContainMatrices) const {
-  int n = numberOfChildren();
-  for (int i = 0; i < n; i++) {
-    Expression c = childAtIndex(i);
-    if (!c.isReal(context, canContainMatrices)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 Expression NAryExpression::checkChildrenAreRationalIntegersAndUpdate(
     const ReductionContext& reductionContext) {
   int childrenNumber = numberOfChildren();
@@ -90,17 +78,19 @@ Expression NAryExpression::checkChildrenAreRationalIntegersAndUpdate(
        * complex or finite non-integer number. Otherwise, rely on template
        * approximations. hasDefinedComplexApproximation is given Cartesian
        * complex format to force imaginary part approximation. */
+      ApproximationContext approximationContext(reductionContext, true);
+      Preferences::ComplexFormat complexFormat =
+          approximationContext.complexFormat();
+      approximationContext.setComplextFormat(
+          Preferences::ComplexFormat::Cartesian);
       if (!c.isReal(reductionContext.context(),
                     reductionContext.shouldCheckMatrices()) &&
-          c.hasDefinedComplexApproximation<float>(
-              reductionContext.context(), Preferences::ComplexFormat::Cartesian,
-              reductionContext.angleUnit())) {
+          c.hasDefinedComplexApproximation<float>(approximationContext)) {
         return replaceWithUndefinedInPlace();
       }
       // If c was complex but with a null imaginary part, real part is checked.
-      double app = c.approximateToScalar<double>(
-          reductionContext.context(), reductionContext.complexFormat(),
-          reductionContext.angleUnit(), true);
+      approximationContext.setComplextFormat(complexFormat);
+      double app = c.approximateToScalar<double>(approximationContext);
       if (std::isfinite(app) && app != std::round(app)) {
         return replaceWithUndefinedInPlace();
       }
@@ -117,17 +107,21 @@ Expression NAryExpression::checkChildrenAreRationalIntegersAndUpdate(
 Expression NAryExpression::combineComplexCartesians(
     ComplexOperator complexOperator, ReductionContext reductionContext) {
   /* Let's bubble up the complex cartesian if possible.
-   * Children are sorted so ComplexCartesian nodes are at the end
-   */
+   * Children are sorted so ComplexCartesian nodes are at the end. */
   int currentNChildren = numberOfChildren();
   if (childAtIndex(currentNChildren - 1).type() !=
       ExpressionNode::Type::ComplexCartesian) {
     return Expression();
   }
-
+  /* We need to shallow reduce with target for analysis otherwise the
+   * combination of complex might not be well reduced. */
+  ReductionContext contextForAnalysis = reductionContext;
+  contextForAnalysis.setTarget(ReductionTarget::SystemForAnalysis);
   int i = currentNChildren - 1;
   // Merge all ComplexCartesian and real children into one
   ComplexCartesian child = childAtIndex(i).convert<ComplexCartesian>();
+  child.real().shallowReduce(contextForAnalysis);
+  child.imag().shallowReduce(contextForAnalysis);
   while (i > 0) {
     i--;
     Expression c = childAtIndex(i);
@@ -139,8 +133,10 @@ Expression NAryExpression::combineComplexCartesians(
       c = ComplexCartesian::Builder(c, Rational::Builder(0));
     }
     assert(c.type() == ExpressionNode::Type::ComplexCartesian);
-    child = (child.*complexOperator)(static_cast<ComplexCartesian&>(c),
-                                     reductionContext);
+    ComplexCartesian complex = static_cast<ComplexCartesian&>(c);
+    complex.real().shallowReduce(contextForAnalysis);
+    complex.imag().shallowReduce(contextForAnalysis);
+    child = (child.*complexOperator)(complex, reductionContext);
     replaceChildAtIndexInPlace(numberOfChildren() - 1, child);
     removeChildAtIndexInPlace(i);
   }

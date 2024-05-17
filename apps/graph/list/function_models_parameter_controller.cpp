@@ -22,7 +22,7 @@ FunctionModelsParameterController::FunctionModelsParameterController(
     : ExplicitSelectableListViewController(parentResponder),
       m_listController(listController) {
   m_emptyModelCell.label()->setMessage(I18n::Message::Empty);
-  m_selectableListView.setMargins(0);
+  m_selectableListView.resetMargins();
   m_selectableListView.hideScrollBars();
   const Model* models = Models();
   for (int i = 0; i < k_numberOfExpressionCells; i++) {
@@ -34,7 +34,7 @@ FunctionModelsParameterController::FunctionModelsParameterController(
      * entering exam mode or changing country which requires exiting the app and
      * rebuilding the cells when re-entering. */
     m_modelCells[i].subLabel()->setMessage(
-        Preferences::sharedPreferences->examMode().forbidImplicitPlots()
+        Preferences::sharedPreferences->examMode().forbidGraphDetails()
             ? I18n::Message::Default
             : k_modelDescriptions[static_cast<int>(models[i]) - 1]);
   }
@@ -55,26 +55,20 @@ const char* FunctionModelsParameterController::title() {
 
 void FunctionModelsParameterController::viewWillAppear() {
   ViewController::viewWillAppear();
+  for (int i = 0; i < k_numberOfExpressionCells; i++) {
+    Model model = Models()[i];
+    char buffer[k_maxSizeOfNamedModel];
+    Poincare::Expression e = Expression::Parse(
+        ModelWithDefaultName(model, buffer, k_maxSizeOfNamedModel),
+        nullptr);  // No context needed
+    m_layouts[i] =
+        e.createLayout(Poincare::Preferences::PrintFloatMode::Decimal,
+                       Preferences::ShortNumberOfSignificantDigits,
+                       AppsContainer::sharedAppsContainer()->globalContext());
+    m_modelCells[i].label()->setLayout(m_layouts[i]);
+  }
   m_selectableListView.selectCell(0);
   m_selectableListView.reloadData();
-}
-
-void FunctionModelsParameterController::fillCellForRow(
-    Escher::HighlightCell* cell, int row) {
-  if (cell == &m_emptyModelCell) {
-    return;
-  }
-  int i = row - 1;
-  Model model = Models()[i];
-  char buffer[k_maxSizeOfNamedModel];
-  Poincare::Expression e = Expression::Parse(
-      ModelWithDefaultName(model, buffer, k_maxSizeOfNamedModel),
-      nullptr);  // No context needed
-  m_layouts[i] =
-      e.createLayout(Poincare::Preferences::PrintFloatMode::Decimal,
-                     Preferences::ShortNumberOfSignificantDigits,
-                     AppsContainer::sharedAppsContainer()->globalContext());
-  m_modelCells[i].label()->setLayout(m_layouts[i]);
 }
 
 int FunctionModelsParameterController::DefaultName(char buffer[],
@@ -137,14 +131,11 @@ bool FunctionModelsParameterController::handleEvent(Ion::Events::Event event) {
         ModelWithDefaultName(model, buffer, k_maxSizeOfNamedModel));
     assert(success);
     (void)success;  // Silence warnings
-    Container::activeApp()->modalViewController()->dismissModal();
+    App::app()->modalViewController()->dismissModal();
     m_listController->editExpression(Ion::Events::OK);
     return true;
   }
-  if (m_listController->handleEventOnExpressionInTemplateMenu(event)) {
-    return true;
-  }
-  return false;
+  return m_listController->handleEventOnExpressionInTemplateMenu(event);
 }
 
 int FunctionModelsParameterController::numberOfRows() const {

@@ -14,25 +14,19 @@ class TableViewDataSource {
   friend class MemoizedRowHeightManager;
   template <int N>
   friend class MemoizedColumnWidthManager;
+  friend class TableView;
+  friend class ListWithTopAndBottomController;
 
  public:
   // TODO: Factorize ovelap and separator
   constexpr static KDCoordinate k_defaultRowSeparator =
       Escher::Metric::CommonMenuMargin + Escher::Metric::CellSeparatorThickness;
 
-  virtual void initCellSize(TableView* view) {}
   virtual int numberOfRows() const = 0;
   virtual int numberOfColumns() const = 0;
   virtual void fillCellForLocation(HighlightCell* cell, int column, int row);
-  virtual bool cellAtLocationIsSelectable(HighlightCell* cell, int column,
-                                          int row) {
-    /* TODO: If cell is nullptr because it's a reusable cell not populated
-     * yet, this can't check if the cell is selectable.
-     * isSelectable() should maybe belong to dataSource and not cell. */
-    assert(column >= 0 && column < numberOfColumns() && row >= 0 &&
-           row < numberOfRows());
-    return !cell || cell->isSelectable();
-  }
+  virtual bool canSelectCellAtLocation(int column, int row) { return true; }
+  virtual bool canStoreCellAtLocation(int column, int row) { return true; }
 
   KDCoordinate columnWidth(int column, bool withSeparator = true);
   KDCoordinate rowHeight(int row, bool withSeparator = true);
@@ -50,8 +44,7 @@ class TableViewDataSource {
   virtual int reusableCellCount(int type) = 0;
   virtual int typeAtLocation(int column, int row) = 0;
 
-  virtual void resetMemoization(bool force = true);
-  void lockMemoization(bool state);
+  void lockSizeMemoization(bool state);
 
  protected:
   /* These should always be overriden unless sizes are regular, in which case
@@ -93,6 +86,7 @@ class TableViewDataSource {
    * Use a MemoizedTableSize1DManager if the sizes are variable. */
   virtual TableSize1DManager* columnWidthManager() { return nullptr; }
   virtual TableSize1DManager* rowHeightManager() { return nullptr; }
+  virtual void resetSizeMemoization();
 };
 
 }  // namespace Escher

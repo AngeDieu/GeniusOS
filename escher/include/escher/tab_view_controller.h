@@ -22,6 +22,7 @@ class TabViewController : public ViewController {
   void setDisplayTabs(bool display) { m_view.setDisplayTabs(display); }
   void enterActiveTab() { setActiveTab(activeTab()); }
   uint8_t numberOfTabs();
+  void setActiveChildren(uint8_t index);
 
   virtual const char* tabName(uint8_t index);
   bool handleEvent(Ion::Events::Event event) override;
@@ -59,6 +60,9 @@ class TabViewController : public ViewController {
   ContentView m_view;
 
   virtual ViewController* children(uint8_t index) { return m_children[index]; }
+  virtual void updateUnionActiveTab() {}
+  virtual void addTabs();
+
   constexpr static uint8_t k_maxNumberOfChildren = 3;
   ViewController* m_children[k_maxNumberOfChildren];
   uint8_t m_numberOfChildren;

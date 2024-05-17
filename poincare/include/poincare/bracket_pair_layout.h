@@ -19,44 +19,36 @@ class BracketPairLayoutNode : public LayoutNode {
 
  protected:
   // Minimal height at which the children dictates bracket height
-  constexpr static KDCoordinate k_minimalChildHeight =
+  static constexpr KDCoordinate k_minimalChildHeight =
       Escher::Metric::MinimalBracketAndParenthesisChildHeight;
 
-  static bool ChildHeightDictatesHeight(KDCoordinate childHeight) {
-    return childHeight >= k_minimalChildHeight;
+  static KDCoordinate VerticalMargin(KDCoordinate childHeight,
+                                     KDCoordinate minVerticalMargin) {
+    /* If the child height is below the threshold, make it bigger so that
+     * The bracket pair maintains the right height */
+    KDCoordinate verticalMargin = minVerticalMargin;
+
+    if (childHeight < k_minimalChildHeight) {
+      verticalMargin += (k_minimalChildHeight - childHeight) / 2;
+    }
+    return verticalMargin;
   }
-  static KDCoordinate HeightGivenChildHeight(KDCoordinate childHeight,
-                                             KDCoordinate verticalMargin) {
-    return (ChildHeightDictatesHeight(childHeight) ? childHeight
-                                                   : k_minimalChildHeight) +
-           verticalMargin * 2;
+  static KDCoordinate Height(KDCoordinate childHeight,
+                             KDCoordinate minVerticalMargin) {
+    return childHeight + 2 * VerticalMargin(childHeight, minVerticalMargin);
   }
-  static KDCoordinate BaselineGivenChildHeightAndBaseline(
-      KDCoordinate childHeight, KDCoordinate childBaseline,
-      KDCoordinate verticalMargin) {
-    return childBaseline + verticalMargin +
-           (ChildHeightDictatesHeight(childHeight)
-                ? 0
-                : (k_minimalChildHeight - childHeight) / 2);
+
+  static KDCoordinate Baseline(KDCoordinate childHeight,
+                               KDCoordinate childBaseline,
+                               KDCoordinate minVerticalMargin) {
+    return childBaseline + VerticalMargin(childHeight, minVerticalMargin);
   }
-  static KDPoint ChildOffset(KDCoordinate verticalMargin,
-                             KDCoordinate bracketWidth) {
-    return KDPoint(bracketWidth, verticalMargin);
-  }
-  static KDPoint PositionGivenChildHeightAndBaseline(
-      bool left, KDCoordinate bracketWidth, KDSize childSize,
-      KDCoordinate childBaseline, KDCoordinate verticalMargin) {
-    return KDPoint(
-        left ? -bracketWidth : childSize.width(),
-        ChildHeightDictatesHeight(childSize.height())
-            ? -verticalMargin
-            : childBaseline -
-                  HeightGivenChildHeight(childSize.height(), verticalMargin) /
-                      2);
-  }
-  static KDCoordinate OptimalChildHeightGivenLayoutHeight(
-      KDCoordinate layoutHeight, KDCoordinate verticalMargin) {
-    return layoutHeight - verticalMargin * 2;
+
+  static KDPoint ChildOffset(KDCoordinate minVerticalMargin,
+                             KDCoordinate bracketWidth,
+                             KDCoordinate childHeight) {
+    return KDPoint(bracketWidth,
+                   VerticalMargin(childHeight, minVerticalMargin));
   }
 
   // LayoutNode
@@ -71,7 +63,7 @@ class BracketPairLayoutNode : public LayoutNode {
                           Preferences::PrintFloatMode floatDisplayMode,
                           int numberOfSignificantDigits) const;
   virtual KDCoordinate bracketWidth() const = 0;
-  virtual KDCoordinate verticalMargin() const = 0;
+  virtual KDCoordinate minVerticalMargin() const = 0;
   virtual void renderOneBracket(bool left, KDContext* ctx, KDPoint p,
                                 KDGlyph::Style style) = 0;
 };

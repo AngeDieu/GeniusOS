@@ -2,13 +2,14 @@
 #define SOLVER_SOLUTIONS_CONTROLLER_H
 
 #include <apps/i18n.h>
-#include <apps/shared/scrollable_two_layouts_cell.h>
 #include <escher/alternate_empty_view_controller.h>
 #include <escher/even_odd_buffer_text_cell.h>
 #include <escher/even_odd_expression_cell.h>
+#include <escher/scrollable_two_layouts_cell.h>
 #include <escher/selectable_table_view.h>
 #include <escher/selectable_table_view_data_source.h>
 #include <escher/selectable_table_view_delegate.h>
+#include <escher/solid_color_cell.h>
 #include <escher/tab_view_controller.h>
 #include <escher/table_view_data_source.h>
 #include <ion.h>
@@ -19,29 +20,20 @@
 namespace Solver {
 
 class SolutionsController : public Escher::ViewController,
-                            public Escher::AlternateEmptyViewDelegate,
                             public Escher::SelectableTableViewDataSource,
-                            public Escher::TableViewDataSource,
-                            public Escher::SelectableTableViewDelegate {
+                            public Escher::TableViewDataSource {
  public:
   SolutionsController(Escher::Responder *parentResponder);
 
   // ViewController
   const char *title() override;
   Escher::View *view() override { return &m_contentView; }
+  void initView() override;
   void viewWillAppear() override;
   void viewDidDisappear() override;
   void didEnterResponderChain(
       Escher::Responder *previousFirstResponder) override;
   TELEMETRY_ID("Solutions");
-
-  // AlternateEmptyViewDelegate
-  bool isEmpty() const override { return false; }  // View cannot be empty
-  I18n::Message emptyMessage() override {
-    assert(false);
-    return static_cast<I18n::Message>(0);
-  }
-  Escher::Responder *responderWhenEmpty() override;
 
   // TableViewDataSource
   int numberOfRows() const override;
@@ -51,20 +43,16 @@ class SolutionsController : public Escher::ViewController,
   Escher::HighlightCell *reusableCell(int index, int type) override;
   int reusableCellCount(int type) override;
   int typeAtLocation(int column, int row) override;
-  bool cellAtLocationIsSelectable(Escher::HighlightCell *cell, int column,
-                                  int row) override {
+  bool canSelectCellAtLocation(int column, int row) override {
     return typeAtLocation(column, row) != k_messageCellType &&
            typeAtLocation(column, row) != k_emptyCellType;
+  }
+  bool canStoreCellAtLocation(int column, int row) override {
+    return column > 0;
   }
 
   // Responder
   void didBecomeFirstResponder() override;
-
-  // SelectableTableViewDelegate
-  bool canStoreContentOfCellAtLocation(Escher::SelectableTableView *t, int col,
-                                       int row) const override {
-    return col > 0;
-  }
 
  private:
   // TableViewDataSource
@@ -86,7 +74,7 @@ class SolutionsController : public Escher::ViewController,
     ContentView(SolutionsController *controller);
     void drawRect(KDContext *ctx, KDRect rect) const override;
     void setWarning(bool warning);
-    void setWarningMessages(I18n::Message message0, I18n::Message message1);
+    void setWarningMessage(I18n::Message message);
     Escher::SelectableTableView *selectableTableView() {
       return &m_selectableTableView;
     }
@@ -104,8 +92,7 @@ class SolutionsController : public Escher::ViewController,
     int numberOfSubviews() const override;
     Escher::View *subviewAtIndex(int index) override;
     void layoutSubviews(bool force = false) override;
-    Escher::MessageTextView m_warningMessageView0;
-    Escher::MessageTextView m_warningMessageView1;
+    Escher::MessageTextView m_warningMessageView;
     Escher::SelectableTableView m_selectableTableView;
     bool m_displayWarningMoreSolutions;
   };
@@ -144,16 +131,7 @@ class SolutionsController : public Escher::ViewController,
     void layoutSubviews(bool force = false) override {
       setChildFrame(&m_messageView, bounds(), force);
     }
-    bool protectedIsSelectable() override { return false; }
     Escher::MessageTextView m_messageView;
-  };
-
-  class EmptyCell : public Escher::HighlightCell {
-   public:
-    void drawRect(KDContext *ctx, KDRect rect) const override {
-      ctx->fillRect(bounds(),
-                    SolutionsController::ContentView::k_backgroundColor);
-    }
   };
 
   // Cell types
@@ -178,9 +156,9 @@ class SolutionsController : public Escher::ViewController,
           (Poincare::SymbolAbstractNode::k_maxNameLengthWithoutQuotationMarks +
            2) +
       2 * Escher::AbstractEvenOddBufferTextCell::k_horizontalMargin;
-  constexpr static int k_valueCellWidth =
-      Ion::Display::Width - k_symbolCellWidth -
-      Escher::Metric::CommonLeftMargin - Escher::Metric::CommonRightMargin;
+  constexpr static int k_valueCellWidth = Ion::Display::Width -
+                                          k_symbolCellWidth -
+                                          Escher::Metric::CommonMargins.width();
 
   /* Number of cells
    * When displaying approximate solutions for cos(x) = 0 between 0 and 1800 and
@@ -227,11 +205,11 @@ class SolutionsController : public Escher::ViewController,
   Escher::EvenOddExpressionCell m_deltaCell;
   Poincare::Layout m_delta2Layout;
   Poincare::Layout m_delta3Layout;
-  Shared::ScrollableTwoLayoutsCell m_exactValueCells[k_numberOfExactValueCells];
+  Escher::ScrollableTwoLayoutsCell m_exactValueCells[k_numberOfExactValueCells];
   Escher::FloatEvenOddBufferTextCell<>
       m_approximateValueCells[k_numberOfApproximateValueCells];
   MessageCell m_messageCells[k_numberOfMessageCells];
-  EmptyCell m_emptyCell[k_numberOfEmptyCells];
+  Escher::SolidColorCell m_emptyCell[k_numberOfEmptyCells];
   ContentView m_contentView;
 };
 

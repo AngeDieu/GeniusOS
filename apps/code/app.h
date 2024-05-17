@@ -1,21 +1,20 @@
 #ifndef CODE_APP_H
 #define CODE_APP_H
 
+#include <apps/shared/shared_app.h>
 #include <ion/events.h>
 
-#include "../shared/input_event_handler_delegate_app.h"
-#include "../shared/shared_app.h"
 #include "console_controller.h"
 #include "menu_controller.h"
-#include "python_toolbox.h"
+#include "python_toolbox_controller.h"
+#include "python_variable_box_controller.h"
 #include "script_store.h"
-#include "variable_box_controller.h"
 
 namespace Code {
 
-class App : public Shared::InputEventHandlerDelegateApp {
+class App : public Shared::SharedApp {
  public:
-  class Descriptor : public Shared::InputEventHandlerDelegateApp::Descriptor {
+  class Descriptor : public Escher::App::Descriptor {
    public:
     I18n::Message name() const override;
     I18n::Message upperName() const override;
@@ -26,7 +25,6 @@ class App : public Shared::InputEventHandlerDelegateApp {
     Snapshot();
     App *unpack(Escher::Container *container) override;
     const Descriptor *descriptor() const override;
-    ScriptStore *scriptStore();
 #if EPSILON_GETOPT
     bool lockOnConsole() const;
     void setOpt(const char *name, const char *value) override;
@@ -35,11 +33,9 @@ class App : public Shared::InputEventHandlerDelegateApp {
 #if EPSILON_GETOPT
     bool m_lockOnConsole;
 #endif
-    ScriptStore m_scriptStore;
   };
-  static App *app() {
-    return static_cast<App *>(Escher::Container::activeApp());
-  }
+  static App *app() { return static_cast<App *>(Escher::App::app()); }
+  bool quitInputRunLoop();
   ~App();
   TELEMETRY_ID("Code");
   Escher::StackViewController *stackViewController() {
@@ -52,14 +48,11 @@ class App : public Shared::InputEventHandlerDelegateApp {
   bool handleEvent(Ion::Events::Event event) override;
   void willExitResponderChain(Escher::Responder *nextFirstResponder) override;
 
-  /* InputEventHandlerDelegate */
-  PythonToolbox *toolbox() override { return &m_toolbox; }
-  VariableBoxController *variableBox() override {
-    return &m_variableBoxController;
-  }
+  PythonToolboxController *toolbox() override { return &m_toolbox; }
+  PythonVariableBoxController *variableBox() override { return &m_variableBox; }
 
   /* TextInputDelegate */
-  bool textInputDidReceiveEvent(Escher::InputEventHandler *textInput,
+  bool textInputDidReceiveEvent(Escher::EditableField *textInput,
                                 Ion::Events::Event event);
 
   /* Code::App */
@@ -86,8 +79,8 @@ class App : public Shared::InputEventHandlerDelegateApp {
   Escher::ButtonRowController m_listFooter;
   MenuController m_menuController;
   Escher::StackViewController m_codeStackViewController;
-  PythonToolbox m_toolbox;
-  VariableBoxController m_variableBoxController;
+  PythonToolboxController m_toolbox;
+  PythonVariableBoxController m_variableBox;
 #if PLATFORM_DEVICE
   /* On the device, we reach 64K of heap by repurposing the unused tree pool.
    * The linker must make sure that the pool and the apps buffer are

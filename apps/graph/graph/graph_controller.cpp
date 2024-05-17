@@ -18,19 +18,16 @@ using namespace Shared;
 namespace Graph {
 
 GraphController::GraphController(
-    Escher::Responder *parentResponder,
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
-    Escher::ButtonRowController *header,
+    Escher::Responder *parentResponder, Escher::ButtonRowController *header,
     Shared::InteractiveCurveViewRange *interactiveRange,
     CurveViewCursor *cursor, int *selectedCurveIndex)
-    : FunctionGraphController(parentResponder, inputEventHandlerDelegate,
-                              header, interactiveRange, &m_view, cursor,
-                              selectedCurveIndex),
-      m_bannerView(this, inputEventHandlerDelegate, this),
+    : FunctionGraphController(parentResponder, header, interactiveRange,
+                              &m_view, cursor, selectedCurveIndex),
+      m_bannerView(this, this),
       m_view(interactiveRange, m_cursor, &m_bannerView, &m_cursorView),
       m_graphRange(interactiveRange),
-      m_curveParameterController(inputEventHandlerDelegate, interactiveRange,
-                                 &m_bannerView, m_cursor, &m_view),
+      m_curveParameterController(interactiveRange, &m_bannerView, m_cursor,
+                                 &m_view, this),
       m_functionSelectionController(this) {
   m_graphRange->setDelegate(this);
 }
@@ -93,7 +90,20 @@ Range2D GraphController::optimalRange(bool computeX, bool computeY,
   Zoom zoom(NAN, NAN, InteractiveCurveViewRange::NormalYXRatio(), context,
             k_maxFloat);
   ContinuousFunctionStore *store = functionStore();
+  if (store->memoizationOverflows()) {
+    /* Do not compute autozoom if store is full because the computation is too
+     * slow. */
+    Range1D xRange(-Range1D::k_defaultHalfLength, Range1D::k_defaultHalfLength);
+    Range2D defaultRange(xRange, xRange);
+    defaultRange.setRatio(InteractiveCurveViewRange::NormalYXRatio(), true,
+                          k_maxFloat);
+    return Range2D(*(computeX ? defaultRange : originalRange).x(),
+                   *(computeY ? defaultRange : originalRange).y());
+  }
+  bool canComputeIntersections
+      [ContinuousFunctionStore::k_maxNumberOfMemoizedModels];
   int nbFunctions = store->numberOfActiveFunctions();
+  assert(nbFunctions <= ContinuousFunctionStore::k_maxNumberOfMemoizedModels);
   Range1D xBounds =
       computeX ? Range1D(-k_maxFloat, k_maxFloat) : *originalRange.x();
   Range1D yBounds =
@@ -103,6 +113,7 @@ Range2D GraphController::optimalRange(bool computeX, bool computeY,
   zoom.setForcedRange(forcedRange);
 
   for (int i = 0; i < nbFunctions; i++) {
+    canComputeIntersections[i] = false;
     ExpiringPointer<ContinuousFunction> f =
         store->modelForRecord(store->activeRecordAtIndex(i));
     if (f->approximationBasedOnCostlyAlgorithms(context)) {
@@ -170,25 +181,26 @@ Range2D GraphController::optimalRange(bool computeX, bool computeY,
       zoom.fitPoint(Coordinate2D<float>(ranges[0].max(), ranges[1].max()));
       zoom.fitPoint(Coordinate2D<float>(ranges[0].min(), ranges[1].min()));
     } else if (f->properties().isScatterPlot()) {
+      ApproximationContext approximationContext(context);
       for (Point p : f->iterateScatterPlot(context)) {
-        zoom.fitPoint(p.approximate2D<float>(
-            context, Preferences::sharedPreferences->complexFormat(),
-            Preferences::sharedPreferences->angleUnit()));
+        zoom.fitPoint(p.approximate2D<float>(approximationContext));
       }
     } else {
       assert(f->properties().isCartesian());
+      canComputeIntersections[i] = true;
       bool alongY = f->isAlongY();
       Range1D *bounds = alongY ? &yBounds : &xBounds;
       // Use the intersection between the definition domain of f and the bounds
       zoom.setBounds(std::clamp(f->tMin(), bounds->min(), bounds->max()),
                      std::clamp(f->tMax(), bounds->min(), bounds->max()));
       zoom.fitPointsOfInterest(evaluator<float>, f.operator->(), alongY,
-                               evaluator<double>);
+                               evaluator<double>, canComputeIntersections + i);
       zoom.fitBounds(evaluator<float>, f.operator->(), alongY);
       if (f->numberOfSubCurves() > 1) {
         assert(f->numberOfSubCurves() == 2);
         zoom.fitPointsOfInterest(evaluatorSecondCurve<float>, f.operator->(),
-                                 alongY, evaluatorSecondCurve<double>);
+                                 alongY, evaluatorSecondCurve<double>,
+                                 canComputeIntersections + i);
         zoom.fitBounds(evaluatorSecondCurve<float>, f.operator->(), alongY);
       }
 
@@ -220,24 +232,21 @@ Range2D GraphController::optimalRange(bool computeX, bool computeY,
                            Preferences::sharedPreferences->angleUnit(), alongY);
       }
 
-      /* Do not compute intersections if store is full because re-creating a
-       * ContinuousFunction object each time a new function is intersected
-       * is very slow. */
-      if (!store->memoizationIsFull() &&
+      if (canComputeIntersections[i] &&
           f->properties()
               .canComputeIntersectionsWithFunctionsAlongSameVariable()) {
         ContinuousFunction *mainF = f.operator->();
-        for (int j = i + 1; j < nbFunctions; j++) {
+        for (int j = 0; j < i; j++) {
           ExpiringPointer<ContinuousFunction> g =
               store->modelForRecord(store->activeRecordAtIndex(j));
-          if (!g->properties()
-                   .canComputeIntersectionsWithFunctionsAlongSameVariable() ||
-              g->isAlongY() != alongY ||
-              g->approximationBasedOnCostlyAlgorithms(context)) {
-            continue;
+          if (canComputeIntersections[j] &&
+              g->properties()
+                  .canComputeIntersectionsWithFunctionsAlongSameVariable() &&
+              g->isAlongY() == alongY &&
+              !g->approximationBasedOnCostlyAlgorithms(context)) {
+            zoom.fitIntersections(evaluator<float>, mainF, evaluator<float>,
+                                  g.operator->());
           }
-          zoom.fitIntersections(evaluator<float>, mainF, evaluator<float>,
-                                g.operator->());
         }
       }
     }
@@ -253,9 +262,13 @@ Range2D GraphController::optimalRange(bool computeX, bool computeY,
         continue;
       }
       bool alongY = f->isAlongY();
-      zoom.fitMagnitude(evaluator, f.operator->(), alongY);
+      /* If X range is forced (computeX is false), we don't want to crop the Y
+       * axis: we want to see the value of f at each point of X range. */
+      bool cropOutliers = computeX;
+      zoom.fitMagnitude(evaluator, f.operator->(), cropOutliers, alongY);
       if (f->numberOfSubCurves() > 1) {
-        zoom.fitMagnitude(evaluatorSecondCurve, f.operator->(), alongY);
+        zoom.fitMagnitude(evaluatorSecondCurve, f.operator->(), cropOutliers,
+                          alongY);
       }
     }
   }
@@ -394,17 +407,13 @@ double GraphController::defaultCursorT(Ion::Storage::Record record,
     return FunctionGraphController::defaultCursorT(record, ignoreMargins);
   }
 
-  Poincare::Context *context = textFieldDelegateApp()->localContext();
+  Poincare::Context *context = App::app()->localContext();
   if (function->properties().isScatterPlot()) {
-    Preferences::ComplexFormat complexFormat =
-        Preferences::sharedPreferences->complexFormat();
-    Preferences::AngleUnit angleUnit =
-        Preferences::sharedPreferences->angleUnit();
+    ApproximationContext approximationContext(context);
     float t = 0;
     for (Point p : function->iterateScatterPlot(context)) {
       if (isCursorVisibleAtPosition(
-              p.approximate2D<float>(context, complexFormat, angleUnit),
-              ignoreMargins)) {
+              p.approximate2D<float>(approximationContext), ignoreMargins)) {
         return t;
       }
       ++t;
@@ -444,11 +453,7 @@ double GraphController::defaultCursorT(Ion::Storage::Record record,
 
 bool GraphController::moveCursorVertically(OMG::VerticalDirection direction) {
   int currentActiveFunctionIndex = *m_selectedCurveIndex;
-  Context *context = textFieldDelegateApp()->localContext();
-  Preferences::ComplexFormat complexFormat =
-      Preferences::sharedPreferences->complexFormat();
-  Preferences::AngleUnit angleUnit =
-      Preferences::sharedPreferences->angleUnit();
+  Context *context = App::app()->localContext();
 
   int nextSubCurve = 0;
   int nextFunction =
@@ -471,9 +476,9 @@ bool GraphController::moveCursorVertically(OMG::VerticalDirection direction) {
     double nextX = nextT;
     nextT = -1;
     double previousX = -INFINITY;
+    ApproximationContext approximationContext(context);
     for (Point p : nextF->iterateScatterPlot(context)) {
-      Coordinate2D<double> xy =
-          p.approximate2D<float>(context, complexFormat, angleUnit);
+      Coordinate2D<double> xy = p.approximate2D<float>(approximationContext);
       if (xy.x() >= nextX) {
         if (xy.x() - nextX < nextX - previousX) {
           ++nextT;
@@ -550,17 +555,6 @@ void GraphController::jumpToLeftRightCurve(double t,
   m_selectedSubCurveIndex = nextSubCurve;
   selectCurveAtIndex(nextCurveIndex, true);
   return;
-}
-
-void GraphController::moveCursorAndCenterIfNeeded(double t) {
-  FunctionGraphController::moveCursorAndCenterIfNeeded(t);
-  if (snapToInterestAndUpdateCursor(
-          m_cursor,
-          std::nextafter(m_cursor->t(), -static_cast<double>(INFINITY)),
-          std::nextafter(m_cursor->t(), static_cast<double>(INFINITY)),
-          m_selectedSubCurveIndex)) {
-    reloadBannerView();
-  }
 }
 
 void GraphController::reloadBannerViewForCursorOnFunction(

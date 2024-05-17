@@ -160,23 +160,16 @@ Expression Symbol::shallowReduce(ReductionContext reductionContext) {
   }
 
   /* Recursively replace symbols and catch circular references involving symbols
-   * as well as functions.
-   * A symbol does not behave the same as a function : any nested symbol that
-   * is either undefined or was the parameter of a function defined in the
-   * parents of this expression must be replaced with undefined.
-   * For example, within the expression 'diff(a,x,3)', with 'a' defined as
-   * 'diff(x,x,x)' :
-   * If x is globally undefined, 'a' should be expanded to 'diff(x,x,undef)'
-   * If x is defined as '2', 'a' should be expanded to 'diff(x,x,2)'.
-   * Reduction's symbolic computation only apply on non-nested variables. */
-  Expression result = SymbolAbstract::Expand(
-      *this, reductionContext.context(), true,
-      SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined);
+   * as well as functions. */
+  Expression result = SymbolAbstract::Expand(*this, reductionContext.context(),
+                                             true, symbolicComputation);
   if (result.isUninitialized()) {
-    if (symbolicComputation !=
-        SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined) {
+    if (symbolicComputation ==
+        SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition) {
       return *this;
     }
+    assert(symbolicComputation ==
+           SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined);
     return replaceWithUndefinedInPlace();
   }
   replaceWithInPlace(result);
@@ -202,16 +195,15 @@ bool Symbol::derivate(const ReductionContext& reductionContext, Symbol symbol,
 
 int Symbol::getPolynomialCoefficients(Context* context, const char* symbolName,
                                       Expression coefficients[]) const {
-  if (strcmp(name(), symbolName) == 0) {
-    // This is the symbol we are looking for.
+  int deg = polynomialDegree(context, symbolName);
+  if (deg == 1) {
     coefficients[0] = Rational::Builder(0);
     coefficients[1] = Rational::Builder(1);
-    return 1;
+  } else {
+    assert(deg == 0);
+    coefficients[0] = clone();
   }
-  /* No variable expansion is expected within this method. Only functions are
-   * expanded and replaced. */
-  coefficients[0] = clone();
-  return 0;
+  return deg;
 }
 
 Expression Symbol::deepReplaceReplaceableSymbols(
@@ -230,6 +222,11 @@ Expression Symbol::deepReplaceReplaceableSymbols(
     return *this;
   }
 
+  assert(symbolicComputation ==
+             SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined ||
+         symbolicComputation ==
+             SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition);
+
   // Check that this is not a parameter in a parametered expression
   Expression ancestor = *this;
   while (parameteredAncestorsCount > 0) {
@@ -247,10 +244,12 @@ Expression Symbol::deepReplaceReplaceableSymbols(
 
   Expression e = context->expressionForSymbolAbstract(*this, true);
   if (e.isUninitialized()) {
-    if (symbolicComputation !=
-        SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined) {
+    if (symbolicComputation ==
+        SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition) {
       return *this;
     }
+    assert(symbolicComputation ==
+           SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined);
     return replaceWithUndefinedInPlace();
   }
 

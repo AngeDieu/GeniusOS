@@ -19,6 +19,7 @@ class TableView : public ScrollView {
   void setVerticalCellOverlap(KDCoordinate o) {
     m_contentView.setVerticalCellOverlap(o);
   }
+
   int firstDisplayedRow() const { return m_contentView.rowsScrollingOffset(); }
   int firstDisplayedColumn() const {
     return m_contentView.columnsScrollingOffset();
@@ -34,7 +35,7 @@ class TableView : public ScrollView {
 
   /* This method computes the minimal scrolling needed to properly display the
    * requested cell. */
-  virtual void scrollToCell(int col, int row) {
+  void scrollToCell(int col, int row) {
     scrollToContentRect(m_contentView.cellFrame(col, row));
   }
   HighlightCell *cellAtLocation(int col, int row) {
@@ -43,25 +44,36 @@ class TableView : public ScrollView {
   void reloadCellAtLocation(int col, int row, bool forceSetFrame = false) {
     m_contentView.reloadCellAtLocation(col, row, forceSetFrame);
   }
-  void initSize(KDRect rect);
   void reloadVisibleCellsAtColumn(int column);
   void hideScrollBars() { m_decorator.setVisibility(false); }
   BarDecorator *decorator() override { return &m_decorator; }
 
-  void resetDataSourceMemoization() { dataSource()->resetMemoization(); }
+  void resetSizeAndOffsetMemoization();
+  void resetMemoizedColumnAndRowOffsets() {
+    m_contentView.resetMemoizedColumnAndRowOffsets();
+  }
+
+  KDCoordinate invisibleHeight() {
+    return std::max(contentOffset().y() - margins()->top(), 0);
+  }
+  KDCoordinate invisibleWidth() {
+    return std::max(contentOffset().x() - margins()->left(), 0);
+  }
 
  protected:
 #if ESCHER_VIEW_LOGGING
   const char *className() const override { return "TableView"; }
 #endif
   TableViewDataSource *dataSource() { return m_contentView.dataSource(); }
-  void layoutSubviews(bool force = false) override;
   int numberOfDisplayableCells() {
     return m_contentView.numberOfDisplayableCells();
   }
   HighlightCell *reusableCellAtIndex(int index) {
     return m_contentView.reusableCellAtIndex(index);
   }
+  void layoutSubviews(bool force = false) override;
+  // Ensure that cells are properly filled after scrolling
+  bool alwaysForceRelayoutOfContentView() const override { return true; }
 
   class ContentView : public View {
    public:
@@ -82,26 +94,21 @@ class TableView : public ScrollView {
     HighlightCell *cellAtLocation(int row, int col);
     TableViewDataSource *dataSource() { return m_dataSource; }
     KDCoordinate invisibleHeight() const {
-      return std::max(
-          m_tableView->contentOffset().y() - m_tableView->topMargin(), 0);
+      return m_tableView->invisibleHeight();
     }
     KDCoordinate invisibleWidth() const {
-      return std::max(
-          m_tableView->contentOffset().x() - m_tableView->leftMargin(), 0);
+      return m_tableView->invisibleWidth();
     }
-    int rowsScrollingOffset() const {
-      return m_dataSource->rowAfterCumulatedHeight(invisibleHeight());
-    }
-    int columnsScrollingOffset() const {
-      return m_dataSource->columnAfterCumulatedWidth(invisibleWidth());
+    int rowsScrollingOffset() const;
+    int columnsScrollingOffset() const;
+    void resetMemoizedColumnAndRowOffsets() {
+      m_rowsScrollingOffset = -1;
+      m_columnsScrollingOffset = -1;
     }
     int numberOfDisplayableRows() const;
     int numberOfDisplayableColumns() const;
     KDRect cellFrame(int col, int row) const;
-    void layoutSubviews(bool force = false) override {
-      layoutSubviews(force, false);
-    }
-    void layoutSubviews(bool force, bool updateCellContent);
+    void layoutSubviews(bool force) override;
     int numberOfDisplayableCells() const {
       return numberOfDisplayableRows() * numberOfDisplayableColumns();
     }
@@ -128,9 +135,11 @@ class TableView : public ScrollView {
     /* These two methods transform a positive index (of subview for instance)
      * into coordinates that refer to the data source entire table */
     int absoluteColumnFromSubviewIndex(int index) const {
+      assert(numberOfDisplayableColumns() > 0);
       return (index % numberOfDisplayableColumns()) + columnsScrollingOffset();
     }
     int absoluteRowFromSubviewIndex(int index) const {
+      assert(numberOfDisplayableColumns() > 0);
       return (index / numberOfDisplayableColumns()) + rowsScrollingOffset();
     }
     int typeOfSubviewAtIndex(int index) const;
@@ -142,6 +151,8 @@ class TableView : public ScrollView {
     TableViewDataSource *m_dataSource;
     KDCoordinate m_horizontalCellOverlap;
     KDCoordinate m_verticalCellOverlap;
+    mutable int m_rowsScrollingOffset;
+    mutable int m_columnsScrollingOffset;
   };
   BarDecorator m_decorator;
   ContentView m_contentView;

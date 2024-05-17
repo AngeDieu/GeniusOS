@@ -1,8 +1,8 @@
 #include "app.h"
 
+#include <apps/apps_container.h>
 #include <apps/i18n.h>
 
-#include "../apps_container.h"
 #include "graph_icon.h"
 
 using namespace Poincare;
@@ -40,22 +40,8 @@ const App::Descriptor* App::Snapshot::descriptor() const {
 }
 
 void App::Snapshot::tidy() {
-  m_graphRange.setDelegate(nullptr);
+  functionStore()->setCachesContainer(nullptr);
   SharedApp::Snapshot::tidy();
-}
-
-CodePoint App::XNT() {
-  if (snapshot()->activeTab() != 0) {
-    return ContinuousFunction::k_cartesianSymbol;
-  }
-  int selectedFunctionIndex = listController()->selectedRow();
-  if (!isStoreMenuOpen() && selectedFunctionIndex >= 0) {
-    assert(selectedFunctionIndex < functionStore()->numberOfModels());
-    Ion::Storage::Record record =
-        functionStore()->recordAtIndex(selectedFunctionIndex);
-    return functionStore()->modelForRecord(record)->symbol();
-  }
-  return ContinuousFunction::k_cartesianSymbol;
 }
 
 App::ListTab::ListTab()
@@ -65,20 +51,21 @@ App::ListTab::ListTab()
 
 App::GraphTab::GraphTab()
     : Shared::FunctionApp::GraphTab(&m_graphController),
-      m_graphController(&m_graphAlternateEmptyViewController, app(),
-                        &m_graphHeader, app()->snapshot()->graphRange(),
+      m_graphController(&m_graphAlternateEmptyViewController, &m_graphHeader,
+                        app()->snapshot()->graphRange(),
                         app()->snapshot()->cursor(),
                         app()->snapshot()->selectedCurveIndex()) {}
 
 App::ValuesTab::ValuesTab()
     : Shared::FunctionApp::ValuesTab(&m_valuesController),
-      m_valuesController(&m_valuesAlternateEmptyViewController, app(),
-                         &m_valuesHeader,
+      m_valuesController(&m_valuesAlternateEmptyViewController, &m_valuesHeader,
                          &app()->m_functionParameterController) {}
 
 App::App(Snapshot* snapshot)
     : FunctionApp(snapshot, &m_tabs, ListTab::k_title),
       m_functionParameterController(this, I18n::Message::FunctionColor,
-                                    I18n::Message::DeleteExpression) {}
+                                    I18n::Message::DeleteExpression) {
+  snapshot->functionStore()->setCachesContainer(&m_cachesContainer);
+}
 
 }  // namespace Graph

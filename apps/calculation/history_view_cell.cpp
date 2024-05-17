@@ -1,76 +1,42 @@
 #include "history_view_cell.h"
 
+#include <apps/constant.h>
 #include <assert.h>
 #include <poincare/exception_checkpoint.h>
 #include <string.h>
 
 #include <algorithm>
 
-#include "../constant.h"
 #include "app.h"
-#include "calculation_selectable_table_view.h"
+#include "calculation_selectable_list_view.h"
 
 using namespace Escher;
 using namespace Poincare;
 
 namespace Calculation {
 
-/* HistoryViewCellDataSource */
-
-void HistoryViewCellDataSource::setSelectedSubviewType(
-    SubviewType subviewType, bool sameCell, int previousSelectedCol,
-    int previousSelectedRow) {
-  HistoryViewCell *selectedCell = nullptr;
-  HistoryViewCell *previouslySelectedCell = nullptr;
-  SubviewType previousSubviewType = m_selectedSubviewType;
-  m_selectedSubviewType = subviewType;
-  /* We need to notify the whole table that the selection changed if it
-   * involves the selection/deselection of an output. Indeed, only them can
-   * trigger change in the displayed expressions. */
-  historyViewCellDidChangeSelection(&selectedCell, &previouslySelectedCell,
-                                    previousSelectedCol, previousSelectedRow,
-                                    subviewType, previousSubviewType);
-
-  previousSubviewType = sameCell ? previousSubviewType : SubviewType::None;
-  if (selectedCell) {
-    selectedCell->reloadSubviewHighlight();
-    selectedCell->cellDidSelectSubview(subviewType, previousSubviewType);
-    Container::activeApp()->setFirstResponder(selectedCell, true);
-  }
-  if (previouslySelectedCell) {
-    previouslySelectedCell->cellDidSelectSubview(SubviewType::Input);
-  }
-}
-
 /* HistoryViewCell */
 
-KDCoordinate HistoryViewCell::Height(Calculation *calculation, Context *context,
-                                     bool expanded) {
+void HistoryViewCell::ComputeCalculationHeights(Calculation *calculation,
+                                                Context *context) {
   HistoryViewCell cell(nullptr);
-  cell.setCalculation(calculation, expanded, context, true);
-  KDRect ellipsisFrame = KDRectZero;
-  KDRect inputFrame = KDRectZero;
-  KDRect outputFrame = KDRectZero;
-  cell.computeSubviewFrames(Ion::Display::Width, k_maxCellHeight,
-                            &ellipsisFrame, &inputFrame, &outputFrame);
-  KDCoordinate result =
-      k_margin + inputFrame.unionedWith(outputFrame).height() + k_margin;
-  if (result < 0 || result > k_maxCellHeight) {
-    // if result < 0, result overflowed KDCOORDINATE_MAX
-    return k_maxCellHeight;
-  }
-  return result;
+  cell.setNewCalculation(calculation, false, context, true);
+  KDCoordinate unExpandedHeight = cell.minimalHeightForOptimalDisplay();
+  KDCoordinate expandedHeight = cell.updateExpanded(true)
+                                    ? cell.minimalHeightForOptimalDisplay()
+                                    : unExpandedHeight;
+  calculation->setHeights(unExpandedHeight, expandedHeight);
 }
 
 HistoryViewCell::HistoryViewCell(Responder *parentResponder)
     : Responder(parentResponder),
       m_calculationCRC32(0),
       m_calculationDisplayOutput(Calculation::DisplayOutput::Unknown),
-      m_calculationAdditionInformations({}),
+      m_additionalResultsType({}),
       m_inputView(this, k_inputViewHorizontalMargin,
                   k_inputOutputViewsVerticalMargin),
       m_scrollableOutputView(this),
-      m_calculationExpanded(false),
+      m_calculationExpanded(TrinaryBoolean::Unknown),
       m_calculationSingleLine(false) {}
 
 void HistoryViewCell::setEven(bool even) {
@@ -109,9 +75,11 @@ void HistoryViewCell::reloadSubviewHighlight() {
       case HistoryViewCellDataSource::SubviewType::Output:
         m_scrollableOutputView.evenOddCell()->setHighlighted(true);
         return;
-      default:
-        assert(type == HistoryViewCellDataSource::SubviewType::Ellipsis);
+      case HistoryViewCellDataSource::SubviewType::Ellipsis:
         m_ellipsis.setHighlighted(true);
+        return;
+      default:
+        assert(type == HistoryViewCellDataSource::SubviewType::None);
         return;
     }
   }
@@ -133,30 +101,22 @@ Layout HistoryViewCell::layout() const {
 }
 
 void HistoryViewCell::reloadScroll() {
-  m_inputView.reloadScroll();
+  m_inputView.resetScroll();
   m_scrollableOutputView.reloadScroll();
 }
 
 void HistoryViewCell::reloadOutputSelection(
     HistoryViewCellDataSource::SubviewType previousType) {
+  assert(m_calculationDisplayOutput != Calculation::DisplayOutput::Unknown);
   /* Select the right output according to the calculation display output. This
    * will reload the scroll to display the selected output. */
-  if (m_calculationDisplayOutput ==
-      Calculation::DisplayOutput::ExactAndApproximate) {
-    m_scrollableOutputView.setSelectedSubviewPosition(
-        previousType == HistoryViewCellDataSource::SubviewType::Ellipsis
-            ? Shared::ScrollableTwoLayoutsView::SubviewPosition::Right
-            : Shared::ScrollableTwoLayoutsView::SubviewPosition::Center);
-  } else {
-    assert(
-        (m_calculationDisplayOutput ==
-         Calculation::DisplayOutput::ApproximateOnly) ||
-        (m_calculationDisplayOutput ==
-         Calculation::DisplayOutput::ExactAndApproximateToggle) ||
-        (m_calculationDisplayOutput == Calculation::DisplayOutput::ExactOnly));
-    m_scrollableOutputView.setSelectedSubviewPosition(
-        Shared::ScrollableTwoLayoutsView::SubviewPosition::Right);
-  }
+  bool selectExactOutput =
+      m_calculationDisplayOutput ==
+          Calculation::DisplayOutput::ExactAndApproximate &&
+      previousType != HistoryViewCellDataSource::SubviewType::Ellipsis;
+  m_scrollableOutputView.setSelectedSubviewPosition(
+      selectExactOutput ? ScrollableTwoLayoutsView::SubviewPosition::Center
+                        : ScrollableTwoLayoutsView::SubviewPosition::Right);
 }
 
 void HistoryViewCell::cellDidSelectSubview(
@@ -167,18 +127,10 @@ void HistoryViewCell::cellDidSelectSubview(
     reloadOutputSelection(previousType);
   }
 
-  // Update m_calculationExpanded
-  m_calculationExpanded =
-      (type == HistoryViewCellDataSource::SubviewType::Output &&
-       m_calculationDisplayOutput ==
-           Calculation::DisplayOutput::ExactAndApproximateToggle);
   /* The selected subview has changed. The displayed outputs might have changed.
    * For example, for the calculation 1.2+2 --> 3.2, selecting the output would
    * display 1.2+2 --> 16/5 = 3.2. */
-  m_scrollableOutputView.setDisplayCenter(
-      m_calculationDisplayOutput ==
-          Calculation::DisplayOutput::ExactAndApproximate ||
-      m_calculationExpanded);
+  updateExpanded(type == HistoryViewCellDataSource::SubviewType::Output);
 
   /* The displayed outputs have changed. We need to re-layout the cell
    * and re-initialize the scroll. */
@@ -242,10 +194,9 @@ void HistoryViewCell::computeSubviewFrames(KDCoordinate frameWidth,
                                            KDRect *ellipsisFrame,
                                            KDRect *inputFrame,
                                            KDRect *outputFrame) {
-  assert(ellipsisFrame != nullptr && inputFrame != nullptr &&
-         outputFrame != nullptr);
+  assert(ellipsisFrame && inputFrame && outputFrame);
 
-  if (displayedEllipsis()) {
+  if (isDisplayingEllipsis()) {
     *ellipsisFrame = KDRect(frameWidth - Metric::EllipsisCellWidth, 0,
                             Metric::EllipsisCellWidth, frameHeight);
     frameWidth -= Metric::EllipsisCellWidth;
@@ -261,7 +212,7 @@ void HistoryViewCell::computeSubviewFrames(KDCoordinate frameWidth,
   m_calculationSingleLine = ViewsCanBeSingleLine(
       inputSize.width(),
       m_scrollableOutputView.minimalSizeForOptimalDisplayFullSize().width(),
-      !m_calculationAdditionInformations.isEmpty());
+      hasEllipsis());
 
   KDCoordinate inputY = k_margin;
   KDCoordinate outputY = k_margin;
@@ -306,22 +257,13 @@ void HistoryViewCell::resetMemoization() {
 void HistoryViewCell::setCalculation(Calculation *calculation, bool expanded,
                                      Context *context,
                                      bool canChangeDisplayOutput) {
-  if (m_calculationExpanded != expanded) {
-    // Change expanded if needed
-    m_calculationExpanded =
-        expanded && calculation->displayOutput(context) ==
-                        ::Calculation::Calculation::DisplayOutput::
-                            ExactAndApproximateToggle;
-    m_scrollableOutputView.setDisplayCenter(
-        m_calculationDisplayOutput ==
-            Calculation::DisplayOutput::ExactAndApproximate ||
-        m_calculationExpanded);
-  }
-
   uint32_t newCalculationCRC =
       Ion::crc32Byte((const uint8_t *)calculation,
                      ((char *)calculation->next()) - ((char *)calculation));
   if (newCalculationCRC == m_calculationCRC32) {
+    if (updateExpanded(expanded)) {
+      reloadScroll();
+    }
     return;
   }
 
@@ -330,95 +272,8 @@ void HistoryViewCell::setCalculation(Calculation *calculation, bool expanded,
 
   // Memoization
   m_calculationCRC32 = newCalculationCRC;
-  m_calculationAdditionInformations = calculation->additionalInformations();
-  m_inputView.setLayout(calculation->createInputLayout());
 
-  /* All expressions have to be updated at the same time. Otherwise,
-   * when updating one layout, if the second one still points to a deleted
-   * layout, calling to layoutSubviews() would fail. */
-
-  // Create the exact output layout
-  Layout exactOutputLayout = Layout();
-  if (Calculation::DisplaysExact(calculation->displayOutput(context))) {
-    bool couldNotCreateExactLayout = false;
-    exactOutputLayout =
-        calculation->createExactOutputLayout(&couldNotCreateExactLayout);
-    if (couldNotCreateExactLayout) {
-      if (canChangeDisplayOutput &&
-          calculation->displayOutput(context) !=
-              ::Calculation::Calculation::DisplayOutput::ExactOnly) {
-        calculation->forceDisplayOutput(
-            ::Calculation::Calculation::DisplayOutput::ApproximateOnly);
-      } else {
-        /* We should only display the exact result, but we cannot create it
-         * -> raise an exception. */
-        ExceptionCheckpoint::Raise();
-      }
-    }
-    KDCoordinate maxVisibleWidth =
-        Ion::Display::Width -
-        (m_scrollableOutputView.leftMargin() +
-         m_scrollableOutputView.rightMargin()
-         // > arrow and = sign
-         + 2 * KDFont::GlyphWidth(m_scrollableOutputView.font()));
-    if (canChangeDisplayOutput &&
-        calculation->displayOutput(context) ==
-            ::Calculation::Calculation::DisplayOutput::ExactAndApproximate &&
-        exactOutputLayout.layoutSize(m_scrollableOutputView.font()).width() >
-            maxVisibleWidth) {
-      calculation->forceDisplayOutput(
-          ::Calculation::Calculation::DisplayOutput::ExactAndApproximateToggle);
-    }
-  }
-
-  // Create the approximate output layout
-  Layout approximateOutputLayout;
-  if (calculation->displayOutput(context) ==
-      ::Calculation::Calculation::DisplayOutput::ExactOnly) {
-    approximateOutputLayout = exactOutputLayout;
-  } else {
-    bool couldNotCreateApproximateLayout = false;
-    approximateOutputLayout = calculation->createApproximateOutputLayout(
-        &couldNotCreateApproximateLayout);
-    if (couldNotCreateApproximateLayout) {
-      if (canChangeDisplayOutput &&
-          calculation->displayOutput(context) !=
-              ::Calculation::Calculation::DisplayOutput::ApproximateOnly) {
-        /* Set the display output to ApproximateOnly, make room in the pool by
-         * erasing the exact layout, and retry to create the approximate layout
-         */
-        calculation->forceDisplayOutput(
-            ::Calculation::Calculation::DisplayOutput::ApproximateOnly);
-        exactOutputLayout = Layout();
-        couldNotCreateApproximateLayout = false;
-        approximateOutputLayout = calculation->createApproximateOutputLayout(
-            &couldNotCreateApproximateLayout);
-        if (couldNotCreateApproximateLayout) {
-          ExceptionCheckpoint::Raise();
-        }
-      } else {
-        ExceptionCheckpoint::Raise();
-      }
-    }
-  }
-  m_calculationDisplayOutput = calculation->displayOutput(context);
-
-  /* We must set which subviews are displayed before setLayouts to mark the
-   * right rectangle as dirty */
-  m_scrollableOutputView.setDisplayableCenter(
-      m_calculationDisplayOutput ==
-          Calculation::DisplayOutput::ExactAndApproximate ||
-      m_calculationDisplayOutput ==
-          Calculation::DisplayOutput::ExactAndApproximateToggle);
-  m_scrollableOutputView.setDisplayCenter(
-      m_calculationDisplayOutput ==
-          Calculation::DisplayOutput::ExactAndApproximate ||
-      m_calculationExpanded);
-  m_scrollableOutputView.setLayouts(Layout(), exactOutputLayout,
-                                    approximateOutputLayout);
-  bool isEqual = calculation->exactAndApproximateDisplayedOutputsEqualSign(
-                     context) == Calculation::EqualSign::Equal;
-  m_scrollableOutputView.setExactAndApproximateAreStriclyEqual(isEqual);
+  setNewCalculation(calculation, expanded, context, canChangeDisplayOutput);
 
   /* The displayed input and outputs have changed. We need to re-layout the cell
    * and re-initialize the scroll. */
@@ -426,15 +281,69 @@ void HistoryViewCell::setCalculation(Calculation *calculation, bool expanded,
   reloadScroll();
 }
 
+void HistoryViewCell::setNewCalculation(Calculation *calculation, bool expanded,
+                                        Poincare::Context *context,
+                                        bool canChangeDisplayOutput) {
+  // Memoization
+  m_additionalResultsType = calculation->additionalResultsType();
+  m_inputView.setLayout(calculation->createInputLayout());
+
+  /* All expressions have to be updated at the same time. Otherwise,
+   * when updating one layout, if the second one still points to a deleted
+   * layout, calling to layoutSubviews() would fail. */
+  Layout exactOutputLayout, approximateOutputLayout;
+  KDFont::Size font = m_scrollableOutputView.font();
+  KDCoordinate maxVisibleWidth =
+      Ion::Display::Width -
+      (m_scrollableOutputView.margins()->width() +
+       2 * KDFont::GlyphWidth(font));  // > arrow and = sign
+  calculation->createOutputLayouts(&exactOutputLayout, &approximateOutputLayout,
+                                   context, canChangeDisplayOutput,
+                                   maxVisibleWidth, font);
+
+  /* Update m_calculationDisplayOutput. Must be done after createOutputLayouts
+   * because calculation->displayOutput can change. */
+  m_calculationDisplayOutput = calculation->displayOutput(context);
+
+  /* Update m_scrollableOutputView. Must be done once m_calculationDisplayOutput
+   * has been updated. We must set which subviews are displayed before
+   * setLayouts to mark the right rectangle as dirty. */
+  m_scrollableOutputView.setDisplayableCenter(
+      m_calculationDisplayOutput ==
+          Calculation::DisplayOutput::ExactAndApproximate ||
+      m_calculationDisplayOutput ==
+          Calculation::DisplayOutput::ExactAndApproximateToggle);
+  m_scrollableOutputView.setLayouts(Layout(), exactOutputLayout,
+                                    approximateOutputLayout);
+  m_scrollableOutputView.setExactAndApproximateAreStriclyEqual(
+      calculation->equalSign(context) == Calculation::EqualSign::Equal);
+  updateExpanded(expanded);
+}
+
 void HistoryViewCell::didBecomeFirstResponder() {
   assert(m_dataSource);
   if (m_dataSource->selectedSubviewType() ==
       HistoryViewCellDataSource::SubviewType::Input) {
-    Container::activeApp()->setFirstResponder(&m_inputView);
+    App::app()->setFirstResponder(&m_inputView);
   } else if (m_dataSource->selectedSubviewType() ==
              HistoryViewCellDataSource::SubviewType::Output) {
-    Container::activeApp()->setFirstResponder(&m_scrollableOutputView);
+    App::app()->setFirstResponder(&m_scrollableOutputView);
   }
+}
+
+KDCoordinate HistoryViewCell::minimalHeightForOptimalDisplay() {
+  KDRect ellipsisFrame = KDRectZero;
+  KDRect inputFrame = KDRectZero;
+  KDRect outputFrame = KDRectZero;
+  computeSubviewFrames(Ion::Display::Width, k_maxCellHeight, &ellipsisFrame,
+                       &inputFrame, &outputFrame);
+  KDCoordinate result =
+      k_margin + inputFrame.unionedWith(outputFrame).height() + k_margin;
+  if (result < 0 || result > k_maxCellHeight) {
+    // if result < 0, result overflowed KDCOORDINATE_MAX
+    return k_maxCellHeight;
+  }
+  return result;
 }
 
 bool HistoryViewCell::handleEvent(Ion::Events::Event event) {
@@ -458,8 +367,9 @@ bool HistoryViewCell::handleEvent(Ion::Events::Event event) {
         HistoryViewCellDataSource::SubviewType::None,
         HistoryViewCellDataSource::SubviewType::Input,
         HistoryViewCellDataSource::SubviewType::Output,
-        displayedEllipsis() ? HistoryViewCellDataSource::SubviewType::Ellipsis
-                            : HistoryViewCellDataSource::SubviewType::None,
+        isDisplayingEllipsis()
+            ? HistoryViewCellDataSource::SubviewType::Ellipsis
+            : HistoryViewCellDataSource::SubviewType::None,
         HistoryViewCellDataSource::SubviewType::None,
     };
     if (event == Ion::Events::Right || event == Ion::Events::Left) {
@@ -476,13 +386,29 @@ bool HistoryViewCell::handleEvent(Ion::Events::Event event) {
     otherSubviewType = HistoryViewCellDataSource::SubviewType::Input;
   } else if (event == Ion::Events::Right &&
              type != HistoryViewCellDataSource::SubviewType::Ellipsis &&
-             displayedEllipsis()) {
+             isDisplayingEllipsis()) {
     otherSubviewType = HistoryViewCellDataSource::SubviewType::Ellipsis;
   }
   if (otherSubviewType == HistoryViewCellDataSource::SubviewType::None) {
     return false;
   }
   m_dataSource->setSelectedSubviewType(otherSubviewType, true);
+  return true;
+}
+
+bool HistoryViewCell::updateExpanded(bool expanded) {
+  assert(m_calculationDisplayOutput != Calculation::DisplayOutput::Unknown);
+  TrinaryBoolean calculationExpanded = BinaryToTrinaryBool(
+      m_calculationDisplayOutput ==
+          Calculation::DisplayOutput::ExactAndApproximate ||
+      (expanded && m_calculationDisplayOutput ==
+                       Calculation::DisplayOutput::ExactAndApproximateToggle));
+  if (m_calculationExpanded == calculationExpanded) {
+    return false;
+  }
+  m_calculationExpanded = calculationExpanded;
+  m_scrollableOutputView.setDisplayCenter(
+      TrinaryToBinaryBool(m_calculationExpanded));
   return true;
 }
 

@@ -11,10 +11,8 @@ namespace Code {
 
 class ConsoleEditCell : public Escher::HighlightCell, public Escher::Responder {
  public:
-  ConsoleEditCell(
-      Escher::Responder* parentResponder = nullptr,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate = nullptr,
-      Escher::TextFieldDelegate* delegate = nullptr);
+  ConsoleEditCell(Escher::Responder* parentResponder = nullptr,
+                  Escher::TextFieldDelegate* delegate = nullptr);
 
   // View
   int numberOfSubviews() const override;

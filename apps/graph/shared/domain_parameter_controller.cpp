@@ -12,14 +12,14 @@ using namespace Poincare;
 namespace Graph {
 
 DomainParameterController::DomainParameterController(Responder* parentResponder)
-    : Shared::SingleRangeController(parentResponder, this,
-                                    &m_confirmPopUpController),
+    : Shared::SingleRangeController(parentResponder, &m_confirmPopUpController),
       m_confirmPopUpController(Invocation::Builder<DomainParameterController>(
           [](DomainParameterController* controller, void* sender) {
             controller->pop(false);
             return true;
           },
-          this)) {}
+          this)),
+      m_currentTextFieldIsMinField(false) {}
 
 bool DomainParameterController::textFieldDidReceiveEvent(
     AbstractTextField* textField, Ion::Events::Event event) {
@@ -30,38 +30,31 @@ bool DomainParameterController::textFieldDidReceiveEvent(
   if (event == Ion::Events::Toolbox) {
     switchToolboxContent(textField, true);
   }
-  /* Do not refuse empty text for functions of x, as that will later be
-   * replaced by ±inf. */
-  return !(function()->properties().isCartesian() &&
-           textFieldShouldFinishEditing(textField, event) &&
-           textField->text()[0] == '\0') &&
-         FloatParameterController<float>::textFieldDidReceiveEvent(textField,
+  return FloatParameterController<float>::textFieldDidReceiveEvent(textField,
                                                                    event);
 }
 
 bool DomainParameterController::textFieldDidFinishEditing(
-    AbstractTextField* textField, const char* text, Ion::Events::Event event) {
+    AbstractTextField* textField, Ion::Events::Event event) {
   switchToolboxContent(textField, false);
-  if (text[0] == '\0') {
+  assert(!textField->isEditing());
+  if (function()->properties().isCartesian() &&
+      textField->draftText()[0] == '\0') {
+    textField->setEditing(true);  // To edit draft text buffer in setText
     if (textField == m_boundsCells[0].textField()) {
-      text = Infinity::Name(true);
+      textField->setText(Infinity::Name(true));
     } else {
       assert(textField == m_boundsCells[1].textField());
-      text = Infinity::Name(false);
+      textField->setText(Infinity::Name(false));
     }
+    textField->setEditing(false);  // set editing back to previous value
   }
-  return SingleRangeController::textFieldDidFinishEditing(textField, text,
-                                                          event);
+  return SingleRangeController::textFieldDidFinishEditing(textField, event);
 }
 
-bool DomainParameterController::textFieldDidAbortEditing(
+void DomainParameterController::textFieldDidAbortEditing(
     AbstractTextField* textField) {
   switchToolboxContent(textField, false);
-  return false;
-}
-
-FunctionToolbox* DomainParameterController::toolbox() {
-  return App::app()->functionToolbox();
 }
 
 I18n::Message DomainParameterController::parameterMessage(int index) const {
@@ -84,12 +77,10 @@ bool DomainParameterController::parametersAreDifferent() {
 }
 
 void DomainParameterController::extractParameters() {
-  setParameterAtIndex(1, function()->tMin());
-  setParameterAtIndex(2, function()->tMax());
+  setRange(function()->tMin(), function()->tMax());
   m_autoParam = function()->tAuto();
-  /* Setting m_rangeParam tMin might affect m_rangeParam.max(), but setting tMax
-   * right after will not affect m_rangeParam.min() because Function's Range1D
-   * parameters are valid (tMax>tMin), and final tMin value is already set.
+  /* Setting m_rangeParam should affect tMin and tMax because Function's Range1D
+   * parameters are valid (tMax>tMin).
    * Same happens in confirmParameters when setting function's parameters from
    * valid m_rangeParam parameters. */
   assert(!parametersAreDifferent());
@@ -97,8 +88,7 @@ void DomainParameterController::extractParameters() {
 
 void DomainParameterController::setAutoRange() {
   assert(m_autoParam);
-  setParameterAtIndex(1, function()->autoTMin());
-  setParameterAtIndex(2, function()->autoTMax());
+  setRange(function()->autoTMin(), function()->autoTMax());
 }
 
 void DomainParameterController::confirmParameters() {
@@ -128,21 +118,24 @@ DomainParameterController::function() const {
   return App::app()->functionStore()->modelForRecord(m_record);
 }
 
+Poincare::Layout DomainParameterController::extraCellLayoutAtRow(int row) {
+  assert(row == 0);
+  Preferences* pref = Preferences::sharedPreferences;
+  return Infinity::Builder(m_currentTextFieldIsMinField)
+      .createLayout(pref->displayMode(), pref->numberOfSignificantDigits(),
+                    App::app()->localContext());
+}
+
 void DomainParameterController::switchToolboxContent(
     Escher::AbstractTextField* textField, bool setSpecificContent) {
   assert(textField == m_boundsCells[0].textField() ||
          textField == m_boundsCells[1].textField());
-  FunctionToolbox::AddedCellsContent content;
-  if (setSpecificContent) {
-    content = !function()->properties().isCartesian()
-                  ? FunctionToolbox::AddedCellsContent::None
-              : textField == m_boundsCells[0].textField()
-                  ? FunctionToolbox::AddedCellsContent::NegativeInfinity
-                  : FunctionToolbox::AddedCellsContent::PositiveInfinity;
+  if (setSpecificContent && function()->properties().isCartesian()) {
+    m_currentTextFieldIsMinField = (textField == m_boundsCells[0].textField());
+    App::app()->defaultToolbox()->setExtraCellsDataSource(this);
   } else {
-    content = FunctionToolbox::AddedCellsContent::ComparisonOperators;
+    App::app()->defaultToolbox()->setExtraCellsDataSource(nullptr);
   }
-  toolbox()->setAddedCellsContent(content);
 }
 
 }  // namespace Graph

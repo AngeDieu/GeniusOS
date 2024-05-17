@@ -18,38 +18,35 @@ TypeController::TypeController(StackViewController *parent,
                                HypothesisController *hypothesisController,
                                InputController *inputController,
                                Statistic *statistic)
-    : Escher::SelectableListViewController<
-          Escher::StandardMemoizedListViewDataSource>(parent),
+    : UniformSelectableListController(parent),
       m_hypothesisController(hypothesisController),
       m_inputController(inputController),
       m_statistic(statistic) {
-  m_selectableListView.setBottomMargin(0);
-
+  m_selectableListView.margins()->setBottom(0);
   // Init selection
   selectRow(0);
 }
 
 void TypeController::didBecomeFirstResponder() {
-  resetMemoization();
-  m_selectableListView.reloadData(true);
+  m_selectableListView.reloadData();
 }
 
 bool TypeController::handleEvent(Ion::Events::Event event) {
   // canBeActivatedByEvent can be called on any cell with chevron
-  if (!m_cells[0].canBeActivatedByEvent(event)) {
+  if (!cell(0)->canBeActivatedByEvent(event)) {
     return popFromStackViewControllerOnLeftEvent(event);
   }
   DistributionType type;
   int selRow = selectedRow();
   if (selRow == k_indexOfTTest) {
     type = DistributionType::T;
-  } else if (selRow == indexOfZTest()) {
+  } else if (selRow == k_indexOfZTest) {
     type = DistributionType::Z;
   } else {
     assert(selRow == k_indexOfPooledTest);
     type = DistributionType::TPooled;
   }
-  Escher::ViewController *controller = m_inputController;
+  ViewController *controller = m_inputController;
   if (m_statistic->hasHypothesisParameters()) {
     controller = m_hypothesisController;
   }
@@ -68,7 +65,7 @@ const char *TypeController::title() {
   return m_titleBuffer;
 }
 
-void TypeController::stackOpenPage(Escher::ViewController *nextPage) {
+void TypeController::stackOpenPage(ViewController *nextPage) {
   switch (m_statistic->distributionType()) {
     case DistributionType::T:
       selectRow(k_indexOfTTest);
@@ -78,32 +75,21 @@ void TypeController::stackOpenPage(Escher::ViewController *nextPage) {
       break;
     default:
       assert(m_statistic->distributionType() == DistributionType::Z);
-      selectRow(indexOfZTest());
+      selectRow(k_indexOfZTest);
       break;
   }
   ViewController::stackOpenPage(nextPage);
 }
 
-int TypeController::numberOfRows() const {
-  return m_statistic->numberOfAvailableDistributions();
-}
-
-void TypeController::fillCellForRow(Escher::HighlightCell *cell, int row) {
-  assert(row <= indexOfZTest());
-  I18n::Message message;
-  if (row == k_indexOfTTest) {
-    message = m_statistic->tDistributionName();
-  } else if (row == indexOfZTest()) {
-    message = m_statistic->zDistributionName();
-  } else {
-    assert(row == k_indexOfPooledTest);
-    message = m_statistic->tPooledDistributionName();
-  }
-
-  static_cast<Escher::MenuCell<Escher::MessageTextView, Escher::EmptyCellWidget,
-                               Escher::ChevronView> *>(cell)
+void TypeController::viewWillAppear() {
+  cell(k_indexOfTTest)->label()->setMessage(m_statistic->tDistributionName());
+  cell(k_indexOfPooledTest)
       ->label()
-      ->setMessage(message);
+      ->setMessage(m_statistic->tPooledDistributionName());
+  cell(k_indexOfZTest)->label()->setMessage(m_statistic->zDistributionName());
+  cell(k_indexOfPooledTest)
+      ->setVisible(m_statistic->numberOfAvailableDistributions() ==
+                   numberOfRows());
 }
 
 }  // namespace Inference

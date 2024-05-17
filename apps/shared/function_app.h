@@ -10,15 +10,14 @@
 #include "function_graph_controller.h"
 #include "function_list_controller.h"
 #include "function_store.h"
-#include "layout_field_delegate_app.h"
-#include "shared_app.h"
+#include "math_app.h"
 #include "values_controller.h"
 
 namespace Shared {
 
-class FunctionApp : public LayoutFieldDelegateApp {
+class FunctionApp : public MathApp {
  public:
-  class Snapshot : public Shared::SharedApp::Snapshot,
+  class Snapshot : public SharedApp::Snapshot,
                    public Escher::TabViewDataSource {
    public:
     Snapshot();
@@ -32,7 +31,7 @@ class FunctionApp : public LayoutFieldDelegateApp {
     int m_selectedCurveIndex;
   };
   static FunctionApp *app() {
-    return static_cast<FunctionApp *>(Escher::Container::activeApp());
+    return static_cast<FunctionApp *>(Escher::App::app());
   }
   virtual ~FunctionApp() = default;
   Snapshot *snapshot() const {

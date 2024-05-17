@@ -2,6 +2,7 @@
 #include <poincare/layout_helper.h>
 #include <poincare/list_complex.h>
 #include <poincare/list_sort.h>
+#include <poincare/point_evaluation.h>
 #include <poincare/serialization_helper.h>
 
 namespace Poincare {
@@ -39,7 +40,7 @@ Evaluation<T> ListSortNode::templatedApproximate(
     return Complex<T>::Undefined();
   }
   ListComplex<T> listChild = static_cast<ListComplex<T>&>(child);
-  listChild = listChild.sort();
+  listChild.sort();
   return std::move(listChild);
 }
 
@@ -51,21 +52,27 @@ Expression ListSort::shallowReduce(ReductionContext reductionContext) {
     }
     return *this;
   }
+  if (recursivelyMatches(Expression::IsUndefined, nullptr)) {
+    // Cannot sort if a child is the expression Undefined
+    replaceWithInPlace(child);
+    return child;
+  }
+
   List list = static_cast<List&>(child);
   ApproximationContext approximationContext(reductionContext, true);
-  void* pack[] = {list.node(), &approximationContext,
-                  const_cast<bool*>(&k_nanIsGreatest), &list};
-  Helpers::Sort(
-      // Swap
-      [](int i, int j, void* ctx, int n) {
-        void** p = reinterpret_cast<void**>(ctx);
-        Expression* e = reinterpret_cast<Expression*>(p[3]);
-        assert(e->numberOfChildren() == n && 0 <= i && 0 <= j && i < n &&
-               j < n);
-        e->swapChildrenInPlace(i, j);
-      },
-      // Compare
-      Helpers::ListEvaluationComparisonAtIndex, pack, child.numberOfChildren());
+  Evaluation<float> approximatedList =
+      list.approximateToEvaluation<float>(approximationContext);
+  bool listOfDefinedScalars = approximatedList.isListOfDefinedScalars();
+  bool listOfDefinedPoints = approximatedList.isListOfDefinedPoints();
+  if (!listOfDefinedScalars && !listOfDefinedPoints) {
+    return *this;
+  }
+
+  Helpers::ListSortPack<float> pack{
+      &list, static_cast<ListComplex<float>*>(&approximatedList),
+      listOfDefinedScalars};
+  Helpers::Sort(Helpers::SwapInList<float>, Helpers::CompareInList<float>,
+                &pack, child.numberOfChildren());
   replaceWithInPlace(child);
   return child;
 }

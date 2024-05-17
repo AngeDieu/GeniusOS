@@ -16,12 +16,9 @@ using namespace Escher;
 namespace Regression {
 
 GoToParameterController::GoToParameterController(
-    Responder* parentResponder,
-    Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-    InteractiveCurveViewRange* range, Store* store, CurveViewCursor* cursor,
-    GraphController* graphController)
-    : Shared::GoToParameterController(parentResponder,
-                                      inputEventHandlerDelegate, range, cursor),
+    Responder* parentResponder, InteractiveCurveViewRange* range, Store* store,
+    CurveViewCursor* cursor, GraphController* graphController)
+    : Shared::GoToParameterController(parentResponder, range, cursor),
       m_store(store),
       m_xPrediction(true),
       m_graphController(graphController) {}
@@ -69,8 +66,7 @@ bool GoToParameterController::confirmParameterAtIndex(int parameterIndex,
       }
     }
     // Value not reached
-    Container::activeApp()->displayWarning(
-        I18n::Message::ValueNotReachedByRegression);
+    App::app()->displayWarning(I18n::Message::ValueNotReachedByRegression);
     return false;
   }
   m_graphController->selectRegressionCurve();
@@ -82,7 +78,7 @@ bool GoToParameterController::confirmParameterAtIndex(int parameterIndex,
     /* We here compute y2 = a*((y1-b)/a)+b, which does not always give y1,
      * because of computation precision. y2 migth thus be invalid. */
     if (std::isnan(yFromX) || std::isinf(yFromX)) {
-      Container::activeApp()->displayWarning(I18n::Message::ForbiddenValue);
+      App::app()->displayWarning(I18n::Message::ForbiddenValue);
       return false;
     }
     m_cursor->moveTo(unknown, unknown, yFromX);

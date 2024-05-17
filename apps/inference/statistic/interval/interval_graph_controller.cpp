@@ -34,15 +34,15 @@ bool IntervalGraphController::handleEvent(Ion::Events::Event event) {
   if (event == Ion::Events::Copy || event == Ion::Events::Cut ||
       event == Ion::Events::Sto || event == Ion::Events::Var) {
     // Copy confidence interval as matrix
-    char copyBuffer[2 * Constants::k_shortBufferSize + 4];
+    char copyBuffer[2 * Constants::k_largeBufferSize + 4];
     Poincare::Print::CustomPrintf(
         copyBuffer, sizeof(copyBuffer), "[[%*.*ed,%*.*ed]]",
         m_currentEstimate - m_currentMarginOfError,
         Poincare::Preferences::PrintFloatMode::Decimal,
-        Poincare::Preferences::ShortNumberOfSignificantDigits,
+        Poincare::Preferences::LargeNumberOfSignificantDigits,
         m_currentEstimate + m_currentMarginOfError,
         Poincare::Preferences::PrintFloatMode::Decimal,
-        Poincare::Preferences::ShortNumberOfSignificantDigits);
+        Poincare::Preferences::LargeNumberOfSignificantDigits);
     if (event == Ion::Events::Sto || event == Ion::Events::Var) {
       App::app()->storeValue(copyBuffer);
     } else {
@@ -71,7 +71,7 @@ void IntervalGraphController::setResultTitleForCurrentValues(
 void IntervalGraphController::selectAdjacentInterval(bool goUp) {
   m_selectedIntervalIndex += goUp ? -1 : 1;
   double currentThreshold = m_interval->threshold();
-  /* Temporarly change the threshold to compute the values displayed in
+  /* Temporarily change the threshold to compute the values displayed in
    * conclusionView, in titles and in the clipboard */
   m_interval->setThreshold(Interval::DisplayedIntervalThresholdAtIndex(
       currentThreshold, m_selectedIntervalIndex));

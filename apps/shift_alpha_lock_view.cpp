@@ -14,7 +14,7 @@ ShiftAlphaLockView::ShiftAlphaLockView()
                      .backgroundColor = TitleBarView::k_backgroundColor,
                      .font = KDFont::Size::Small},
            .horizontalAlignment = KDGlyph::k_alignRight}),
-      m_status(Ion::Events::ShiftAlphaStatus::Default) {}
+      m_status(Ion::Events::ShiftAlphaStatus()) {}
 
 void ShiftAlphaLockView::drawRect(KDContext* ctx, KDRect rect) const {
   ctx->fillRect(bounds(), TitleBarView::k_backgroundColor);
@@ -23,24 +23,13 @@ void ShiftAlphaLockView::drawRect(KDContext* ctx, KDRect rect) const {
 bool ShiftAlphaLockView::setStatus(Ion::Events::ShiftAlphaStatus status) {
   if (status != m_status) {
     m_status = status;
-    switch (m_status) {
-      case Ion::Events::ShiftAlphaStatus::Alpha:
-      case Ion::Events::ShiftAlphaStatus::AlphaLock:
-        m_shiftAlphaView.setMessage(I18n::Message::Alpha);
-        break;
-      case Ion::Events::ShiftAlphaStatus::ShiftAlpha:
-      case Ion::Events::ShiftAlphaStatus::ShiftAlphaLock:
-        m_shiftAlphaView.setMessage(I18n::Message::CapitalAlpha);
-        break;
-      case Ion::Events::ShiftAlphaStatus::Shift:
-        m_shiftAlphaView.setMessage(I18n::Message::Shift);
-        break;
-      case Ion::Events::ShiftAlphaStatus::Default:
-        m_shiftAlphaView.setMessage(I18n::Message::Default);
-        break;
-      default:
-        assert(false);
-    }
+
+    constexpr I18n::Message k_messages[2][2] = {
+        {I18n::Message::Default, I18n::Message::Shift},
+        {I18n::Message::Alpha, I18n::Message::CapitalAlpha}};
+    m_shiftAlphaView.setMessage(
+        k_messages[m_status.alphaIsActive()][m_status.shiftIsActive()]);
+
     layoutSubviews();
     markWholeFrameAsDirty();
     return true;
@@ -60,20 +49,10 @@ KDSize ShiftAlphaLockView::minimalSizeForOptimalDisplay() const {
 }
 
 int ShiftAlphaLockView::numberOfSubviews() const {
-  switch (m_status) {
-    case Ion::Events::ShiftAlphaStatus::Alpha:
-    case Ion::Events::ShiftAlphaStatus::Shift:
-    case Ion::Events::ShiftAlphaStatus::ShiftAlpha:
-      return 1;
-    case Ion::Events::ShiftAlphaStatus::AlphaLock:
-    case Ion::Events::ShiftAlphaStatus::ShiftAlphaLock:
-      return 2;
-    case Ion::Events::ShiftAlphaStatus::Default:
-      return 0;
-    default:
-      assert(false);
-      return 0;
+  if (m_status.alphaIsLocked()) {
+    return 2;
   }
+  return (m_status.alphaIsActive() || m_status.shiftIsActive()) ? 1 : 0;
 }
 
 View* ShiftAlphaLockView::subviewAtIndex(int index) {

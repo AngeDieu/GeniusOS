@@ -10,8 +10,7 @@ GraphTypeController::GraphTypeController(
     Escher::TabViewController* tabController,
     Escher::StackViewController* stackView, Store* store,
     GraphViewModel* graphViewModel)
-    : Escher::SelectableCellListPage<GraphTypeCell, k_numberOfCells,
-                                     Escher::RegularListViewDataSource>(
+    : Escher::UniformSelectableListController<GraphTypeCell, k_numberOfCells>(
           parentResponder),
       m_tabController(tabController),
       m_stackViewController(stackView),
@@ -21,13 +20,11 @@ GraphTypeController::GraphTypeController(
       GraphViewModel::IndexOfGraphView(m_graphViewModel->selectedGraphView()));
   for (uint8_t i = 0; i < GraphViewModel::k_numberOfGraphViews; i++) {
     GraphViewModel::GraphView graphView = GraphViewModel::GraphViewAtIndex(i);
-    cellAtIndex(i)->subLabel()->setGlyphFormat(
-        Escher::GlyphsView::FormatForWidgetType(
-            Escher::CellWidget::Type::Label));
-    cellAtIndex(i)->subLabel()->setMessage(
+    cell(i)->subLabel()->setGlyphFormat(Escher::GlyphsView::FormatForWidgetType(
+        Escher::CellWidget::Type::Label));
+    cell(i)->subLabel()->setMessage(
         GraphViewModel::MessageForGraphView(graphView));
-    cellAtIndex(i)->label()->setImage(
-        GraphViewModel::ImageForGraphView(graphView));
+    cell(i)->label()->setImage(GraphViewModel::ImageForGraphView(graphView));
   }
 }
 
@@ -39,7 +36,7 @@ Escher::Responder* GraphTypeController::responderWhenEmpty() {
 void GraphTypeController::didBecomeFirstResponder() {
   selectRow(
       GraphViewModel::IndexOfGraphView(m_graphViewModel->selectedGraphView()));
-  m_selectableListView.reloadData(true);
+  m_selectableListView.reloadData();
 }
 
 bool GraphTypeController::handleEvent(Ion::Events::Event event) {

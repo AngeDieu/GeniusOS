@@ -13,14 +13,12 @@ namespace Statistics {
 class HistogramParameterController
     : public Shared::FloatParameterController<double> {
  public:
-  HistogramParameterController(
-      Escher::Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegateApp,
-      Store* store);
+  HistogramParameterController(Escher::Responder* parentResponder,
+                               Store* store);
   void viewWillAppear() override;
   const char* title() override;
   int numberOfRows() const override { return 1 + k_numberOfCells; }
-  void fillCellForRow(Escher::HighlightCell* cell, int row) override;
+  KDCoordinate nonMemoizedRowHeight(int row) override;
 
  private:
   constexpr static int k_numberOfCells = 2;

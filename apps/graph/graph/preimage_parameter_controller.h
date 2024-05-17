@@ -1,19 +1,18 @@
 #ifndef GRAPH_PREIMAGE_PARAMETER_CONTROLLER
 #define GRAPH_PREIMAGE_PARAMETER_CONTROLLER
 
-#include "../../shared/go_to_parameter_controller.h"
+#include <apps/shared/go_to_parameter_controller.h>
+
 #include "preimage_graph_controller.h"
 
 namespace Graph {
 
 class PreimageParameterController : public Shared::GoToParameterController {
  public:
-  PreimageParameterController(
-      Escher::Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      Shared::InteractiveCurveViewRange* graphRange,
-      Shared::CurveViewCursor* cursor,
-      PreimageGraphController* preimageGraphController);
+  PreimageParameterController(Escher::Responder* parentResponder,
+                              Shared::InteractiveCurveViewRange* graphRange,
+                              Shared::CurveViewCursor* cursor,
+                              PreimageGraphController* preimageGraphController);
   const char* title() override {
     return I18n::translate(I18n::Message::Preimage);
   }

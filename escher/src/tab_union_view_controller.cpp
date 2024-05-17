@@ -29,36 +29,30 @@ void TabUnionViewController::initView() {
 
 void TabUnionViewController::setActiveTab(int8_t i, bool enter) {
   assert(i >= 0 && i < m_numberOfChildren);
-  if (i != m_dataSource->activeTab()) {
+
+  bool dataSourceChangeActiveTab = i != m_dataSource->activeTab();
+
+  if (dataSourceChangeActiveTab) {
     if (!m_isSelected) {
-      Container::activeApp()->setFirstResponder(nullptr);
+      App::app()->setFirstResponder(nullptr);
     }
-    children(m_dataSource->activeTab())->viewDidDisappear();
+    activeViewController()->viewDidDisappear();
+    m_dataSource->setActiveTab(i);
     m_tabs->setActiveTab(i);
+    setActiveChildren(i);
   }
   ViewController* activeVC = children(i);
-  if (i != m_dataSource->activeTab()) {
-    m_dataSource->setActiveTab(i);
-    m_view.setActiveView(activeVC->view());
-    children(i)->viewWillAppear();
-    m_view.m_tabView.setActiveIndex(i);
-  }
+
   /* If enter is false, we switch to the ith tab but the focus stays on the tab
    * button. It is useful when pressing Back on a non-leftmost tab. */
   if (enter) {
     m_isSelected = false;
-    Container::activeApp()->setFirstResponder(activeVC);
+    App::app()->setFirstResponder(activeVC);
   }
 }
 
-void TabUnionViewController::viewWillAppear() {
-  if (m_dataSource->activeTab() < 0) {
-    m_dataSource->setActiveTab(0);
-  }
+void TabUnionViewController::updateUnionActiveTab() {
   m_tabs->setActiveTab(m_dataSource->activeTab());
-  m_view.setActiveView(children(m_dataSource->activeTab())->view());
-  activeViewController()->viewWillAppear();
-  m_view.m_tabView.setActiveIndex(m_dataSource->activeTab());
 }
 
 }  // namespace Escher

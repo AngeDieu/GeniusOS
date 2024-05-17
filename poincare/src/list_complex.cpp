@@ -60,38 +60,16 @@ ListComplex<T> ListComplex<T>::Undefined() {
 }
 
 template <typename T>
-ListComplex<T> ListComplex<T>::sort() {
-  void *ctx = this;
-  Helpers::Sort(
-      // Swap
-      [](int i, int j, void *context, int n) {
-        ListComplex<T> *list = reinterpret_cast<ListComplex<T> *>(context);
-        assert(list->numberOfChildren() == n && 0 <= i && 0 <= j && i < n &&
-               j < n);
-        list->swapChildrenInPlace(i, j);
-      },
-      // Compare
-      [](int i, int j, void *context, int numberOfElements) {
-        ListComplex<T> *list = reinterpret_cast<ListComplex<T> *>(context);
-
-        Evaluation<T> eI = list->childAtIndex(i);
-        Evaluation<T> eJ = list->childAtIndex(j);
-        if (eI.type() == EvaluationNode<T>::Type::PointEvaluation) {
-          if (eJ.isUndefined()) {
-            return !ListSort::k_nanIsGreatest;
-          } else if (eJ.type() == EvaluationNode<T>::Type::PointEvaluation) {
-            return static_cast<PointEvaluation<T> &>(eI).xy().isGreaterThan(
-                static_cast<PointEvaluation<T> &>(eJ).xy(),
-                ListSort::k_nanIsGreatest);
-          }
-        }
-
-        float xI = eI.toScalar();
-        float xJ = eJ.toScalar();
-        return Helpers::FloatIsGreater(xI, xJ, ListSort::k_nanIsGreatest);
-      },
-      ctx, numberOfChildren());
-  return *this;
+bool ListComplex<T>::sort() {
+  bool listOfDefinedScalars = this->isListOfDefinedScalars();
+  bool listOfDefinedPoints = this->isListOfDefinedPoints();
+  if (!listOfDefinedScalars && !listOfDefinedPoints) {
+    return false;
+  }
+  Helpers::ListSortPack<T> pack{nullptr, this, listOfDefinedScalars};
+  Helpers::Sort(Helpers::SwapInList<T>, Helpers::CompareInList<T>, &pack,
+                numberOfChildren());
+  return true;
 }
 
 template class ListComplexNode<float>;

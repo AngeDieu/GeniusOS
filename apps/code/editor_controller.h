@@ -1,10 +1,9 @@
 #ifndef CODE_EDITOR_CONTROLLER_H
 #define CODE_EDITOR_CONTROLLER_H
 
-#include "../shared/input_event_handler_delegate.h"
 #include "editor_view.h"
+#include "python_variable_box_controller.h"
 #include "script.h"
-#include "variable_box_controller.h"
 
 namespace Code {
 
@@ -12,9 +11,7 @@ class MenuController;
 class ScriptParameterController;
 class App;
 
-class EditorController : public Escher::ViewController,
-                         public Escher::TextAreaDelegate,
-                         public Shared::InputEventHandlerDelegate {
+class EditorController : public Escher::ViewController {
  public:
   EditorController(MenuController* menuController, App* pythonDelegate);
   void setScript(Script script, int scriptIndex);
@@ -31,13 +28,6 @@ class EditorController : public Escher::ViewController,
     return Escher::ViewController::TitlesDisplay::DisplayNoTitle;
   }
   TELEMETRY_ID("Editor");
-
-  /* TextAreaDelegate */
-  bool textAreaDidReceiveEvent(Escher::TextArea* textArea,
-                               Ion::Events::Event event) override;
-
-  /* InputEventHandlerDelegate */
-  VariableBoxController* variableBox() override;
 
  private:
   void cleanStorageEmptySpace();

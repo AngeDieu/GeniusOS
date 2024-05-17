@@ -11,62 +11,10 @@ namespace Shared {
 
 class Sequence;
 
-template <typename T>
-class TemplatedSequenceContext : public Poincare::ContextWithParent {
- public:
-  TemplatedSequenceContext(SequenceContext* sequenceContext);
-  void resetCache();
-  void stepUntilRank(int sequenceIndex, int rank);
-  int rank(int sequenceIndex, bool intermediateComputation) const {
-    assert(0 <= sequenceIndex &&
-           sequenceIndex < SequenceStore::k_maxNumberOfSequences);
-    return intermediateComputation ? m_intermediateRanks[sequenceIndex]
-                                   : m_mainRanks[sequenceIndex];
-  }
-  T storedValueOfSequenceAtRank(int sequenceIndex, int rank);
-
- private:
-  constexpr static int k_maxRecurrentRank = 10000;
-  int* rankPointer(int sequenceIndex, bool intermediateComputation);
-  T* valuesPointer(int sequenceIndex, bool intermediateComputation);
-  void shiftValuesRight(int sequenceIndex, bool intermediateComputation,
-                        int delta);
-  void stepRanks(int sequenceIndex, bool intermediateComputation, int step);
-  void resetValuesOfSequence(int sequenceIndex, bool intermediateComputation);
-  void resetRanksAndValuesOfSequence(int sequenceIndex,
-                                     bool intermediateComputation);
-  void resetDataOfCurrentComputation();
-  const Poincare::Expression protectedExpressionForSymbolAbstract(
-      const Poincare::SymbolAbstract& symbol, bool clone,
-      ContextWithParent* lastDescendantContext) override;
-
-  SequenceContext* m_sequenceContext;
-
-  /* Main ranks for main computations and intermediate ranks for intermediate
-   * computations (ex: computation of v(2) in u(3) = v(2) + 4). If ranks are
-   * {9,5,4} then values are {{u9,u8,u7}, {v5,v4,v3}, {w4,w3,w2}}. */
-  int m_mainRanks[SequenceStore::k_maxNumberOfSequences];
-  T m_mainValues[SequenceStore::k_maxNumberOfSequences]
-                [SequenceStore::k_maxRecurrenceDepth + 1];
-  int m_intermediateRanks[SequenceStore::k_maxNumberOfSequences];
-  T m_intermediateValues[SequenceStore::k_maxNumberOfSequences]
-                        [SequenceStore::k_maxRecurrenceDepth + 1];
-
-  bool m_isInsideComputation;
-  int m_smallestRankBeingComputed[SequenceStore::k_maxNumberOfSequences];
-};
-
 class SequenceContext : public Poincare::ContextWithParent {
  public:
   SequenceContext(Poincare::Context* parentContext,
-                  SequenceStore* sequenceStore)
-      : ContextWithParent(parentContext),
-        m_sequenceStore(sequenceStore),
-        m_floatSequenceContext(this),
-        m_doubleSequenceContext(this),
-        m_sequenceIsNotComputable{Poincare::TrinaryBoolean::Unknown,
-                                  Poincare::TrinaryBoolean::Unknown,
-                                  Poincare::TrinaryBoolean::Unknown} {}
+                  SequenceStore* sequenceStore);
 
   /* u{n}, v{n} and w{n} must be parsed as sequences in the sequence app
    * so that u{n} can be defined as a function of v{n} without v{n} being
@@ -79,39 +27,54 @@ class SequenceContext : public Poincare::ContextWithParent {
       const char* identifier, int length) override;
 
   void resetCache();
-
-  template <typename T>
-  void stepUntilRank(int sequenceIndex, int rank) {
-    context<T>()->stepUntilRank(sequenceIndex, rank);
-  }
-
-  SequenceStore* sequenceStore() { return m_sequenceStore; }
-
   void tidyDownstreamPoolFrom(Poincare::TreeNode* treePoolCursor) override;
-
-  template <typename T>
-  int rank(int sequenceIndex, bool intermediateComputation) {
-    return context<T>()->rank(sequenceIndex, intermediateComputation);
-  }
-
-  template <typename T>
-  T storedValueOfSequenceAtRank(int sequenceIndex, int rank) {
-    return context<T>()->storedValueOfSequenceAtRank(sequenceIndex, rank);
-  }
-
-  template <typename T>
-  TemplatedSequenceContext<T>* context();
-
-  Sequence* sequenceAtNameIndex(int sequenceIndex) const;
-
+  SequenceStore* sequenceStore() { return m_sequenceStore; }
   bool sequenceIsNotComputable(int sequenceIndex);
 
+  void stepUntilRank(int sequenceIndex, int rank);
+  int rank(int sequenceIndex, bool intermediateComputation) {
+    return *(rankPointer(sequenceIndex, intermediateComputation));
+  }
+  double storedValueOfSequenceAtRank(int sequenceIndex, int rank);
+
  private:
+  constexpr static int k_maxRecurrentRank = 10000;
+  constexpr static int k_storageDepth = 6;
+  constexpr static int k_numberOfSequences =
+      SequenceStore::k_maxNumberOfSequences;
+
+  int* rankPointer(int sequenceIndex, bool intermediateComputation);
+  double* valuesPointer(int sequenceIndex, bool intermediateComputation);
+  void shiftValuesRight(int sequenceIndex, bool intermediateComputation,
+                        int delta);
+  void stepRanks(int sequenceIndex, bool intermediateComputation, int step);
+  void resetValuesOfSequence(int sequenceIndex, bool intermediateComputation);
+  void resetRanksAndValuesOfSequence(int sequenceIndex,
+                                     bool intermediateComputation);
+  void resetComputationStatus();
+  const Poincare::Expression protectedExpressionForSymbolAbstract(
+      const Poincare::SymbolAbstract& symbol, bool clone,
+      ContextWithParent* lastDescendantContext) override;
+  Sequence* sequenceAtNameIndex(int sequenceIndex) const;
+  int rankForInitialValuesStorage(int sequenceIndex) const;
+
+  /* Main ranks for main computations and intermediate ranks for intermediate
+   * computations (ex: computation of v(2) in u(3) = v(2) + 4). If ranks are
+   * {9,5,4} then values are {{u9,u8,u7}, {v5,v4,v3}, {w4,w3,w2}}. */
+  int m_mainRanks[k_numberOfSequences];
+  double m_mainValues[k_numberOfSequences][k_storageDepth];
+  int m_intermediateRanks[k_numberOfSequences];
+  double m_intermediateValues[k_numberOfSequences][k_storageDepth];
+  /* Save initial values to avoid stepping all values back. For example if in an
+   * intermediate computation we ask for v(n) with v(n+1) = v(n)+v(0), we will
+   * always step to rank n and then step back to rank 0, replacing all values
+   * stored in m_intermediateValues. */
+  double m_initialValues[k_numberOfSequences][k_storageDepth];
+
   SequenceStore* m_sequenceStore;
-  TemplatedSequenceContext<float> m_floatSequenceContext;
-  TemplatedSequenceContext<double> m_doubleSequenceContext;
-  Poincare::TrinaryBoolean
-      m_sequenceIsNotComputable[SequenceStore::k_maxNumberOfSequences];
+  bool m_isInsideComputation;
+  int m_smallestRankBeingComputed[k_numberOfSequences];
+  Poincare::TrinaryBoolean m_sequenceIsNotComputable[k_numberOfSequences];
 };
 
 }  // namespace Shared

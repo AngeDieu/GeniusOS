@@ -1,10 +1,10 @@
 #include "tangent_graph_controller.h"
 
 #include <apps/apps_container_helper.h>
+#include <apps/shared/poincare_helpers.h>
 #include <poincare/preferences.h>
 #include <poincare/print.h>
 
-#include "../../shared/poincare_helpers.h"
 #include "../app.h"
 
 using namespace Shared;
@@ -32,30 +32,29 @@ void TangentGraphController::viewWillAppear() {
   m_bannerView->setDisplayParameters(false, true, true);
   reloadBannerView();
   panToMakeCursorVisible();
-  m_graphView->reload();
+  Shared::SimpleInteractiveCurveViewController::viewWillAppear();
 }
 
 void TangentGraphController::didBecomeFirstResponder() {
   if (curveView()->hasFocus()) {
     m_bannerView->abscissaValue()->setParentResponder(this);
-    m_bannerView->abscissaValue()->setDelegates(textFieldDelegateApp(), this);
-    Container::activeApp()->setFirstResponder(m_bannerView->abscissaValue());
+    m_bannerView->abscissaValue()->setDelegate(this);
+    App::app()->setFirstResponder(m_bannerView->abscissaValue());
   }
 }
 
 bool TangentGraphController::textFieldDidFinishEditing(
-    AbstractTextField *textField, const char *text, Ion::Events::Event event) {
-  Shared::TextFieldDelegateApp *myApp = textFieldDelegateApp();
-  double floatBody =
-      textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
-  if (myApp->hasUndefinedValue(floatBody)) {
+    AbstractTextField *textField, Ion::Events::Event event) {
+  double floatBody = ParseInputFloatValue<double>(textField->draftText());
+  if (HasUndefinedValue(floatBody)) {
     return false;
   }
   ExpiringPointer<ContinuousFunction> function =
       App::app()->functionStore()->modelForRecord(m_record);
   assert(function->properties().isCartesian());
   double y =
-      function->evaluate2DAtParameter(floatBody, myApp->localContext()).y();
+      function->evaluate2DAtParameter(floatBody, App::app()->localContext())
+          .y();
   m_cursor->moveTo(floatBody, floatBody, y);
   panToMakeCursorVisible();
   reloadBannerView();

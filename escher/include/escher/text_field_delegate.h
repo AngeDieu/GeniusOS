@@ -9,22 +9,20 @@ class AbstractTextField;
 class TextFieldDelegate {
  public:
   virtual bool textFieldShouldFinishEditing(AbstractTextField* textField,
-                                            Ion::Events::Event event) = 0;
+                                            Ion::Events::Event event) {
+    return event == Ion::Events::OK || event == Ion::Events::EXE;
+  }
   virtual void textFieldDidStartEditing(AbstractTextField* textField) {}
   virtual bool textFieldDidReceiveEvent(AbstractTextField* textField,
-                                        Ion::Events::Event event) = 0;
+                                        Ion::Events::Event event) {
+    return false;
+  }
   virtual bool textFieldDidFinishEditing(AbstractTextField* textField,
-                                         const char* text,
                                          Ion::Events::Event event) {
     return false;
   }
-  virtual bool textFieldDidAbortEditing(AbstractTextField* textField) {
-    return false;
-  }
-  virtual bool textFieldDidHandleEvent(AbstractTextField* textField,
-                                       bool returnValue, bool textDidChange) {
-    return returnValue;
-  }
+  virtual void textFieldDidAbortEditing(AbstractTextField* textField) {}
+  virtual void textFieldDidHandleEvent(AbstractTextField* textField) {}
   virtual bool textFieldIsEditable(AbstractTextField* textField) {
     return true;
   }

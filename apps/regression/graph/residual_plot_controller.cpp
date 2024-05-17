@@ -34,6 +34,8 @@ void ResidualPlotController::updateCursor() {
       Poincare::Preferences::sharedPreferences->displayMode();
   constexpr size_t bufferSize =
       Shared::BannerView::BannerBufferTextView::MaxTextSize();
+  constexpr static int k_maxNumberOfGlyphs =
+      Poincare::Print::k_maxNumberOfSmallGlyphsInScreenWidth;
   char buffer[bufferSize];
 
   Poincare::Print::CustomPrintf(buffer, bufferSize, "x=%*.*ed", x, displayMode,
@@ -46,8 +48,8 @@ void ResidualPlotController::updateCursor() {
                                 y, displayMode, significantDigits);
   m_bannerView.ordinateView()->setText(buffer);
 
-  Poincare::Print::CustomPrintfWithMaxNumberOfSignificantDigits(
-      buffer, bufferSize, significantDigits, "%s%s%*.*ed",
+  Poincare::Print::CustomPrintfWithMaxNumberOfGlyphs(
+      buffer, bufferSize, significantDigits, k_maxNumberOfGlyphs, "%s%s%*.*ed",
       I18n::translate(I18n::Message::ResidualStandardDeviation),
       I18n::translate(I18n::Message::ColonConvention),
       m_store->residualStandardDeviation(
@@ -103,11 +105,16 @@ void ResidualPlotController::viewWillAppear() {
     yMin = std::min(yMin, y);
     yMax = std::max(yMax, y);
   }
+  if (yMax == DBL_MIN) {
+    // This happens if every y is NAN
+    yMin = -Poincare::Range1D::k_defaultHalfLength;
+    yMax = Poincare::Range1D::k_defaultHalfLength;
+  }
   assert(xMin <= xMax && yMin <= yMax);
+  updateCursor();
   m_range.calibrate(xMin, xMax, yMin, yMax, view()->bounds().height(),
                     m_bannerView.bounds().height());
-
-  updateCursor();
+  m_curveView.reload();
 }
 
 }  // namespace Regression

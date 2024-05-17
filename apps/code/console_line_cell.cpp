@@ -5,6 +5,7 @@
 #include <kandinsky/coordinate.h>
 #include <kandinsky/point.h>
 
+#include "app.h"
 #include "console_controller.h"
 
 using namespace Escher;
@@ -67,7 +68,7 @@ void ConsoleLineCell::setHighlighted(bool highlight) {
 void ConsoleLineCell::reloadCell() {
   layoutSubviews();
   HighlightCell::reloadCell();
-  m_scrollableView.reloadScroll();
+  m_scrollableView.resetScroll();
 }
 
 int ConsoleLineCell::numberOfSubviews() const {
@@ -110,7 +111,7 @@ void ConsoleLineCell::layoutSubviews(bool force) {
 }
 
 void ConsoleLineCell::didBecomeFirstResponder() {
-  Container::activeApp()->setFirstResponder(&m_scrollableView);
+  App::app()->setFirstResponder(&m_scrollableView);
 }
 
 }  // namespace Code

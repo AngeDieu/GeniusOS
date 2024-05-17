@@ -2,10 +2,9 @@
 #define FINANCE_APP_H
 
 #include <apps/i18n.h>
+#include <apps/shared/math_app.h>
 #include <escher/stack_view_controller.h>
 
-#include "../shared/layout_field_delegate_app.h"
-#include "../shared/shared_app.h"
 #include "data.h"
 #include "interest_menu_controller.h"
 #include "menu_controller.h"
@@ -14,10 +13,10 @@
 
 namespace Finance {
 
-class App : public Shared::LayoutFieldDelegateApp {
+class App : public Shared::MathApp {
  public:
   // Descriptor
-  class Descriptor : public Shared::TextFieldDelegateApp::Descriptor {
+  class Descriptor : public Escher::App::Descriptor {
    public:
     I18n::Message name() const override { return I18n::Message::FinanceApp; }
     I18n::Message upperName() const override {
@@ -48,9 +47,7 @@ class App : public Shared::LayoutFieldDelegateApp {
   };
   TELEMETRY_ID("Finance");
 
-  static App *app() {
-    return static_cast<App *>(Escher::Container::activeApp());
-  }
+  static App *app() { return static_cast<App *>(Escher::App::app()); }
   static InterestData *GetInterestData() {
     return app()->snapshot()->data()->interestData();
   }

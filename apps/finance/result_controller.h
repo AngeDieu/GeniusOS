@@ -17,7 +17,8 @@ class ResultController : public Escher::ListWithTopAndBottomController {
  public:
   ResultController(Escher::StackViewController* parentResponder);
 
-  void didBecomeFirstResponder() override;
+  void viewWillAppear() override;
+  void didBecomeFirstResponder() override {}
   bool handleEvent(Ion::Events::Event e) override;
   const char* title() override;
   ViewController::TitlesDisplay titlesDisplay() override {
@@ -28,6 +29,9 @@ class ResultController : public Escher::ListWithTopAndBottomController {
   Escher::HighlightCell* reusableCell(int i, int type) override {
     assert(type == 0 && i == 0);
     return &m_cell;
+  }
+  KDCoordinate nonMemoizedRowHeight(int row) override {
+    return m_cell.minimalSizeForOptimalDisplay().height();
   }
 
  private:

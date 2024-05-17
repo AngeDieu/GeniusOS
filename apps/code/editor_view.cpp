@@ -1,9 +1,10 @@
 #include "editor_view.h"
 
 #include <apps/global_preferences.h>
-#include <escher/app.h>
 #include <escher/palette.h>
 #include <poincare/integer.h>
+
+#include "app.h"
 
 using namespace Escher;
 
@@ -26,6 +27,12 @@ bool EditorView::isAutocompleting() const {
 
 void EditorView::resetSelection() { m_textArea.resetSelection(); }
 
+void EditorView::removeAutocompletionText() {
+  if (m_textArea.isAutocompleting()) {
+    m_textArea.removeAutocompletionText();
+  }
+}
+
 void EditorView::scrollViewDidChangeOffset(
     ScrollViewDataSource* scrollViewDataSource) {
   m_gutterView.setOffset(scrollViewDataSource->offset().y());
@@ -40,7 +47,7 @@ View* EditorView::subviewAtIndex(int index) {
 }
 
 void EditorView::didBecomeFirstResponder() {
-  Container::activeApp()->setFirstResponder(&m_textArea);
+  App::app()->setFirstResponder(&m_textArea);
 }
 
 void EditorView::layoutSubviews(bool force) {

@@ -168,11 +168,17 @@ Evaluation<T> IntegralNode::templatedApproximate(
   DetailedResult<T> detailedResult =
       adaptiveQuadrature<T>(start, end, precision, k_maxNumberOfIterations,
                             substitution, approximationContext);
-  constexpr T minimumPrecisionForDisplay = 0.1;
-  T result = detailedResult.absoluteError > minimumPrecisionForDisplay
-                 ? NAN
-                 : scale * detailedResult.integral;
+  T result = DetailedResultIsValid(detailedResult)
+                 ? scale * detailedResult.integral
+                 : NAN;
   return Complex<T>::Builder(result);
+}
+
+template <typename T>
+bool IntegralNode::DetailedResultIsValid(DetailedResult<T> result) {
+  constexpr T maximumErrorForDisplay = 0.1;
+  return !std::isnan(result.integral) &&
+         result.absoluteError < maximumErrorForDisplay;
 }
 
 template <typename T>
@@ -473,21 +479,44 @@ IntegralNode::DetailedResult<T> IntegralNode::adaptiveQuadrature(
     const ApproximationContext& approximationContext) const {
   DetailedResult<T> quadKG =
       kronrodGaussQuadrature(a, b, substitution, approximationContext);
-  if (quadKG.absoluteError <= eps) {
-    return quadKG;
-  } else if (--numberOfIterations > 0) {
-    T m = (a + b) / 2;
-    DetailedResult<T> left = adaptiveQuadrature<T>(
-        a, m, eps / 2, numberOfIterations, substitution, approximationContext);
-    DetailedResult<T> right = adaptiveQuadrature<T>(
-        m, b, eps / 2, numberOfIterations, substitution, approximationContext);
-    DetailedResult<T> result;
-    result.integral = left.integral + right.integral;
-    result.absoluteError = left.absoluteError + right.absoluteError;
-    return result;
-  } else {
+  return iterateAdaptiveQuadrature(quadKG, a, b, eps, numberOfIterations,
+                                   substitution, approximationContext);
+}
+
+template <typename T>
+IntegralNode::DetailedResult<T> IntegralNode::iterateAdaptiveQuadrature(
+    DetailedResult<T> quadKG, T a, T b, T eps, int numberOfIterations,
+    Substitution<T> substitution,
+    const ApproximationContext& approximationContext) const {
+  if (quadKG.absoluteError <= eps || numberOfIterations == 1) {
     return quadKG;
   }
+
+  T m = (a + b) / 2;
+  DetailedResult<T> left =
+      kronrodGaussQuadrature(a, m, substitution, approximationContext);
+  DetailedResult<T> right =
+      kronrodGaussQuadrature(m, b, substitution, approximationContext);
+
+  /* Start by the side with the biggest error to reach maximumError faster if
+   * it can be reached. */
+  bool leftFirst = left.absoluteError >= right.absoluteError;
+  for (int i = 0; i < 2; i++) {
+    bool currentIsLeft = ((i == 0) == leftFirst);
+    DetailedResult<T>* current = currentIsLeft ? &left : &right;
+    T lowerBound = currentIsLeft ? a : m;
+    T upperBound = currentIsLeft ? m : b;
+    *current = iterateAdaptiveQuadrature(*current, lowerBound, upperBound,
+                                         eps / 2, numberOfIterations - 1,
+                                         substitution, approximationContext);
+    if (!DetailedResultIsValid(*current)) {
+      return {NAN, NAN};
+    }
+  }
+  DetailedResult<T> result = {
+      .integral = left.integral + right.integral,
+      .absoluteError = left.absoluteError + right.absoluteError};
+  return result;
 }
 #endif
 

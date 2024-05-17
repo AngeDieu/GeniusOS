@@ -105,12 +105,12 @@ void assert_cache_stays_valid(const char* definition, float rangeXMin = -5,
                               float rangeXMax = 5) {
   GlobalContext globalContext;
   ContinuousFunctionStore functionStore;
+  CachesContainer cachesContainer;
+  functionStore.setCachesContainer(&cachesContainer);
 
   InteractiveCurveViewRange graphRange;
-  graphRange.setXMin(rangeXMin);
-  graphRange.setXMax(rangeXMax);
-  graphRange.setYMin(-3.f);
-  graphRange.setYMax(3.f);
+  graphRange.setXRange(rangeXMin, rangeXMax);
+  graphRange.setYRange(-3.f, 3.f);
 
   CurveViewCursor cursor;
   ContinuousFunction* function =

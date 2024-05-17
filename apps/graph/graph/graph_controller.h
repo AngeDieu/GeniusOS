@@ -20,7 +20,6 @@ class GraphController : public Shared::FunctionGraphController,
                         public GraphControllerHelper {
  public:
   GraphController(Escher::Responder *parentResponder,
-                  Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
                   Escher::ButtonRowController *header,
                   Shared::InteractiveCurveViewRange *interactiveRange,
                   Shared::CurveViewCursor *cursor, int *selectedCurveIndex);
@@ -119,7 +118,6 @@ class GraphController : public Shared::FunctionGraphController,
   bool moveCursorVertically(OMG::VerticalDirection direction) override;
 
   // InteractiveCurveViewController
-  void moveCursorAndCenterIfNeeded(double t) override;
   FunctionSelectionController *curveSelectionController() const override {
     return const_cast<FunctionSelectionController *>(
         &m_functionSelectionController);

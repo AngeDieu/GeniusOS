@@ -16,12 +16,10 @@ using namespace Escher;
 
 namespace Statistics {
 
-StoreController::StoreController(
-    Responder *parentResponder,
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate, Store *store,
-    ButtonRowController *header, Context *parentContext)
-    : Shared::StoreController(parentResponder, inputEventHandlerDelegate, store,
-                              header, parentContext),
+StoreController::StoreController(Responder *parentResponder, Store *store,
+                                 ButtonRowController *header,
+                                 Context *parentContext)
+    : Shared::StoreController(parentResponder, store, header, parentContext),
       m_store(store),
       m_storeParameterController(this, this, store) {}
 
@@ -52,7 +50,7 @@ int StoreController::numberOfColumns() const {
 
 void StoreController::fillCellForLocation(HighlightCell *cell, int column,
                                           int row) {
-  if (!isCumulatedFrequencyCell(column, row)) {
+  if (typeAtLocation(column, row) != k_nonEditableCellType) {
     return Shared::StoreController::fillCellForLocation(cell, column, row);
   }
   // Handle hidden cells
@@ -61,10 +59,10 @@ void StoreController::fillCellForLocation(HighlightCell *cell, int column,
       static_cast<AbstractEvenOddBufferTextCell *>(cell);
   if (row > numberOfElementsInCol + 1) {
     myCell->setText("");
-    myCell->hide();
+    myCell->setVisible(false);
     return;
   }
-  myCell->show();
+  myCell->setVisible(true);
   myCell->setEven(row % 2 == 0);
 
   double value =

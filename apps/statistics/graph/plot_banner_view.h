@@ -37,17 +37,15 @@ class PlotBannerViewWithEditableField
     : public PlotBannerView,
       public Shared::EditableFieldBannerViewDelegate {
  public:
-  PlotBannerViewWithEditableField(
-      Escher::Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      Escher::TextFieldDelegate* textFieldDelegate)
-      : Shared::EditableFieldBannerViewDelegate(
-            parentResponder, inputEventHandlerDelegate, textFieldDelegate) {}
+  PlotBannerViewWithEditableField(Escher::Responder* parentResponder,
+                                  Escher::TextFieldDelegate* textFieldDelegate)
+      : Shared::EditableFieldBannerViewDelegate(parentResponder,
+                                                textFieldDelegate) {}
   BannerBufferTextView* valueLabel() { return editableFieldLabel(); }
   Escher::TextField* value() { return editableField(); }
 
  private:
-  Escher::View* valueView() override { return editablView(); }
+  Escher::View* valueView() override { return editableView(); }
 };
 
 }  // namespace Statistics

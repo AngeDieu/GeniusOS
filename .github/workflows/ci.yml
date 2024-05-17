@@ -1,30 +1,48 @@
 name: Continuous Integration
+
 on:
-  pull_request:
-    branches:
-      - master
   push:
-    branches:
-      - master
+    branches: [ master, 'version-*' ]
+  pull_request:
+
+  workflow_dispatch:
+    inputs:
+      android:
+       type: boolean
+       default: 'true'
+      windows:
+       type: boolean
+       default: 'true'
+      macos:
+       type: boolean
+       default: 'true'
+      ios:
+       type: boolean
+       default: 'true'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  MAKEFLAGS: ${{ endswith(github.repository, '/epsilon-internal') && '-j32' || '-j2' }}
+  MAKEFLAGS: ${{ (github.repository == 'numworks/epsilon-internal') && '-j32' || '-j2' }}
 
 jobs:
   android:
     runs-on: ubuntu-latest
-    if: ${{ ! endswith(github.repository, '/epsilon-internal') }}
+    if: ${{ (github.repository != 'numworks/epsilon-internal' || github.event.inputs.android == 'true') }}
     steps:
-      - run: $ANDROID_HOME/tools/bin/sdkmanager "ndk;22.1.7171670"
+      - run: $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;22.1.7171670"
       - uses: actions/checkout@v3
       - run: build/setup.sh --only-simulator
-      - run: make PLATFORM=simulator TARGET=android ASSERTIONS=1 epsilon.apk test.apk
+      - run: make PLATFORM=simulator TARGET=android ASSERTIONS=1 test.apk
+      - run: make PLATFORM=simulator TARGET=android ASSERTIONS=1 epsilon.apk
       - uses: actions/upload-artifact@master
         with:
           name: epsilon-android.apk
           path: output/release/simulator/android/epsilon.apk
   device:
-    runs-on: ${{ endswith(github.repository, '/epsilon-internal') && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ (github.repository == 'numworks/epsilon-internal') && 'self-hosted' || 'ubuntu-latest' }}
     strategy:
       matrix:
         model: [n0110, n0115, n0120]
@@ -32,7 +50,7 @@ jobs:
       - uses: numworks/setup-arm-toolchain@latest
       - uses: actions/checkout@v3
         with:
-          token: ${{ secrets.PAT || github.token }}
+          token: ${{ secrets.PAT || secrets.GITHUB_TOKEN }}
           submodules: ${{ secrets.PAT != null }}
       - run: build/setup.sh
       - name: Check for epsilon-core
@@ -58,37 +76,45 @@ jobs:
         run: make MODEL=${{ matrix.model }} bench.ram.dfu
   windows:
     runs-on: windows-latest
-    if: ${{ ! endswith(github.repository, '/epsilon-internal') }}
+    if: ${{ (github.repository != 'numworks/epsilon-internal' || github.event.inputs.windows == 'true') }}
     defaults:
        run:
          shell: msys2 {0}
     steps:
       - uses: msys2/setup-msys2@v2
+        with:
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-arm-none-eabi-gcc
       - uses: actions/checkout@v3
-      - run: build/setup.sh --only-simulator
-      - run: make PLATFORM=simulator ASSERTIONS=1 epsilon.exe test.exe
-      - run: cmd /c output\release\simulator\windows\test.exe --headless --limit-stack-usage
+      - run: build/setup.sh
+      - run: make PLATFORM=simulator ASSERTIONS=1 epsilon.exe
+      - run: make PLATFORM=simulator ASSERTIONS=1 test.exe
+      - run: ./output/release/simulator/windows/test.exe --headless --limit-stack-usage
+      - run: make -j8 userland.A.elf
       - uses: actions/upload-artifact@v3
         with:
           name: epsilon-windows.exe
           path: output/release/simulator/windows/epsilon.exe
   web:
-    runs-on: ${{ endswith(github.repository, '/epsilon-internal') && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ (github.repository == 'numworks/epsilon-internal') && 'self-hosted' || 'ubuntu-latest' }}
     steps:
       - uses: numworks/setup-emscripten@latest
         with:
-          sdk: 1.39.16-fastcomp
+          sdk: 3.1.43
       - uses: actions/checkout@v3
       - run: build/setup.sh --only-simulator
-      - run: make PLATFORM=simulator TARGET=web ASSERTIONS=1 epsilon.zip test.js
+      - run: make PLATFORM=simulator TARGET=web ASSERTIONS=1 epsilon.html test.js
       - run: timeout 5m node output/release/simulator/web/test.js --headless --limit-stack-usage
       - uses: actions/upload-artifact@v3
+        if: ${{ (github.repository != 'numworks/epsilon-internal') }}
         with:
-          name: epsilon-web.zip
-          path: output/release/simulator/web/epsilon.zip
+          name: epsilon.html
+          path: output/release/simulator/web/epsilon.html
           retention-days: 7
   linux:
-    runs-on: ${{ endswith(github.repository, '/epsilon-internal') && 'self-hosted' || 'ubuntu-latest' }}
+    runs-on: ${{ (github.repository == 'numworks/epsilon-internal') && 'self-hosted' || 'ubuntu-latest' }}
     steps:
       - uses: numworks/setup-llvm@latest
       - uses: actions/checkout@v3
@@ -96,30 +122,31 @@ jobs:
       - run: make PLATFORM=simulator ASAN=1 TIDY=1 ASSERTIONS=1 epsilon.bin test.bin
       - run: output/release/simulator/linux/test.bin --headless --limit-stack-usage
       - uses: actions/upload-artifact@v3
-        if: ${{ ! endswith(github.repository, '/epsilon-internal') }}
+        if: ${{ (github.repository != 'numworks/epsilon-internal') }}
         with:
           name: epsilon-linux.bin
           path: output/release/simulator/linux/epsilon.bin
   macos:
     runs-on: macOS-latest
-    if: ${{ ! endswith(github.repository, '/epsilon-internal') }}
+    if: ${{ (github.repository != 'numworks/epsilon-internal' || github.event.inputs.macos == 'true') }}
     steps:
       - uses: actions/checkout@v3
       - run: build/setup.sh --only-simulator
-      - run: make PLATFORM=simulator epsilon.app
       - run: make PLATFORM=simulator ASSERTIONS=1 ARCH=x86_64 test.bin
       - run: output/release/simulator/macos/x86_64/test.bin --headless --limit-stack-usage
+      - run: make PLATFORM=simulator ASSERTIONS=1 epsilon.app
       - uses: actions/upload-artifact@v3
         with:
           name: epsilon-macos.zip
           path: output/release/simulator/macos/epsilon.app
   ios:
     runs-on: macOS-latest
-    if: ${{ ! endswith(github.repository, '/epsilon-internal') }}
+    if: ${{ (github.repository != 'numworks/epsilon-internal' || github.event.inputs.ios == 'true') }}
     steps:
       - uses: actions/checkout@v3
       - run: build/setup.sh --only-simulator
-      - run: make PLATFORM=simulator TARGET=ios EPSILON_TELEMETRY=0 ASSERTIONS=1 epsilon.ipa test.ipa
+      - run: make PLATFORM=simulator TARGET=ios EPSILON_TELEMETRY=0 ASSERTIONS=1 epsilon.ipa
+      - run: make PLATFORM=simulator TARGET=ios EPSILON_TELEMETRY=0 ASSERTIONS=1 test.ipa
       - run: make PLATFORM=simulator TARGET=ios EPSILON_TELEMETRY=0 APPLE_PLATFORM=ios-simulator
       - uses: actions/upload-artifact@v3
         with:

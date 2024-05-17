@@ -11,6 +11,7 @@
 
 #include "app.h"
 #include "poincare/empty_context.h"
+#include "poincare/variable_context.h"
 
 using namespace Poincare;
 using namespace Shared;
@@ -140,8 +141,14 @@ SystemOfEquations::Error SystemOfEquations::simplifyAndFindVariables(
   m_userVariables[0][0] = '\0';
   m_complexFormat = Preferences::sharedPreferences->complexFormat();
 
+  bool forbidSimultaneousEquation = Preferences::sharedPreferences->examMode()
+                                        .forbidSimultaneousEquationSolver();
+
   EquationStore *store = m_store;
   int nEquations = store->numberOfDefinedModels();
+  if (forbidSimultaneousEquation && nEquations > 1) {
+    return Error::DisabledInExamMode;
+  }
   for (int i = 0; i < nEquations; i++) {
     ExpiringPointer<Equation> equation =
         store->modelForRecord(store->definedRecordAtIndex(i));
@@ -197,6 +204,10 @@ SystemOfEquations::Error SystemOfEquations::simplifyAndFindVariables(
     }
     m_numberOfResolutionVariables = nbResolutionVariables;
   }
+
+  if (forbidSimultaneousEquation && m_numberOfResolutionVariables > 1) {
+    return Error::DisabledInExamMode;
+  }
   return Error::NoError;
 }
 
@@ -213,7 +224,8 @@ SystemOfEquations::Error SystemOfEquations::solveLinearSystem(
   Expression coefficients[EquationStore::k_maxNumberOfEquations]
                          [Expression::k_maxNumberOfVariables];
   Expression constants[EquationStore::k_maxNumberOfEquations];
-  int m = m_store->numberOfDefinedModels();
+  const int numberOfOriginalEquations = m_store->numberOfDefinedModels();
+  int m = numberOfOriginalEquations;
   for (int i = 0; i < m; i++) {
     bool isLinear = simplifiedEquations[i].getLinearCoefficients(
         &m_variables[0][0], SymbolAbstractNode::k_maxNameSize, coefficients[i],
@@ -245,8 +257,7 @@ SystemOfEquations::Error SystemOfEquations::solveLinearSystem(
   assert(!ab.recursivelyMatches(Expression::IsUninitialized, context));
 
   // Compute the rank of (A|b)
-  int rank = ab.rank(context, m_complexFormat, angleUnit, unitFormat,
-                     ReductionTarget::SystemForApproximation, true);
+  int rank = ab.rank(context);
   if (rank == -1) {
     return Error::EquationUndefined;
   }
@@ -269,109 +280,130 @@ SystemOfEquations::Error SystemOfEquations::solveLinearSystem(
     }
   }
 
-  if (rank == n && n > 0) {
-    /* The rank is equal to the number of variables: the system has n solutions,
-     * and after canonization their values are the values on the last column. */
-    assert(m_numberOfSolutions == 0);
-    Error error;
-    for (int i = 0; i < n; i++) {
-      error =
-          registerSolution(ab.matrixChild(i, n), context, SolutionType::Exact);
-      if (error != Error::NoError) {
-        break;
-      }
-    }
-    assert(error != Error::NoError ||
-           m_numberOfSolutions == static_cast<size_t>(n));
-    return error;
-  }
-
-  /* The system is insufficiently qualified: bind the value of n-rank
-   * variables to parameters. */
-  m_hasMoreSolutions = true;
-
   /* Use a context without t to avoid replacing the t? parameters with a value
-   * if the user stored something in them but they are not used by the system..
-   */
+   * if the user stored something in them but they are not used by the
+   * system.
+   * It is declared here as it needs to be accessible when registering the
+   * solutions at the end. */
   ContextWithoutT noTContext(context);
-  context = &noTContext;
 
-  // 't' + 2 digits + '\0'
-  constexpr size_t parameterNameSize = 1 + 2 + 1;
-  char parameterName[parameterNameSize] = {k_parameterPrefix};
-  size_t parameterIndex = n - rank == 1 ? 0 : 1;
-  uint32_t usedParameterIndices = tagParametersUsedAsVariables();
+  if (rank != n || n <= 0) {
+    /* The system is insufficiently qualified: bind the value of n-rank
+     * variables to parameters. */
+    m_hasMoreSolutions = true;
 
-  int variable = n - 1;
-  int row = m - 1;
-  int firstVariableInRow = -1;
-  while (variable >= 0) {
-    // Find the first variable with a non-null coefficient in the current row
-    if (row >= 0) {
-      for (int col = 0; firstVariableInRow < 0 && col < n; col++) {
-        if (ab.matrixChild(row, col).isNull(context) != TrinaryBoolean::True) {
-          firstVariableInRow = col;
+    context = &noTContext;
+
+    // 't' + 2 digits + '\0'
+    constexpr size_t parameterNameSize = 1 + 2 + 1;
+    char parameterName[parameterNameSize] = {k_parameterPrefix};
+    size_t parameterIndex = n - rank == 1 ? 0 : 1;
+    uint32_t usedParameterIndices = tagParametersUsedAsVariables();
+
+    int variable = n - 1;
+    int row = m - 1;
+    int firstVariableInRow = -1;
+    while (variable >= 0) {
+      // Find the first variable with a non-null coefficient in the current row
+      if (row >= 0) {
+        for (int col = 0; firstVariableInRow < 0 && col < n; col++) {
+          if (ab.matrixChild(row, col).isNull(context) !=
+              TrinaryBoolean::True) {
+            firstVariableInRow = col;
+          }
+        }
+
+        if (firstVariableInRow < 0 || firstVariableInRow == variable) {
+          /* If firstVariableInRow < 0, the row is null and provides no
+           * information. If variable is the first with a non-null coefficient,
+           * the current row uniquely qualifies it, no need to bind a parameter
+           * to it. */
+          row--;
+          if (firstVariableInRow == variable) {
+            variable--;
+          }
+          firstVariableInRow = -1;
+          continue;
         }
       }
+      /* If row < 0, there are still unbound variables after scanning all the
+       * row, so simply bind them all. */
 
-      if (firstVariableInRow < 0 || firstVariableInRow == variable) {
-        /* If firstVariableInRow < 0, the row is null and provides no
-         * information. If variable is the first with a non-null coefficient,
-         * the current row uniquely qualifies it, no need to bind a parameter to
-         * it. */
-        row--;
-        if (firstVariableInRow == variable) {
-          variable--;
-        }
-        firstVariableInRow = -1;
-        continue;
+      assert(firstVariableInRow < variable);
+      /* No row uniquely qualifies the current variable, bind it to a parameter.
+       * Add the row variable=parameter to increase the rank of the system. */
+      for (int i = 0; i < n; i++) {
+        ab.addChildAtIndexInPlace(Rational::Builder(i == variable ? 1 : 0),
+                                  abChildren, abChildren);
+        ++abChildren;
       }
-    }
-    /* If row < 0, there are still unbound variables after scanning all the row,
-     * so simply bind them all. */
 
-    assert(firstVariableInRow < variable);
-    /* No row uniquely qualifies the current variable, bind it to a parameter.
-     * Add the row variable=parameter to increase the rank of the system. */
-    for (int i = 0; i < n; i++) {
-      ab.addChildAtIndexInPlace(Rational::Builder(i == variable ? 1 : 0),
-                                abChildren, abChildren);
-      ++abChildren;
-    }
-
-    // Generate a unique identifier t? that does not collide with variables.
-    while (OMG::BitHelper::bitAtIndex(usedParameterIndices, parameterIndex)) {
+      // Generate a unique identifier t? that does not collide with variables.
+      while (OMG::BitHelper::bitAtIndex(usedParameterIndices, parameterIndex)) {
+        parameterIndex++;
+        assert(parameterIndex <
+               OMG::BitHelper::numberOfBitsIn(usedParameterIndices));
+      }
+      size_t parameterNameLength =
+          parameterIndex == 0
+              ? 1
+              : 1 + PrintInt::Left(parameterIndex, parameterName + 1,
+                                   parameterNameSize - 2);
       parameterIndex++;
-      assert(parameterIndex <
-             OMG::BitHelper::numberOfBitsIn(usedParameterIndices));
+      assert(parameterNameLength >= 1 &&
+             parameterNameLength < parameterNameSize);
+      parameterName[parameterNameLength] = '\0';
+      ab.addChildAtIndexInPlace(
+          Symbol::Builder(parameterName, parameterNameLength), abChildren,
+          abChildren);
+      ++abChildren;
+      ab.setDimensions(++m, n + 1);
+      variable--;
     }
-    size_t parameterNameLength =
-        parameterIndex == 0
-            ? 1
-            : 1 + PrintInt::Left(parameterIndex, parameterName + 1,
-                                 parameterNameSize - 2);
-    parameterIndex++;
-    assert(parameterNameLength >= 1 && parameterNameLength < parameterNameSize);
-    parameterName[parameterNameLength] = '\0';
-    ab.addChildAtIndexInPlace(
-        Symbol::Builder(parameterName, parameterNameLength), abChildren,
-        abChildren);
-    ++abChildren;
-    ab.setDimensions(++m, n + 1);
-    variable--;
-  }
 
-  rank = ab.rank(context, m_complexFormat, angleUnit, unitFormat,
-                 ReductionTarget::SystemForAnalysis, true);
-  if (rank == -1) {
-    return Error::EquationUndefined;
+    /* forceCanonization = true so that canonization still happens even if
+     * t.approximate() is NAN. If other children of ab have an undef
+     * approximation, the previous rank computation would already have returned
+     * -1. */
+    rank = ab.rank(context, true);
+    if (rank == -1) {
+      return Error::EquationUndefined;
+    }
   }
   assert(rank == n);
-  // System is fully qualified, register the parametric solutions.
+
+  // System is fully qualified, register the solutions.
   m_numberOfSolutions = 0;
+
+  // Make sure the solution satisfies dependencies in equations
+  VariableContext solutionContexts[k_maxNumberOfSolutions];
   for (int i = 0; i < n; i++) {
-    Error error =
-        registerSolution(ab.matrixChild(i, n), context, SolutionType::Formal);
+    solutionContexts[i] = VariableContext(
+        variable(i), i == 0 ? context : &solutionContexts[i - 1]);
+    solutionContexts[i].setExpressionForSymbolAbstract(
+        ab.matrixChild(i, n),
+        Symbol::Builder(variable(i), strlen(variable(i))));
+  }
+  ReductionContext reductionContextWithSolutions(
+      &solutionContexts[n - 1], m_complexFormat,
+      Preferences::sharedPreferences->angleUnit(),
+      GlobalPreferences::sharedGlobalPreferences->unitFormat(),
+      ReductionTarget::SystemForAnalysis);
+  for (int i = 0; i < numberOfOriginalEquations; i++) {
+    if (simplifiedEquations[i].type() != ExpressionNode::Type::Dependency) {
+      continue;
+    }
+    if (simplifiedEquations[i]
+            .cloneAndReduce(reductionContextWithSolutions)
+            .isUndefined()) {
+      return Error::NoError;
+    }
+  }
+
+  SolutionType solutionType =
+      m_hasMoreSolutions ? SolutionType::Formal : SolutionType::Exact;
+  for (int i = 0; i < n; i++) {
+    Error error = registerSolution(ab.matrixChild(i, n), context, solutionType);
     if (error != Error::NoError) {
       return error;
     }
@@ -409,7 +441,7 @@ SystemOfEquations::Error SystemOfEquations::solvePolynomial(
   if (m_degree == 2) {
     numberOfSolutions = Poincare::Polynomial::QuadraticPolynomialRoots(
         coefficients[2], coefficients[1], coefficients[0], x, x + 1, &delta,
-        reductionContext);
+        reductionContext, &solutionsAreApproximate);
   } else {
     assert(m_degree == 3);
     numberOfSolutions = Poincare::Polynomial::CubicPolynomialRoots(
@@ -418,7 +450,23 @@ SystemOfEquations::Error SystemOfEquations::solvePolynomial(
   }
   SolutionType type =
       solutionsAreApproximate ? SolutionType::Approximate : SolutionType::Exact;
+
   for (size_t i = 0; i < numberOfSolutions; i++) {
+    /* Since getPolynomialReducedCoefficients passes right through dependencies,
+     * we need to handle them now. */
+    if (simplifiedEquations[0].type() == ExpressionNode::Type::Dependency) {
+      VariableContext contextWithSolution(variable(0), context);
+      contextWithSolution.setExpressionForSymbolAbstract(
+          x[i], Symbol::Builder(variable(0), strlen(variable(0))));
+      ReductionContext reductionContextWithSolution = reductionContext;
+      reductionContextWithSolution.setContext(&contextWithSolution);
+      if (simplifiedEquations[0]
+              .cloneAndReduce(reductionContextWithSolution)
+              .isUndefined()) {
+        continue;
+      }
+    }
+
     Error error = registerSolution(x[i], context, type);
     // Ignore EquationNonreal error on solutions since delta may still be real.
     if (error != Error::NoError && error != Error::EquationNonreal) {
@@ -435,9 +483,11 @@ static void simplifyAndApproximateSolution(
     Preferences::ComplexFormat complexFormat, Preferences::AngleUnit angleUnit,
     Preferences::UnitFormat unitFormat,
     SymbolicComputation symbolicComputation) {
-  e.cloneAndSimplifyAndApproximate(
-      exact, approximate, context, complexFormat, angleUnit, unitFormat,
-      symbolicComputation, UnitConversion::Default, approximateDuringReduction);
+  ReductionContext reductionContext = ReductionContext(
+      context, complexFormat, angleUnit, unitFormat, ReductionTarget::User,
+      symbolicComputation, UnitConversion::Default);
+  e.cloneAndSimplifyAndApproximate(exact, approximate, reductionContext,
+                                   approximateDuringReduction);
   if (exact->type() == ExpressionNode::Type::Dependency) {
     /* e has been reduced under ReductionTarget::SystemForAnalysis in
      * Equation::Model::standardForm and has gone through Matrix::rank,

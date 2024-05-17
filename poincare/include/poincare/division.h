@@ -30,7 +30,6 @@ class DivisionNode final : public ExpressionNode {
                : TrinaryBoolean::Unknown;
   }
   Type type() const override { return Type::Division; }
-  int polynomialDegree(Context* context, const char* symbolName) const override;
   Expression removeUnit(Expression* unit) override {
     assert(false);
     return ExpressionNode::removeUnit(unit);
@@ -78,9 +77,9 @@ class DivisionNode final : public ExpressionNode {
  private:
   // Approximation
   template <typename T>
-  static Complex<T> computeOnComplex(const std::complex<T> c,
-                                     const std::complex<T> d,
-                                     Preferences::ComplexFormat complexFormat);
+  static std::complex<T> computeOnComplex(
+      const std::complex<T> c, const std::complex<T> d,
+      Preferences::ComplexFormat complexFormat);
   template <typename T>
   static MatrixComplex<T> computeOnMatrixAndComplex(
       const MatrixComplex<T> m, const std::complex<T> c,

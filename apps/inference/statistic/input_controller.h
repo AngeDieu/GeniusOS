@@ -3,7 +3,6 @@
 
 #include <apps/shared/float_parameter_controller.h>
 #include <escher/highlight_cell.h>
-#include <escher/input_event_handler_delegate.h>
 #include <escher/menu_cell_with_editable_text.h>
 
 #include "inference/models/statistic/statistic.h"
@@ -23,8 +22,7 @@ class InputController
 
  public:
   InputController(Escher::StackViewController* parent,
-                  ResultsController* resultsController, Statistic* statistic,
-                  Escher::InputEventHandlerDelegate* handler);
+                  ResultsController* resultsController, Statistic* statistic);
   int numberOfRows() const override {
     return m_statistic->numberOfParameters() + 1 /* button */;
   }
@@ -33,6 +31,8 @@ class InputController
     return m_titleBuffer;
   }
   ViewController::TitlesDisplay titlesDisplay() override;
+  void initView() override;
+  void viewWillAppear() override;
   int typeAtRow(int row) const override;
   bool handleEvent(Ion::Events::Event event) override;
   void buttonAction() override;
@@ -67,11 +67,9 @@ class InputController
   constexpr static int k_numberOfTitleSignificantDigits =
       Poincare::Preferences::VeryShortNumberOfSignificantDigits;
   constexpr static int k_titleBufferSize =
-      sizeof("H0:= Ha: α=") + 7 /* μ1-μ2 */ +
+      sizeof("H0:μ1-μ2= Ha:μ1-μ2≠ α=") +  // longest possible
       3 * (Poincare::PrintFloat::charSizeForFloatsWithPrecision(
-               k_numberOfTitleSignificantDigits) -
-           1) +
-      2 /* op */ + 10;
+              k_numberOfTitleSignificantDigits));
   char m_titleBuffer[k_titleBufferSize];
   Statistic* m_statistic;
   ResultsController* m_resultsController;
@@ -81,6 +79,7 @@ class InputController
   Escher::MenuCellWithEditableText<Escher::MessageTextView,
                                    Escher::MessageTextView>
       m_significanceCell;
+  Escher::MessageTextView m_messageView;
 };
 
 }  // namespace Inference

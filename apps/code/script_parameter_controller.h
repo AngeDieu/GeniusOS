@@ -34,11 +34,12 @@ class ScriptParameterController
   /* MemoizedListViewDataSource */
   Escher::AbstractMenuCell* cell(int index) override;
   int numberOfRows() const override { return k_totalNumberOfCell; }
-  void fillCellForRow(Escher::HighlightCell* cell, int row) override;
 
  private:
   constexpr static int k_totalNumberOfCell = 4;
   Escher::StackViewController* stackViewController();
+  void updateAutoImportSwitch();
+
   I18n::Message m_pageTitle;
   Escher::MenuCell<Escher::MessageTextView> m_executeScript;
   Escher::MenuCell<Escher::MessageTextView> m_renameScript;

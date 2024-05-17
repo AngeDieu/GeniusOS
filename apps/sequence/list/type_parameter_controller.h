@@ -14,15 +14,11 @@ namespace Sequence {
 class ListController;
 
 class TypeParameterController
-    : public Escher::SelectableCellListPage<
-          Escher::MenuCell<Escher::LayoutView, Escher::MessageTextView>, 3,
-          Escher::RegularListViewDataSource> {
+    : public Escher::UniformSelectableListController<
+          Escher::MenuCell<Escher::LayoutView, Escher::MessageTextView>, 3> {
  public:
   TypeParameterController(Escher::Responder* parentResponder,
-                          ListController* list, KDCoordinate topMargin = 0,
-                          KDCoordinate rightMargin = 0,
-                          KDCoordinate bottomMargin = 0,
-                          KDCoordinate leftMargin = 0);
+                          ListController* list, KDMargins margins = {});
   const char* title() override;
   void viewWillAppear() override;
   void viewDidDisappear() override;

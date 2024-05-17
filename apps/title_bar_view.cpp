@@ -60,7 +60,7 @@ View* TitleBarView::subviewAtIndex(int index) {
   View* views[] = {&m_titleView,          &m_preferenceView,
                    &m_examModeIconView,   &m_examModeTextView,
                    &m_shiftAlphaLockView, &m_batteryView};
-  assert(0 <= index && index < std::size(views));
+  assert(0 <= index && index < static_cast<int>(std::size(views)));
   return views[index];
 }
 
@@ -114,8 +114,14 @@ void TitleBarView::layoutSubviews(bool force) {
       case ExamMode::Ruleset::STAAR:
         examModeMessage = I18n::Message::ExamModeTitleBarSTAAR;
         break;
-      case ExamMode::Ruleset::Keystone:
-        examModeMessage = I18n::Message::ExamModeTitleBarKeystone;
+      case ExamMode::Ruleset::Pennsylvania:
+        examModeMessage = I18n::Message::ExamModeTitleBarPennsylvania;
+        break;
+      case ExamMode::Ruleset::SouthCarolina:
+        examModeMessage = I18n::Message::ExamModeTitleBarSouthCarolina;
+        break;
+      case ExamMode::Ruleset::NorthCarolina:
+        examModeMessage = I18n::Message::ExamModeTitleBarNorthCarolina;
         break;
       default:
         examModeMessage = I18n::Message::Default;

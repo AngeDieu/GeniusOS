@@ -5,6 +5,8 @@
 #include <apps/shared/inference.h>
 
 #include "hypothesis_params.h"
+#include "interfaces/distributions.h"
+#include "interfaces/significance_tests.h"
 
 namespace Inference {
 
@@ -33,12 +35,14 @@ enum class CategoricalType {
 };
 
 class Statistic : public Shared::Inference {
-  friend class DistributionInterface;
-
  public:
   Statistic() : m_threshold(-1), m_degreesOfFreedom(NAN) {}
 
   enum class SubApp { Test, Interval, NumberOfSubApps };
+
+  constexpr static DistributionT DistribT = DistributionT();
+  constexpr static DistributionZ DistribZ = DistributionZ();
+  constexpr static DistributionChi2 DistribChi2 = DistributionChi2();
 
   virtual void init() {}
   virtual void tidy() {}
@@ -88,6 +92,7 @@ class Statistic : public Shared::Inference {
     return testType != significanceTestType();
   }  // Default implementation used in final implementation
   virtual DistributionType distributionType() const = 0;
+  const Distribution* distribution() const;
   virtual bool initializeDistribution(DistributionType distribution) {
     return distribution != distributionType();
   }  // Default implementation used in final implementation
@@ -103,6 +108,10 @@ class Statistic : public Shared::Inference {
   }
   double parameterAtIndex(int i) const override;
   void setParameterAtIndex(double f, int i) override;
+  double cumulativeDistributiveFunctionAtAbscissa(
+      double x) const override final;
+  double cumulativeDistributiveInverseForProbability(
+      double probability) const override final;
   double threshold() const {
     assert(0 <= m_threshold && m_threshold <= 1);
     return m_threshold;
@@ -113,7 +122,7 @@ class Statistic : public Shared::Inference {
   int indexOfThreshold() const { return numberOfStatisticParameters(); }
   virtual I18n::Message thresholdName() const = 0;
   virtual I18n::Message thresholdDescription() const = 0;
-  virtual Poincare::Layout testCriticalValueSymbol() = 0;
+  Poincare::Layout criticalValueSymbolLayout();
 
   // Outputs
   virtual int numberOfResults() const = 0;
@@ -131,7 +140,8 @@ class Statistic : public Shared::Inference {
   virtual bool isGraphable() const { return true; }
 
  protected:
-  virtual float canonicalDensityFunction(float x) const = 0;
+  float computeYMax() const override final;
+  float canonicalDensityFunction(float x) const;
   virtual int numberOfStatisticParameters() const = 0;
 
   /* Threshold is either the confidence level or the significance level */

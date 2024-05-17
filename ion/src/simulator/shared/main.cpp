@@ -1,5 +1,8 @@
 #include <assert.h>
 #include <ion.h>
+#if ESCHER_LOG_EVENTS_NAME
+#include <ion/keyboard/layout_events.h>
+#endif
 #include <ion/src/shared/init.h>
 
 #include <algorithm>
@@ -196,9 +199,23 @@ int main(int argc, char *argv[]) {
 
   const char *allScreenshotsFolder = args.pop("--take-all-screenshots");
   if (allScreenshotsFolder) {
-    Ion::Simulator::Screenshot::commandlineScreenshot()->initEachStep(
-        allScreenshotsFolder);
+    Ion::Simulator::Screenshot::commandlineScreenshot()->init(
+        allScreenshotsFolder, true);
   }
+
+  bool computeScreenshotsHash = args.popFlag("--compute-hash");
+  if (computeScreenshotsHash) {
+    Ion::Simulator::Screenshot::commandlineScreenshot()->init(nullptr, true,
+                                                              true);
+  }
+
+#if ESCHER_LOG_EVENTS_NAME
+  bool doNotLogEvents = args.popFlag("--hide-events");
+  if (doNotLogEvents) {
+    Ion::Events::SetLogEvents(false);
+  }
+#endif
+
 #if !defined(_WIN32)
   signal(SIGUSR1, Ion::Simulator::Actions::handleUSR1Sig);
 #endif

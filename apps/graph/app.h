@@ -10,7 +10,6 @@
 
 #include "graph/graph_controller.h"
 #include "list/list_controller.h"
-#include "shared/function_toolbox.h"
 #include "values/values_controller.h"
 
 namespace Graph {
@@ -29,6 +28,7 @@ class App : public Shared::FunctionApp {
     using Shared::FunctionApp::Snapshot::Snapshot;
     App *unpack(Escher::Container *container) override;
     void reset() override;
+    void tidy() override;
     const Descriptor *descriptor() const override;
     Shared::ContinuousFunctionStore *functionStore() override {
       return static_cast<Shared::GlobalContext *>(
@@ -42,20 +42,16 @@ class App : public Shared::FunctionApp {
     }
 
    private:
-    void tidy() override;
     Shared::InteractiveCurveViewRange m_graphRange;
     Shared::Interval m_interval
         [Shared::ContinuousFunctionProperties::k_numberOfVariableSymbolTypes];
   };
-  static App *app() {
-    return static_cast<App *>(Escher::Container::activeApp());
-  }
+  static App *app() { return static_cast<App *>(Escher::App::app()); }
   Snapshot *snapshot() const {
     return static_cast<Snapshot *>(Escher::App::snapshot());
   }
 
   TELEMETRY_ID("Graph");
-  CodePoint XNT() override;
   Shared::ContinuousFunctionStore *functionStore() const override {
     return snapshot()->functionStore();
   }
@@ -75,7 +71,6 @@ class App : public Shared::FunctionApp {
   FunctionParameterController *parameterController() {
     return &m_functionParameterController;
   }
-  FunctionToolbox *functionToolbox() { return &m_functionToolbox; }
 
  private:
   App(Snapshot *snapshot);
@@ -95,7 +90,7 @@ class App : public Shared::FunctionApp {
   };
 
   FunctionParameterController m_functionParameterController;
-  FunctionToolbox m_functionToolbox;
+  Shared::CachesContainer m_cachesContainer;
   Escher::TabUnion<ListTab, GraphTab, ValuesTab> m_tabs;
 };
 

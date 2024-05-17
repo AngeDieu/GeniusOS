@@ -33,17 +33,10 @@ bool NormalProbabilityController::drawSeriesZScoreLine(int series, float *x,
   return true;
 }
 
-void NormalProbabilityController::moveCursorToSelectedIndex() {
-  m_cursorView.setColor(
-      Shared::DoublePairStore::colorOfSeriesAtIndex(selectedSeries()),
-      &m_curveView);
-  PlotController::moveCursorToSelectedIndex();
-}
-
 void NormalProbabilityController::reloadValueInBanner(
     Poincare::Preferences::PrintFloatMode displayMode, int precision) {
   constexpr static int k_bufferSize =
-      1 + Ion::Display::Width / KDFont::GlyphWidth(KDFont::Size::Small);
+      Shared::BannerView::BannerBufferTextView::MaxTextSize();
   char buffer[k_bufferSize] = "";
   Poincare::Print::CustomPrintf(buffer, k_bufferSize, "%s%s%*.*ed",
                                 I18n::translate(I18n::Message::StatisticsValue),
@@ -60,7 +53,8 @@ bool NormalProbabilityController::moveSelectionHorizontally(
                     totalValues(selectedSeries()));
   if (nextIndex != selectedIndex()) {
     setSelectedIndex(nextIndex);
-    moveCursorToSelectedIndex();
+    // Skip setColor to prevent invalidating cursor buffer
+    moveCursorToSelectedIndex(false);
     return true;
   }
   return false;

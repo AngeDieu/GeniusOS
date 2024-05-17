@@ -9,10 +9,21 @@
 
 namespace Poincare {
 
+class List;
+template <typename T>
+class ListComplex;
+
 class Helpers {
  public:
   typedef void (*Swap)(int i, int j, void* context, int numberOfElements);
   typedef bool (*Compare)(int i, int j, void* context, int numberOfElements);
+
+  template <typename T>
+  struct ListSortPack {
+    List* list;
+    ListComplex<T>* listComplex;
+    bool scalars;
+  };
 
   static size_t AlignedSize(size_t realSize, size_t alignment);
   static size_t Gcd(size_t a, size_t b);
@@ -20,12 +31,12 @@ class Helpers {
   static bool Rotate(uint32_t* dst, uint32_t* src, size_t len);
   static void Sort(Swap swap, Compare compare, void* context,
                    int numberOfElements);
-  static bool FloatIsGreater(float xI, float xJ, bool nanIsGreatest);
 
-  /* This is a default *Compare function. Context first three elements must be:
-   * {ListNode *, ApproximationContext *, bool * nanIsGreatest} */
-  static bool ListEvaluationComparisonAtIndex(int i, int j, void* context,
-                                              int numberOfElements);
+  template <typename T>
+  static void SwapInList(int i, int j, void* context, int numberOfElements);
+  template <typename T>
+  static bool CompareInList(int i, int j, void* context, int numberOfElements);
+
   // Return true if observed and expected are approximately equal
   template <typename T>
   static bool RelativelyEqual(T observed, T expected, T relativeThreshold);

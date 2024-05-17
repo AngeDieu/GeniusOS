@@ -1,10 +1,10 @@
 #ifndef SETTINGS_DISPLAY_MODE_CONTROLLER_H
 #define SETTINGS_DISPLAY_MODE_CONTROLLER_H
 
+#include <apps/shared/parameter_text_field_delegate.h>
 #include <escher/menu_cell_with_editable_text.h>
 #include <escher/message_text_view.h>
 
-#include "../../shared/parameter_text_field_delegate.h"
 #include "preferences_controller.h"
 
 namespace Settings {
@@ -12,9 +12,7 @@ namespace Settings {
 class DisplayModeController : public PreferencesController,
                               public Shared::ParameterTextFieldDelegate {
  public:
-  DisplayModeController(
-      Escher::Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate);
+  DisplayModeController(Escher::Responder* parentResponder);
   TELEMETRY_ID("DisplayMode");
   KDCoordinate nonMemoizedRowHeight(int row) override;
   Escher::HighlightCell* reusableCell(int index, int type) override;
@@ -32,7 +30,6 @@ class DisplayModeController : public PreferencesController,
   bool textFieldShouldFinishEditing(Escher::AbstractTextField* textField,
                                     Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
 
  private:

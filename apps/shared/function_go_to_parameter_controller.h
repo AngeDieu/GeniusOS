@@ -10,7 +10,6 @@ class FunctionGoToParameterController : public GoToParameterController {
  public:
   FunctionGoToParameterController(
       Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
       InteractiveCurveViewController* graphController,
       InteractiveCurveViewRange* graphRange, CurveViewCursor* cursor);
 

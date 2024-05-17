@@ -4,7 +4,6 @@
 #include <escher/button_cell.h>
 #include <escher/dropdown_widget.h>
 #include <escher/highlight_cell.h>
-#include <escher/input_event_handler_delegate.h>
 #include <escher/layout_view.h>
 #include <escher/menu_cell.h>
 #include <escher/menu_cell_with_editable_text.h>
@@ -24,13 +23,11 @@ namespace Inference {
 class HypothesisController
     : public Escher::ExplicitSelectableListViewController,
       public Escher::TextFieldDelegate,
-      public Escher::DropdownCallback,
-      public Escher::SelectableListViewDelegate {
+      public Escher::DropdownCallback {
  public:
   HypothesisController(Escher::StackViewController* parent,
                        InputController* inputController,
-                       InputSlopeController* inputSlopeController,
-                       Escher::InputEventHandlerDelegate* handler, Test* test);
+                       InputSlopeController* inputSlopeController, Test* test);
   static bool ButtonAction(HypothesisController* controller, void* s);
 
   // SelectableListViewController
@@ -45,28 +42,20 @@ class HypothesisController
   KDCoordinate separatorBeforeRow(int row) override {
     return cell(row) == &m_next ? k_defaultRowSeparator : 0;
   }
+  bool canStoreCellAtRow(int row) override { return false; }
 
   // TextFieldDelegate
   bool textFieldDidReceiveEvent(Escher::AbstractTextField* textField,
                                 Ion::Events::Event event) override;
-  bool textFieldShouldFinishEditing(Escher::AbstractTextField* textField,
-                                    Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
-  bool textFieldDidAbortEditing(Escher::AbstractTextField* textField) override;
+  void textFieldDidAbortEditing(Escher::AbstractTextField* textField) override;
   bool textFieldIsEditable(Escher::AbstractTextField* textField) override {
     // AbstractWithEditableText shortcuts the delegates chain.
     assert(false);
     return true;
   }
   bool textFieldIsStorable(Escher::AbstractTextField* textField) override {
-    return false;
-  }
-
-  // SelectableListViewDelegate
-  bool canStoreContentOfCell(Escher::SelectableListView* t,
-                             int row) const override {
     return false;
   }
 

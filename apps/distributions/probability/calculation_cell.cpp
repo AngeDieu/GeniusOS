@@ -10,25 +10,18 @@ using namespace Escher;
 
 namespace Distributions {
 
-CalculationCell::CalculationCell(
-    Responder* parentResponder,
-    InputEventHandlerDelegate* inputEventHandlerDelegate,
-    TextFieldDelegate* textFieldDelegate)
+CalculationCell::CalculationCell(Responder* parentResponder,
+                                 TextFieldDelegate* textFieldDelegate)
     : m_text(I18n::Message::Default,
              {.horizontalAlignment = KDGlyph::k_alignCenter}),
-      m_calculation(parentResponder, inputEventHandlerDelegate,
-                    textFieldDelegate),
-      m_isResponder(true) {}
+      m_calculation(parentResponder, textFieldDelegate),
+      m_isEditable(true) {}
 
 Responder* CalculationCell::responder() {
-  if (m_isResponder) {
+  if (m_isEditable) {
     return &m_calculation;
   }
   return nullptr;
-}
-
-void CalculationCell::setResponder(bool shouldBeResponder) {
-  m_isResponder = shouldBeResponder;
 }
 
 void CalculationCell::setHighlighted(bool highlight) {
@@ -45,7 +38,7 @@ KDSize CalculationCell::minimalSizeForOptimalDisplay() const {
 
 void CalculationCell::drawRect(KDContext* ctx, KDRect rect) const {
   ctx->fillRect(bounds(), KDColorWhite);
-  if (m_isResponder) {
+  if (m_isEditable) {
     KDSize textSize = m_text.minimalSizeForOptimalDisplay();
     ctx->strokeRect(KDRect(2 * k_margin + textSize.width(), 0,
                            calculationCellWidth() +

@@ -1,5 +1,6 @@
 #include "../calculation_store.h"
 
+#include <apps/calculation/additional_results/additional_results_type.h>
 #include <apps/shared/expression_display_permissions.h>
 #include <apps/shared/global_context.h>
 #include <assert.h>
@@ -9,8 +10,7 @@
 #include <quiz.h>
 #include <string.h>
 
-typedef ::Calculation::Calculation::AdditionalInformations
-    AdditionalInformations;
+typedef ::Calculation::AdditionalResultsType AdditionalResultsType;
 typedef ::Calculation::Calculation::DisplayOutput DisplayOutput;
 typedef ::Calculation::Calculation::EqualSign EqualSign;
 typedef ::Calculation::Calculation::NumberOfSignificantDigits
@@ -19,7 +19,7 @@ typedef ::Calculation::Calculation::NumberOfSignificantDigits
 using namespace Poincare;
 using namespace Calculation;
 
-constexpr static int calculationBufferSize =
+constexpr static size_t calculationBufferSize =
     10 * (sizeof(::Calculation::Calculation) +
           ::Calculation::Calculation::k_numberOfExpressions *
               ::Constant::MaxSerializedExpressionSize +
@@ -33,11 +33,6 @@ void assert_store_is(CalculationStore *store, const char **result) {
   }
 }
 
-KDCoordinate dummyHeight(::Calculation::Calculation *c, Context *context,
-                         bool expanded) {
-  return 0;
-}
-
 QUIZ_CASE(calculation_store) {
   Shared::GlobalContext globalContext;
   CalculationStore store(calculationBuffer, calculationBufferSize);
@@ -45,7 +40,7 @@ QUIZ_CASE(calculation_store) {
   const char *result[] = {"9", "8", "7", "6", "5", "4", "3", "2", "1", "0"};
   for (int i = 0; i < 10; i++) {
     char text[2] = {(char)(i + '0'), 0};
-    store.push(text, &globalContext, dummyHeight);
+    store.push(text, &globalContext);
     quiz_assert(store.numberOfCalculations() == i + 1);
   }
   assert_store_is(&store, result);
@@ -60,25 +55,25 @@ QUIZ_CASE(calculation_store) {
   store.deleteAll();
   /* Checking if the store handles correctly the delete of older calculations
    * when full. */
-  constexpr int minimalSize = ::Calculation::Calculation::k_minimalSize +
-                              sizeof(::Calculation::Calculation *);
+  constexpr size_t minimalSize = ::CalculationStore::k_calculationMinimalSize +
+                                 sizeof(::Calculation::Calculation *);
   constexpr const char *pattern = "123456789+";
-  constexpr int patternSize = 10;
+  constexpr size_t patternSize = 10;
   assert(strlen(pattern) == patternSize);
 
   // Case 1 : Remaining space < minimalSize
   {
-    constexpr int calculationSize = 200;
+    constexpr size_t calculationSize = 200;
     assert(calculationSize < store.remainingBufferSize());
     assert(calculationSize % patternSize == 0);
     char text[calculationSize];
-    for (int i = 0; i < calculationSize; i += patternSize) {
+    for (size_t i = 0; i < calculationSize; i += patternSize) {
       memcpy(text + i, pattern, patternSize);
     }
     text[calculationSize - 1] = '\0';
 
     while (store.remainingBufferSize() > minimalSize) {
-      store.push(text, &globalContext, dummyHeight);
+      store.push(text, &globalContext);
     }
     int numberOfCalculations1 = store.numberOfCalculations();
     /* The buffer is now too full to push a new calculation.
@@ -86,7 +81,7 @@ QUIZ_CASE(calculation_store) {
      * distinguish it from previously pushed ones. */
     text[0] = '9';
     Shared::ExpiringPointer<::Calculation::Calculation> pushedCalculation =
-        store.push(text, &globalContext, dummyHeight);
+        store.push(text, &globalContext);
     // Assert pushed text is correct
     quiz_assert(strcmp(store.calculationAtIndex(0)->inputText(), text) == 0);
     quiz_assert(strcmp(pushedCalculation->inputText(), text) == 0);
@@ -98,24 +93,24 @@ QUIZ_CASE(calculation_store) {
 
   // Case 2 : Remaining space > minimalSize but pushed calculation doesn't fit
   {
-    constexpr int calculationSize =
+    constexpr size_t calculationSize =
         2 * minimalSize - (2 * minimalSize) % patternSize;
     assert(calculationSize % patternSize == 0);
     assert(calculationSize < store.remainingBufferSize());
     char text[calculationSize];
-    for (int i = 0; i < calculationSize; i += patternSize) {
+    for (size_t i = 0; i < calculationSize; i += patternSize) {
       memcpy(text + i, pattern, patternSize);
     }
     text[calculationSize - 1] = '\0';
 
     // Push big calculations until approaching the limit
     while (store.remainingBufferSize() > 2 * minimalSize) {
-      store.push(text, &globalContext, dummyHeight);
+      store.push(text, &globalContext);
     }
     /* Push small calculations so that remainingBufferSize remain bigger, but
      * gets closer to minimalSize */
     while (store.remainingBufferSize() > minimalSize + minimalSize / 2) {
-      store.push("1", &globalContext, dummyHeight);
+      store.push("1", &globalContext);
     }
     assert(store.remainingBufferSize() > minimalSize);
     int numberOfCalculations1 = store.numberOfCalculations();
@@ -124,7 +119,7 @@ QUIZ_CASE(calculation_store) {
      * distinguish it from previously pushed ones. */
     text[0] = '9';
     Shared::ExpiringPointer<::Calculation::Calculation> pushedCalculation =
-        store.push(text, &globalContext, dummyHeight);
+        store.push(text, &globalContext);
     quiz_assert(strcmp(store.calculationAtIndex(0)->inputText(), text) == 0);
     quiz_assert(strcmp(pushedCalculation->inputText(), text) == 0);
     int numberOfCalculations2 = store.numberOfCalculations();
@@ -132,14 +127,13 @@ QUIZ_CASE(calculation_store) {
     quiz_assert(numberOfCalculations1 >= numberOfCalculations2);
   }
   store.deleteAll();
-  quiz_assert(store.remainingBufferSize() ==
-              static_cast<int>(store.bufferSize()));
+  quiz_assert(store.remainingBufferSize() == store.bufferSize());
 }
 
 void assertAnsIs(const char *input, const char *expectedAnsInputText,
                  Context *context, CalculationStore *store) {
-  store->push(input, context, dummyHeight);
-  store->push("Ans", context, dummyHeight);
+  store->push(input, context);
+  store->push("Ans", context);
   Shared::ExpiringPointer<::Calculation::Calculation> lastCalculation =
       store->calculationAtIndex(0);
   quiz_assert(strcmp(lastCalculation->inputText(), expectedAnsInputText) == 0);
@@ -156,15 +150,15 @@ QUIZ_CASE(calculation_ans) {
       Preferences::ComplexFormat::Real);
   Preferences::sharedPreferences->setExamMode(ExamMode(ExamMode::Ruleset::Off));
 
-  store.push("1+3/4", &globalContext, dummyHeight);
-  store.push("ans+2/3", &globalContext, dummyHeight);
+  store.push("1+3/4", &globalContext);
+  store.push("ans+2/3", &globalContext);
   Shared::ExpiringPointer<::Calculation::Calculation> lastCalculation =
       store.calculationAtIndex(0);
   quiz_assert(lastCalculation->displayOutput(&globalContext) ==
               DisplayOutput::ExactAndApproximate);
   quiz_assert(strcmp(lastCalculation->exactOutputText(), "29/12") == 0);
 
-  store.push("ans+0.22", &globalContext, dummyHeight);
+  store.push("ans+0.22", &globalContext);
   lastCalculation = store.calculationAtIndex(0);
   quiz_assert(lastCalculation->displayOutput(&globalContext) ==
               DisplayOutput::ExactAndApproximateToggle);
@@ -173,6 +167,7 @@ QUIZ_CASE(calculation_ans) {
                      "2.6366666666667") == 0);
 
   assertAnsIs("1+1→a", "2", &globalContext, &store);
+  assertAnsIs("0^0→a", "0^0", &globalContext, &store);
   Ion::Storage::FileSystem::sharedFileSystem->recordNamed("a.exp").destroy();
 
   assertAnsIs("1+1", "2", &globalContext, &store);
@@ -180,6 +175,9 @@ QUIZ_CASE(calculation_ans) {
   assertAnsIs("√(-1-1)", "√(-1-1)", &globalContext, &store);
   assertAnsIs("int(diff(x^2,x,x),x,0,1)", "int(diff(x^2,x,x),x,0,1)",
               &globalContext, &store);
+  assertAnsIs("int(diff(x^2.1,x,x),x,0,1)", "int(diff(x^2.1,x,x),x,0,1)",
+              &globalContext, &store);
+  assertAnsIs("int(diff(x^2,x,x),x,0,1)→a", "1", &globalContext, &store);
 
   assertAnsIs("√(1+1)", "√(2)", &globalContext, &store);
 
@@ -202,14 +200,13 @@ void assertCalculationIs(const char *input, DisplayOutput display,
                          const char *displayedApproximateOutput,
                          const char *storedApproximateOutput, Context *context,
                          CalculationStore *store) {
-  store->push(input, context, dummyHeight);
+  store->push(input, context);
   Shared::ExpiringPointer<::Calculation::Calculation> lastCalculation =
       store->calculationAtIndex(0);
   quiz_assert(lastCalculation->displayOutput(context) == display);
   if (sign != EqualSign::Unknown && display != DisplayOutput::ApproximateOnly &&
       display != DisplayOutput::ExactOnly) {
-    quiz_assert(lastCalculation->exactAndApproximateDisplayedOutputsEqualSign(
-                    context) == sign);
+    quiz_assert(lastCalculation->equalSign(context) == sign);
   }
   if (exactOutput) {
     quiz_assert_print_if_failure(
@@ -235,7 +232,7 @@ QUIZ_CASE(calculation_significant_digits) {
   Shared::GlobalContext globalContext;
   CalculationStore store(calculationBuffer, calculationBufferSize);
 
-  assertCalculationIs("11123456789", DisplayOutput::ExactAndApproximate,
+  assertCalculationIs("11123456789", DisplayOutput::ExactAndApproximateToggle,
                       EqualSign::Approximation, "11123456789", "1.112345679ᴇ10",
                       "11123456789", &globalContext, &store);
   assertCalculationIs("1123456789", DisplayOutput::ApproximateOnly,
@@ -251,10 +248,10 @@ QUIZ_CASE(calculation_display_exact_approximate) {
       Preferences::sharedPreferences->angleUnit();
   Preferences::sharedPreferences->setAngleUnit(Preferences::AngleUnit::Degree);
 
-  assertCalculationIs("1/2", DisplayOutput::ExactAndApproximate,
+  assertCalculationIs("1/2", DisplayOutput::ExactAndApproximateToggle,
                       EqualSign::Equal, "1/2", "0.5", "0.5", &globalContext,
                       &store);
-  assertCalculationIs("1/3", DisplayOutput::ExactAndApproximate,
+  assertCalculationIs("1/3", DisplayOutput::ExactAndApproximateToggle,
                       EqualSign::Approximation, "1/3", "0.3333333333",
                       "0.33333333333333", &globalContext, &store);
   assertCalculationIs("1/(2i)", DisplayOutput::ExactAndApproximate,
@@ -383,7 +380,7 @@ QUIZ_CASE(calculation_display_exact_approximate) {
 
   assertCalculationIs("1+1", DisplayOutput::ApproximateOnly, EqualSign::Unknown,
                       nullptr, "2", "2", &globalContext, &store);
-  assertCalculationIs("1/2", DisplayOutput::ExactAndApproximate,
+  assertCalculationIs("1/2", DisplayOutput::ExactAndApproximateToggle,
                       EqualSign::Equal, "1/2", "0.5", nullptr, &globalContext,
                       &store);
   assertCalculationIs("0.5", DisplayOutput::ExactAndApproximateToggle,
@@ -410,7 +407,7 @@ QUIZ_CASE(calculation_display_exact_approximate) {
 void assertMainCalculationOutputIs(const char *input, const char *output,
                                    Context *context, CalculationStore *store) {
   // For the next test, we only need to checkout input and output text.
-  store->push(input, context, dummyHeight);
+  store->push(input, context);
   Shared::ExpiringPointer<::Calculation::Calculation> lastCalculation =
       store->calculationAtIndex(0);
   switch (lastCalculation->displayOutput(context)) {
@@ -670,7 +667,7 @@ QUIZ_CASE(calculation_complex_format) {
   assertCalculationIs("√(-1)", DisplayOutput::ApproximateOnly,
                       EqualSign::Unknown, nullptr, "i", "i", &globalContext,
                       &store);
-  assertCalculationIs("ln(-2)", DisplayOutput::ExactAndApproximate,
+  assertCalculationIs("ln(-2)", DisplayOutput::ExactAndApproximateToggle,
                       EqualSign::Approximation, "ln(-2)", nullptr, nullptr,
                       &globalContext, &store);
   assertCalculationIs("√(-1)×√(-1)", DisplayOutput::ApproximateOnly,
@@ -694,7 +691,7 @@ QUIZ_CASE(calculation_complex_format) {
   assertCalculationIs("√(-1)", DisplayOutput::ExactAndApproximate,
                       EqualSign::Approximation, "e^\u0012π/2×i\u0013", nullptr,
                       nullptr, &globalContext, &store);
-  assertCalculationIs("ln(-2)", DisplayOutput::ExactAndApproximate,
+  assertCalculationIs("ln(-2)", DisplayOutput::ExactAndApproximateToggle,
                       EqualSign::Approximation, "ln(-2)", nullptr, nullptr,
                       &globalContext, &store);
   assertCalculationIs(
@@ -738,8 +735,8 @@ QUIZ_CASE(calculation_involving_sequence) {
   seqStore->tidyDownstreamPoolFrom();
 }
 
-bool operator==(const AdditionalInformations &a,
-                const AdditionalInformations &b) {
+bool operator==(const AdditionalResultsType &a,
+                const AdditionalResultsType &b) {
   // TODO C++20 Use a default comparison operator
   return a.integer == b.integer && a.rational == b.rational &&
          a.directTrigonometry == b.directTrigonometry &&
@@ -750,14 +747,13 @@ bool operator==(const AdditionalInformations &a,
 }
 
 void assertCalculationAdditionalResultTypeHas(
-    const char *input, const AdditionalInformations additionalInformationType,
+    const char *input, const AdditionalResultsType additionalResultsType,
     Context *context, CalculationStore *store) {
-  store->push(input, context, dummyHeight);
+  store->push(input, context);
   Shared::ExpiringPointer<::Calculation::Calculation> lastCalculation =
       store->calculationAtIndex(0);
   quiz_assert_print_if_failure(
-      lastCalculation->additionalInformations() == additionalInformationType,
-      input);
+      lastCalculation->additionalResultsType() == additionalResultsType, input);
   store->deleteAll();
 }
 
@@ -808,6 +804,8 @@ QUIZ_CASE(calculation_additional_results) {
   assertCalculationAdditionalResultTypeHas(
       "[[cos(π/3),-sin(π/3)][sin(π/3),cos(π/3)]]", {.matrix = true},
       &globalContext, &store);
+  assertCalculationAdditionalResultTypeHas("[[mi0]]", {}, &globalContext,
+                                           &store);
   assertCalculationAdditionalResultTypeHas("345nV", {.unit = true},
                                            &globalContext, &store);
   assertCalculationAdditionalResultTypeHas("223m^3", {.unit = true},
@@ -824,6 +822,26 @@ QUIZ_CASE(calculation_additional_results) {
       "e^(2+3)", {.scientificNotation = true}, &globalContext, &store);
   assertCalculationAdditionalResultTypeHas("2i", {.complex = true},
                                            &globalContext, &store);
+  assertCalculationAdditionalResultTypeHas("1+cos(2_rad)", {}, &globalContext,
+                                           &store);
+  assertCalculationAdditionalResultTypeHas("-sin(\")", {}, &globalContext,
+                                           &store);
+  assertCalculationAdditionalResultTypeHas("30°+2_rad", {.unit = true},
+                                           &globalContext, &store);
+  assertCalculationAdditionalResultTypeHas("45_rad", {.unit = true},
+                                           &globalContext, &store);
+  assertCalculationAdditionalResultTypeHas("gon", {.unit = true},
+                                           &globalContext, &store);
+  assertCalculationAdditionalResultTypeHas(
+      "3°/(4π_rad)", {.rational = true, .scientificNotation = true},
+      &globalContext, &store);
+  assertCalculationAdditionalResultTypeHas(
+      "3°/(4_rad)", {.scientificNotation = true}, &globalContext, &store);
+  assertCalculationAdditionalResultTypeHas("180°/(π_rad)", {.integer = true},
+                                           &globalContext, &store);
+  assertCalculationAdditionalResultTypeHas("_L/(_L/3)", {}, &globalContext,
+                                           &store);
+
   Preferences::sharedPreferences->setDisplayMode(
       Preferences::PrintFloatMode::Scientific);
   assertCalculationAdditionalResultTypeHas("e^(2+3)", {}, &globalContext,
@@ -834,6 +852,10 @@ QUIZ_CASE(calculation_additional_results) {
   assertCalculationAdditionalResultTypeHas("√(-1)", {}, &globalContext, &store);
   assertCalculationAdditionalResultTypeHas("{1}", {}, &globalContext, &store);
   assertCalculationAdditionalResultTypeHas("{i}", {}, &globalContext, &store);
+  /* TODO: Not working on windows
+   * assertCalculationAdditionalResultTypeHas("i^(2×e^(7i^(2×e^322)))", {},
+   *                                         &globalContext, &store);*/
+
   assertCalculationAdditionalResultTypeHas("ln(3+4)", {}, &globalContext,
                                            &store);
   assertCalculationAdditionalResultTypeHas("cos(i)", {}, &globalContext,
@@ -846,7 +868,15 @@ QUIZ_CASE(calculation_additional_results) {
   Ion::Storage::FileSystem::sharedFileSystem->recordNamed("z.exp").destroy();
 
   Preferences::sharedPreferences->setComplexFormat(
+      Preferences::ComplexFormat::Polar);
+  assertCalculationAdditionalResultTypeHas("-10", {.complex = true},
+                                           &globalContext, &store);
+
+  Preferences::sharedPreferences->setComplexFormat(
       Preferences::ComplexFormat::Cartesian);
   assertCalculationAdditionalResultTypeHas("√(-1)", {.complex = true},
                                            &globalContext, &store);
+  assertCalculationAdditionalResultTypeHas("[[1+2i][3+i]]", {.matrix = true},
+                                           &globalContext, &store);
+  assertCalculationAdditionalResultTypeHas("-10", {}, &globalContext, &store);
 }

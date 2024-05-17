@@ -33,9 +33,6 @@ Expression MatrixComplexNode<T>::complexToExpression(
     if (c->type() == EvaluationNode<T>::Type::Complex) {
       childExpression = c->complexToExpression(complexFormat);
     }
-    if (childExpression.isUndefined()) {
-      return Undefined::Builder();
-    }
     matrix.addChildAtIndexInPlace(childExpression, i, i);
     i++;
   }
@@ -144,7 +141,7 @@ MatrixComplex<T> MatrixComplexNode<T>::ref(bool reduced) const {
 
 template <typename T>
 std::complex<T> MatrixComplexNode<T>::norm() const {
-  if (vectorType() == Array::VectorType::None) {
+  if (!isVector()) {
     return std::complex<T>(NAN, NAN);
   }
   std::complex<T> sum = 0;
@@ -157,8 +154,7 @@ std::complex<T> MatrixComplexNode<T>::norm() const {
 
 template <typename T>
 std::complex<T> MatrixComplexNode<T>::dot(MatrixComplex<T> *e) const {
-  if (vectorType() == Array::VectorType::None ||
-      vectorType() != e->vectorType() ||
+  if (!isVector() || vectorType() != e->vectorType() ||
       numberOfChildren() != e->numberOfChildren()) {
     return std::complex<T>(NAN, NAN);
   }
@@ -172,9 +168,8 @@ std::complex<T> MatrixComplexNode<T>::dot(MatrixComplex<T> *e) const {
 
 template <typename T>
 Evaluation<T> MatrixComplexNode<T>::cross(MatrixComplex<T> *e) const {
-  if (vectorType() == Array::VectorType::None ||
-      vectorType() != e->vectorType() || numberOfChildren() != 3 ||
-      e->numberOfChildren() != 3) {
+  if (!isVector() || vectorType() != e->vectorType() ||
+      numberOfChildren() != 3 || e->numberOfChildren() != 3) {
     return MatrixComplex<T>::Undefined();
   }
   std::complex<T> operandsCopy[3];

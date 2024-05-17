@@ -13,11 +13,9 @@ namespace Distributions {
 
 class ParametersController : public Shared::FloatParameterController<double> {
  public:
-  ParametersController(
-      Escher::StackViewController* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      Distribution* m_distribution,
-      CalculationController* calculationController);
+  ParametersController(Escher::StackViewController* parentResponder,
+                       Distribution* m_distribution,
+                       CalculationController* calculationController);
   const char* title() override;
   ViewController::TitlesDisplay titlesDisplay() override {
     return ViewController::TitlesDisplay::DisplayLastTitle;
@@ -28,6 +26,7 @@ class ParametersController : public Shared::FloatParameterController<double> {
   TELEMETRY_ID("Parameters");
   int numberOfRows() const override;
   void fillCellForRow(Escher::HighlightCell* cell, int row) override;
+  KDCoordinate nonMemoizedRowHeight(int row) override;
 
  private:
   int reusableParameterCellCount(int type) override;
@@ -39,7 +38,6 @@ class ParametersController : public Shared::FloatParameterController<double> {
   bool setParameterAtIndex(int parameterIndex, double f) override;
 
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
   bool hasUndefinedValue(const char* text, double floatValue) const override;
 

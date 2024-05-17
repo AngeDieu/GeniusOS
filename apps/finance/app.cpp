@@ -1,9 +1,9 @@
 #include "app.h"
 
+#include <apps/apps_container.h>
 #include <apps/i18n.h>
 #include <escher/palette.h>
 
-#include "../apps_container.h"
 #include "finance_icon.h"
 
 namespace Finance {
@@ -58,9 +58,9 @@ void App::didExitPage(Escher::ViewController *controller) {
 
 // App
 App::App(Snapshot *snapshot)
-    : Shared::LayoutFieldDelegateApp(snapshot, &m_stackViewController),
+    : Shared::MathApp(snapshot, &m_stackViewController),
       m_resultController(&m_stackViewController),
-      m_parametersController(&m_stackViewController, this, &m_resultController),
+      m_parametersController(&m_stackViewController, &m_resultController),
       m_interestMenuController(&m_stackViewController, &m_parametersController),
       m_menuController(&m_stackViewController, &m_interestMenuController),
       m_stackViewController(&m_modalViewController, &m_menuController,

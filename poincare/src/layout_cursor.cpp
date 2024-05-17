@@ -26,8 +26,7 @@ void LayoutCursor::safeSetLayout(Layout layout,
 
 void LayoutCursor::safeSetPosition(int position) {
   assert(position >= 0);
-  assert((m_layout.isHorizontal() && position <= m_layout.numberOfChildren()) ||
-         (!m_layout.isHorizontal() && position <= 1));
+  assert(position <= RightmostPossibleCursorPosition(m_layout));
   assert(!isSelecting());
   LayoutCursor previousCursor = *this;
   m_position = position;
@@ -84,7 +83,7 @@ bool LayoutCursor::move(OMG::Direction direction, bool selecting,
                         bool *shouldRedrawLayout, Context *context) {
   *shouldRedrawLayout = false;
   if (!selecting && isSelecting()) {
-    stopSelecting();
+    resetSelection();
     *shouldRedrawLayout = true;
     return true;
   }
@@ -116,7 +115,7 @@ bool LayoutCursor::move(OMG::Direction direction, bool selecting,
   }
 
   if (isSelecting() && selection().isEmpty()) {
-    stopSelecting();
+    resetSelection();
   }
 
   if (*shouldRedrawLayout) {
@@ -590,7 +589,7 @@ void LayoutCursor::deleteAndResetSelection() {
     m_layout = hLayout;
   }
   m_position = selectionLeftBound;
-  stopSelecting();
+  resetSelection();
   balanceAutocompletedBracketsAndKeepAValidCursor();
   removeEmptyRowOrColumnOfGridParentIfNeeded();
   didEnterCurrentPosition();
@@ -631,7 +630,7 @@ bool LayoutCursor::didEnterCurrentPosition(LayoutCursor previousPosition) {
   return changed;
 }
 
-bool LayoutCursor::didExitPosition() {
+void LayoutCursor::prepareForExitingPosition() {
   if (IsEmptyChildOfGridLayout(m_layout)) {
     /* When exiting a grid, the gray columns and rows will disappear, so
      * before leaving the grid, set the cursor position to a layout that will
@@ -642,6 +641,10 @@ bool LayoutCursor::didExitPosition() {
                   parentGrid->indexOfChild(m_layout.node())))),
               OMG::Direction::Right());
   }
+}
+
+bool LayoutCursor::didExitPosition() {
+  prepareForExitingPosition();
   LayoutCursor lc;
   return lc.didEnterCurrentPosition(*this);
 }
@@ -652,6 +655,10 @@ bool LayoutCursor::isAtNumeratorOfEmptyFraction() const {
          m_layout.parent().type() == LayoutNode::Type::FractionLayout &&
          m_layout.parent().indexOfChild(m_layout) == 0 &&
          m_layout.parent().childAtIndex(1).numberOfChildren() == 0;
+}
+
+int LayoutCursor::RightmostPossibleCursorPosition(Layout l) {
+  return l.isHorizontal() ? l.numberOfChildren() : 1;
 }
 
 /* Private */
@@ -965,7 +972,7 @@ bool LayoutCursor::verticalMoveWithoutSelection(
 
 void LayoutCursor::privateStartSelecting() { m_startOfSelection = m_position; }
 
-void LayoutCursor::stopSelecting() { m_startOfSelection = -1; }
+void LayoutCursor::resetSelection() { m_startOfSelection = -1; }
 
 bool LayoutCursor::setEmptyRectangleVisibilityAtCurrentPosition(
     EmptyRectangle::State state) {

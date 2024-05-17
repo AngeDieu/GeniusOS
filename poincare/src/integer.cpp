@@ -1,11 +1,11 @@
 #include <ion.h>
+#include <omg/ieee754.h>
 #include <poincare/addition.h>
 #include <poincare/code_point_layout.h>
 #include <poincare/comparison.h>
 #include <poincare/division.h>
 #include <poincare/division_quotient.h>
 #include <poincare/division_remainder.h>
-#include <poincare/ieee754.h>
 #include <poincare/integer.h>
 #include <poincare/layout_helper.h>
 #include <poincare/mixed_fraction.h>
@@ -159,7 +159,7 @@ int Integer::serialize(char *buffer, int bufferSize, OMG::Base base) const {
     return PrintFloat::ConvertFloatToText<float>(
                m_negative ? -INFINITY : INFINITY, buffer, bufferSize,
                PrintFloat::k_maxFloatGlyphLength,
-               PrintFloat::k_numberOfStoredSignificantDigits,
+               PrintFloat::k_maxNumberOfSignificantDigits,
                Preferences::PrintFloatMode::Decimal)
         .CharLength;
   }
@@ -196,7 +196,7 @@ int Integer::serializeInDecimal(char *buffer, int bufferSize) const {
     if (length >= bufferSize - 1) {
       return PrintFloat::ConvertFloatToText<float>(
                  NAN, buffer, bufferSize, PrintFloat::k_maxFloatGlyphLength,
-                 PrintFloat::k_numberOfStoredSignificantDigits,
+                 PrintFloat::k_maxNumberOfSignificantDigits,
                  Preferences::PrintFloatMode::Decimal)
           .CharLength;
     }
@@ -302,11 +302,11 @@ T Integer::approximate() const {
   uint8_t numberOfBitsInLastDigit = OMG::BitHelper::log2(lastDigit);
 
   bool sign = m_negative;
-  uint16_t exponent = IEEE754<T>::exponentOffset();
+  uint16_t exponent = OMG::IEEE754<T>::exponentOffset();
   /* Escape case if the exponent is too big to be stored */
   assert(numberOfDigits() > 0);
   if (((int)numberOfDigits() - 1) * 32 + numberOfBitsInLastDigit - 1 >
-      IEEE754<T>::maxExponent() - IEEE754<T>::exponentOffset()) {
+      OMG::IEEE754<T>::maxExponent() - OMG::IEEE754<T>::exponentOffset()) {
     return m_negative ? -INFINITY : INFINITY;
   }
   exponent += (numberOfDigits() - 1) * 32;
@@ -319,10 +319,10 @@ T Integer::approximate() const {
    *
    * Shift operator behavior is undefined if the right operand is negative, or
    * greater than or equal to the length in bits of the promoted left operand */
-  assert(IEEE754<T>::size() - numberOfBitsInLastDigit >= 0 &&
-         IEEE754<T>::size() - numberOfBitsInLastDigit < 64);
-  mantissa |=
-      ((uint64_t)lastDigit << (IEEE754<T>::size() - numberOfBitsInLastDigit));
+  assert(OMG::IEEE754<T>::size() - numberOfBitsInLastDigit >= 0 &&
+         OMG::IEEE754<T>::size() - numberOfBitsInLastDigit < 64);
+  mantissa |= ((uint64_t)lastDigit
+               << (OMG::IEEE754<T>::size() - numberOfBitsInLastDigit));
   uint8_t digitIndex = 2;
   int numberOfBits = numberOfBitsInLastDigit;
   /* Complete the mantissa by inserting, from left to right, every digit of the
@@ -330,24 +330,27 @@ T Integer::approximate() const {
    * the mantissa is complete to avoid undefined right shifting (Shift operator
    * behavior is undefined if the right operand is negative, or greater than or
    * equal to the length in bits of the promoted left operand). */
-  while (numberOfDigits() >= digitIndex && numberOfBits < IEEE754<T>::size()) {
+  while (numberOfDigits() >= digitIndex &&
+         numberOfBits < OMG::IEEE754<T>::size()) {
     lastDigit = digit(numberOfDigits() - digitIndex);
     numberOfBits += 32;
-    if (IEEE754<T>::size() > numberOfBits) {
-      assert(IEEE754<T>::size() - numberOfBits > 0 &&
-             IEEE754<T>::size() - numberOfBits < 64);
-      mantissa |= ((uint64_t)lastDigit << (IEEE754<T>::size() - numberOfBits));
+    if (OMG::IEEE754<T>::size() > numberOfBits) {
+      assert(OMG::IEEE754<T>::size() - numberOfBits > 0 &&
+             OMG::IEEE754<T>::size() - numberOfBits < 64);
+      mantissa |=
+          ((uint64_t)lastDigit << (OMG::IEEE754<T>::size() - numberOfBits));
     } else {
-      mantissa |= ((uint64_t)lastDigit >> (numberOfBits - IEEE754<T>::size()));
+      mantissa |=
+          ((uint64_t)lastDigit >> (numberOfBits - OMG::IEEE754<T>::size()));
     }
     digitIndex++;
   }
 
-  T result = IEEE754<T>::buildFloat(sign, exponent, mantissa);
+  T result = OMG::IEEE754<T>::buildFloat(sign, exponent, mantissa);
 
   /* If exponent is 255 and the float is undefined, we have exceed IEEE 754
    * representable float. */
-  if (exponent == IEEE754<T>::maxExponent() && std::isnan(result)) {
+  if (exponent == OMG::IEEE754<T>::maxExponent() && std::isnan(result)) {
     return INFINITY;
   }
   return result;
@@ -440,7 +443,7 @@ Integer Integer::Factorial(const Integer &i) {
 
 Integer Integer::RandomInt(const Integer &a, const Integer &b) {
   if (NaturalOrder(a, b) > 0) {
-    return Integer::Overflow(false);
+    return Overflow(false);
   }
   Integer range = Integer::Subtraction(b, a);
   if (range.isZero()) {
@@ -497,7 +500,7 @@ Integer Integer::addition(const Integer &a, const Integer &b,
 Integer Integer::multiplication(const Integer &a, const Integer &b,
                                 bool oneDigitOverflow) {
   if (a.isOverflow() || b.isOverflow()) {
-    return Integer::Overflow(a.m_negative != b.m_negative);
+    return Overflow(a.m_negative != b.m_negative);
   }
 
   // Enable overflowing of 1 digit
@@ -524,7 +527,7 @@ Integer Integer::multiplication(const Integer &a, const Integer &b,
       } else {
         if (l[0] != 0) {
           // Overflow the largest Integer
-          return Integer::Overflow(a.m_negative != b.m_negative);
+          return Overflow(a.m_negative != b.m_negative);
         }
       }
       carry = l[1];
@@ -535,7 +538,7 @@ Integer Integer::multiplication(const Integer &a, const Integer &b,
     } else {
       if (carry != 0) {
         // Overflow the largest Integer
-        return Integer::Overflow(a.m_negative != b.m_negative);
+        return Overflow(a.m_negative != b.m_negative);
       }
     }
   }
@@ -659,10 +662,10 @@ Integer Integer::multiplyByPowerOfBase(uint8_t pow) const {
 IntegerDivision Integer::udiv(const Integer &numerator,
                               const Integer &denominator) {
   if (denominator.isOverflow()) {
-    return {.quotient = Overflow(false), .remainder = Integer::Overflow(false)};
+    return {.quotient = Overflow(false), .remainder = Overflow(false)};
   }
   if (numerator.isOverflow()) {
-    return {.quotient = Overflow(false), .remainder = Integer::Overflow(false)};
+    return {.quotient = Overflow(false), .remainder = Overflow(false)};
   }
   /* Modern Computer Arithmetic, Richard P. Brent and Paul Zimmermann
    * (Algorithm 1.6) */

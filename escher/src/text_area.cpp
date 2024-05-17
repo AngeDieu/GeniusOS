@@ -15,11 +15,8 @@
 namespace Escher {
 /* TextArea */
 
-TextArea::TextArea(Responder *parentResponder, View *contentView,
-                   KDFont::Size font)
-    : TextInput(parentResponder, contentView),
-      InputEventHandler(nullptr),
-      m_delegate(nullptr) {}
+TextArea::TextArea(Responder *parentResponder, View *contentView)
+    : TextInput(parentResponder, contentView) {}
 
 static inline void InsertSpacesAtLocation(int spacesCount, char *buffer,
                                           int bufferSize) {
@@ -52,7 +49,7 @@ bool TextArea::handleEventWithText(const char *text, bool indentation,
    * indentation, stop here. */
   int spacesCount = 0;
   int totalIndentationSize = 0;
-  int addedTextLength = strlen(text);
+  size_t addedTextLength = strlen(text);
   size_t previousTextLength = contentView()->getText()->textLength();
   char *insertionPosition = const_cast<char *>(cursorLocation());
   const char *textAreaBuffer = contentView()->text();
@@ -190,11 +187,7 @@ bool TextArea::handleEventWithText(const char *text, bool indentation,
 }
 
 bool TextArea::handleEvent(Ion::Events::Event event) {
-  if (m_delegate != nullptr &&
-      m_delegate->textAreaDidReceiveEvent(this, event)) {
-    return true;
-  }
-  if (handleBoxEvent(event)) {
+  if (privateHandleBoxEvent(event)) {
     return true;
   }
   int step = Ion::Events::longPressFactor();
@@ -221,7 +214,7 @@ bool TextArea::handleEvent(Ion::Events::Event event) {
     return handleEventWithText(buffer);
   }
   if (event == Ion::Events::EXE) {
-    return handleEventWithText("\n");
+    return handleEventWithText(k_newLine);
   }
   if (event == Ion::Events::Copy || event == Ion::Events::Cut) {
     if (contentView()->selectionIsEmpty()) {
@@ -270,6 +263,10 @@ bool TextArea::handleEvent(Ion::Events::Event event) {
 void TextArea::setText(char *textBuffer, size_t textBufferSize) {
   contentView()->setText(textBuffer, textBufferSize);
   contentView()->moveCursorGeo(0, 0);
+}
+
+bool TextArea::addXNTCodePoint(CodePoint defaultXNTCodePoint) {
+  return handleEventWithText("x");
 }
 
 int TextArea::indentationBeforeCursor() const {
@@ -507,7 +504,7 @@ void TextArea::ContentView::drawRect(KDContext *ctx, KDRect rect) const {
   // TODO: We're clearing areas we'll draw text over. It's not needed.
   clearRect(ctx, rect);
 
-  KDSize glyphSize = KDFont::GlyphSize(m_font);
+  KDSize glyphSize = KDFont::GlyphSize(m_format.style.font);
 
   /* We want to draw even partially visible characters. So we need to round
    * down for the top left corner and up for the bottom right one. */
@@ -519,7 +516,7 @@ void TextArea::ContentView::drawRect(KDContext *ctx, KDRect rect) const {
   int y = 0;
 
   for (Text::Line line : m_text) {
-    KDCoordinate width = line.glyphWidth(m_font);
+    KDCoordinate width = line.glyphWidth(m_format.style.font);
     if (y >= topLeft.line() && y <= bottomRight.line() &&
         topLeft.column() < (int)width) {
       drawLine(ctx, y, line.text(), line.charLength(), topLeft.column(),
@@ -536,10 +533,10 @@ void TextArea::ContentView::drawStringAt(
   if (length < 0) {
     return;
   }
-  KDSize glyphSize = KDFont::GlyphSize(m_font);
+  KDSize glyphSize = KDFont::GlyphSize(m_format.style.font);
   KDGlyph::Style glyphStyle{.glyphColor = textColor,
                             .backgroundColor = backgroundColor,
-                            .font = m_font};
+                            .font = m_format.style.font};
 
   bool drawSelection = selectionStart != nullptr && selectionEnd > text &&
                        selectionStart < text + length;
@@ -562,7 +559,7 @@ void TextArea::ContentView::drawStringAt(
   nextPoint = ctx->drawString(highlightedDrawStart, nextPoint,
                               {.glyphColor = textColor,
                                .backgroundColor = backgroundHighlightColor,
-                               .font = m_font},
+                               .font = m_format.style.font},
                               highlightedDrawLength);
 
   const char *notHighlightedDrawStart =
@@ -572,11 +569,11 @@ void TextArea::ContentView::drawStringAt(
 }
 
 KDSize TextArea::ContentView::minimalSizeForOptimalDisplay() const {
-  KDSize span = m_text.span(m_font);
+  KDSize span = m_text.span(m_format.style.font);
   return KDSize(
       /* We take into account the space required to draw a cursor at the end of
        * line by adding glyphSize.width() to the width. */
-      span.width() + KDFont::GlyphWidth(m_font), span.height());
+      span.width() + KDFont::GlyphWidth(m_format.style.font), span.height());
 }
 
 void TextArea::ContentView::setText(char *textBuffer, size_t textBufferSize) {
@@ -588,7 +585,7 @@ bool TextArea::ContentView::insertTextAtLocation(const char *text,
                                                  char *location,
                                                  int textLength) {
   int textLen = textLength < 0 ? strlen(text) : textLength;
-  assert(textLen < 0 || textLen <= static_cast<int>(strlen(text)));
+  assert(textLen <= static_cast<int>(strlen(text)));
   if (m_text.textLength() + textLen >= m_text.bufferSize() || textLen == 0) {
     return false;
   }
@@ -661,7 +658,7 @@ size_t TextArea::ContentView::deleteSelection() {
 KDRect TextArea::ContentView::glyphFrameAtPosition(const char *text,
                                                    const char *position) const {
   assert(text == m_text.text());
-  KDSize glyphSize = KDFont::GlyphSize(m_font);
+  KDSize glyphSize = KDFont::GlyphSize(m_format.style.font);
   Text::Position p = m_text.positionAtPointer(position);
 
   KDCoordinate x = 0;
@@ -669,7 +666,9 @@ KDRect TextArea::ContentView::glyphFrameAtPosition(const char *text,
   int y = 0;
   for (Text::Line l : m_text) {
     if (p.line() == y) {
-      x = KDFont::Font(m_font)->stringSizeUntil(l.text(), position).width();
+      x = KDFont::Font(m_format.style.font)
+              ->stringSizeUntil(l.text(), position)
+              .width();
       found = true;
       break;
     }

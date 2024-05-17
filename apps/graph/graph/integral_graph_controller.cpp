@@ -6,7 +6,6 @@
 
 #include <cmath>
 
-#include "../../shared/text_field_delegate.h"
 #include "../app.h"
 
 using namespace Shared;
@@ -16,12 +15,9 @@ using namespace Escher;
 namespace Graph {
 
 IntegralGraphController::IntegralGraphController(
-    Responder* parentResponder,
-    Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-    GraphView* graphView, InteractiveCurveViewRange* graphRange,
-    CurveViewCursor* cursor)
-    : SumGraphController(parentResponder, inputEventHandlerDelegate, graphView,
-                         graphRange, cursor) {}
+    Responder* parentResponder, GraphView* graphView,
+    InteractiveCurveViewRange* graphRange, CurveViewCursor* cursor)
+    : SumGraphController(parentResponder, graphView, graphRange, cursor) {}
 
 const char* IntegralGraphController::title() {
   return I18n::translate(I18n::Message::Integral);

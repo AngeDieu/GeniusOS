@@ -6,12 +6,9 @@ namespace Inference {
 
 InputGoodnessController::InputGoodnessController(
     StackViewController *parent, ViewController *resultsController,
-    GoodnessTest *statistic,
-    InputEventHandlerDelegate *inputEventHandlerDelegate)
-    : InputCategoricalController(parent, resultsController, statistic,
-                                 inputEventHandlerDelegate),
-      m_degreeOfFreedomCell(&m_selectableListView, inputEventHandlerDelegate,
-                            this),
+    GoodnessTest *statistic)
+    : InputCategoricalController(parent, resultsController, statistic),
+      m_degreeOfFreedomCell(&m_selectableListView, this),
       m_goodnessTableCell(&m_selectableListView, statistic, this) {
   m_degreeOfFreedomCell.setMessages(I18n::Message::DegreesOfFreedom);
 }
@@ -21,9 +18,13 @@ void InputGoodnessController::updateDegreeOfFreedomCell() {
                          m_degreeOfFreedomCell.textField(), true, true);
 }
 
-void InputGoodnessController::didBecomeFirstResponder() {
+void InputGoodnessController::viewWillAppear() {
   updateDegreeOfFreedomCell();
-  InputCategoricalController::didBecomeFirstResponder();
+  InputCategoricalController::viewWillAppear();
+}
+
+void InputGoodnessController::createDynamicCells() {
+  m_goodnessTableCell.createCells();
 }
 
 HighlightCell *InputGoodnessController::reusableCell(int index, int type) {
@@ -32,6 +33,13 @@ HighlightCell *InputGoodnessController::reusableCell(int index, int type) {
   } else {
     return InputCategoricalController::reusableCell(index, type);
   }
+}
+
+KDCoordinate InputGoodnessController::nonMemoizedRowHeight(int row) {
+  if (row == k_indexOfDegreeOfFreedom) {
+    return m_degreeOfFreedomCell.minimalSizeForOptimalDisplay().height();
+  }
+  return InputCategoricalController::nonMemoizedRowHeight(row);
 }
 
 int InputGoodnessController::indexOfEditedParameterAtIndex(int index) const {

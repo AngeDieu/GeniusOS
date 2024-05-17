@@ -25,6 +25,7 @@ App::Snapshot::Snapshot()
     : m_lockOnConsole(false)
 #endif
 {
+  ScriptStore::InitTemplates();
 }
 
 App *App::Snapshot::unpack(Container *container) {
@@ -37,14 +38,12 @@ const App::Descriptor *App::Snapshot::descriptor() const {
   return &sDescriptor;
 }
 
-ScriptStore *App::Snapshot::scriptStore() { return &m_scriptStore; }
-
 #if EPSILON_GETOPT
 bool App::Snapshot::lockOnConsole() const { return m_lockOnConsole; }
 
 void App::Snapshot::setOpt(const char *name, const char *value) {
   if (strcmp(name, "script") == 0) {
-    m_scriptStore.deleteAllScripts();
+    ScriptStore::DeleteAllScripts();
     char *separator =
         const_cast<char *>(UTF8Helper::CodePointSearch(value, ':'));
     if (*separator == 0) {
@@ -64,12 +63,11 @@ void App::Snapshot::setOpt(const char *name, const char *value) {
 #endif
 
 App::App(Snapshot *snapshot)
-    : Shared::InputEventHandlerDelegateApp(snapshot,
-                                           &m_codeStackViewController),
+    : Shared::SharedApp(snapshot, &m_codeStackViewController),
       m_pythonUser(nullptr),
-      m_consoleController(nullptr, this, snapshot->scriptStore()
+      m_consoleController(nullptr, this
 #if EPSILON_GETOPT
-                                             ,
+                          ,
                           snapshot->lockOnConsole()
 #endif
                               ),
@@ -77,26 +75,16 @@ App::App(Snapshot *snapshot)
                    &m_menuController, ButtonRowController::Position::Bottom,
                    ButtonRowController::Style::EmbossedGray,
                    ButtonRowController::Size::Large),
-      m_menuController(&m_listFooter, this, snapshot->scriptStore(),
-                       &m_listFooter),
+      m_menuController(&m_listFooter, this, &m_listFooter),
       m_codeStackViewController(
           &m_modalViewController, &m_listFooter,
           Escher::StackViewController::Style::WhiteUniform),
-      m_variableBoxController(snapshot->scriptStore()) {
+      m_variableBox() {
   Clipboard::sharedClipboard()->enterPython();
 }
 
-App::~App() {
-  deinitPython();
-  Clipboard::sharedClipboard()->exitPython();
-}
-
-bool App::handleEvent(Ion::Events::Event event) {
-  if ((event == Ion::Events::USBEnumeration || event == Ion::Events::Home ||
-       event == Ion::Events::Termination) &&
-      m_consoleController.inputRunLoopActive()) {
-    /* We need to return true here because we want to actually exit from the
-     * input run loop, which requires ending a dispatchEvent cycle. */
+bool App::quitInputRunLoop() {
+  if (m_consoleController.inputRunLoopActive()) {
     m_consoleController.terminateInputLoop();
     m_modalViewController.dismissPotentialModal();
     Ion::USB::clearEnumerationInterrupt();
@@ -105,11 +93,34 @@ bool App::handleEvent(Ion::Events::Event event) {
   return false;
 }
 
+App::~App() {
+  quitInputRunLoop();
+  deinitPython();
+  Clipboard::sharedClipboard()->exitPython();
+}
+
+bool App::handleEvent(Ion::Events::Event event) {
+  if (event == Ion::Events::USBEnumeration
+#if !PLATFORM_DEVICE
+      /* On the simulator, pressing Home does not interrupt the execution,
+       * so we must quit the run loop. */
+      || event == Ion::Events::Home
+#endif
+  ) {
+    if (quitInputRunLoop()) {
+      /* We need to return true here because we want to actually exit from the
+       * input run loop, which requires ending a dispatchEvent cycle. */
+      return true;
+    }
+  }
+  return false;
+}
+
 void App::willExitResponderChain(Responder *nextFirstResponder) {
   m_menuController.willExitApp();
 }
 
-bool App::textInputDidReceiveEvent(InputEventHandler *textInput,
+bool App::textInputDidReceiveEvent(EditableField *textInput,
                                    Ion::Events::Event event) {
   const char *pythonText = Helpers::PythonTextForEvent(event);
   if (pythonText != nullptr) {

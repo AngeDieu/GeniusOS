@@ -28,13 +28,13 @@ class ListParameterController
 
   // MemoizedListViewDataSource
   int numberOfRows() const override { return k_numberOfSharedCells; }
-  void fillCellForRow(Escher::HighlightCell* cell, int row) override;
 
  protected:
   // Type order defines cell order
   constexpr static int k_numberOfSharedCells = 3;
   FunctionStore* functionStore();
   ExpiringPointer<Function> function();
+  void updateEnableCellSwitch();
 
   Escher::MenuCell<Escher::MessageTextView, Escher::MessageTextView,
                    Escher::SwitchView>

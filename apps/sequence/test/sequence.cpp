@@ -1,14 +1,13 @@
 #include <apps/shared/global_context.h>
+#include <apps/shared/poincare_helpers.h>
+#include <apps/shared/sequence_context.h>
+#include <apps/shared/sequence_store.h>
 #include <assert.h>
 #include <poincare/test/helper.h>
 #include <quiz.h>
 #include <string.h>
 
 #include <cmath>
-
-#include "../../shared/poincare_helpers.h"
-#include "../../shared/sequence_context.h"
-#include "../../shared/sequence_store.h"
 
 using namespace Poincare;
 
@@ -83,11 +82,10 @@ void check_sum_of_sequence_between_bounds(double result, double start,
   Sequence* seq = addSequence(store, type, definition, condition1, condition2,
                               sequenceContext);
 
-  Preferences preferences = Preferences::ClonePreferencesWithNewComplexFormat(
-      seq->complexFormat(sequenceContext));
-  double sum = PoincareHelpers::ApproximateToScalar<double>(
-      seq->sumBetweenBounds(start, end, sequenceContext), sequenceContext,
-      &preferences, false);
+  ApproximationContext approximationContext(
+      sequenceContext, seq->complexFormat(sequenceContext));
+  double sum = seq->sumBetweenBounds(start, end, sequenceContext)
+                   .approximateToScalar<double>(approximationContext);
   assert_roughly_equal(sum, result);
 
   store->removeAll();

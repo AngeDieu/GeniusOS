@@ -11,27 +11,32 @@ class ListViewDataSource : public TableViewDataSource {
   friend class ListWithTopAndBottomDataSource;
 
  public:
-  void initCellSize(TableView* view) override;
+  ListViewDataSource() : m_width(0) {}
+  virtual void initWidth(TableView* tableView);
   /* reusableCellCount have a default implementation for specific simple
    * lists. Most implementations should override them.*/
   int reusableCellCount(int type) override { return numberOfRows(); }
   virtual void fillCellForRow(HighlightCell* cell, int row) {}
   virtual int typeAtRow(int row) const { return 0; }
+  virtual bool canSelectCellAtRow(int row) { return true; }
+  virtual bool canStoreCellAtRow(int row) { return true; }
 
  protected:
-  KDCoordinate defaultColumnWidth() override { return KDCOORDINATE_MAX; }
+  KDCoordinate defaultColumnWidth() override { return m_width; }
   /* nonMemoizedRowHeight has a default implementation for specific simple
    * lists. Most implementations should override them.*/
-  KDCoordinate nonMemoizedRowHeight(int row) override;
-  KDCoordinate nonMemoizedRowHeightWithWidthInit(HighlightCell* tempCell,
-                                                 int row);
+  KDCoordinate nonMemoizedRowHeight(int row) override = 0;
   KDCoordinate protectedNonMemoizedRowHeight(HighlightCell* cell, int row);
+
+  // TODO there are only two possible widths: settings-like and toolbox-like
+  KDCoordinate m_width;
 
  private:
   // ListViewDataSource has only one column
   int numberOfColumns() const override final { return 1; }
   void fillCellForLocation(HighlightCell* cell, int column,
                            int row) override final {
+    assert(column == 0);
     if (cell->isVisible()) {  // Frame is already set to zero if hidden
       fillCellForRow(cell, row);
     }
@@ -40,11 +45,18 @@ class ListViewDataSource : public TableViewDataSource {
     assert(column == 0);
     return typeAtRow(row);
   }
+  bool canSelectCellAtLocation(int column, int row) override final {
+    assert(column == 0);
+    return canSelectCellAtRow(row);
+  }
+  bool canStoreCellAtLocation(int column, int row) override final {
+    assert(column == 0);
+    return canStoreCellAtRow(row);
+  }
   // Just make this method final without changing behaviour
   KDCoordinate nonMemoizedColumnWidth(int column) override final {
     return TableViewDataSource::nonMemoizedColumnWidth(column);
   }
-  int typeIndexFromIndex(int index);
 };
 
 template <int N>
@@ -62,8 +74,7 @@ using StandardMemoizedListViewDataSource = MemoizedListViewDataSource<7>;
 class RegularListViewDataSource : public ListViewDataSource {
  private:
   KDCoordinate defaultRowHeight() override {
-    // See ListViewDataSource::nonMemoizedRowHeight comment
-    return ListViewDataSource::nonMemoizedRowHeight(0);
+    return protectedNonMemoizedRowHeight(reusableCell(0, typeAtRow(0)), 0);
   }
   KDCoordinate nonMemoizedRowHeight(int row) override final {
     return defaultRowHeight();

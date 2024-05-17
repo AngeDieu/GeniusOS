@@ -13,13 +13,11 @@ using namespace Escher;
 namespace Calculation {
 
 EditExpressionController::ContentView::ContentView(
-    Responder *parentResponder, CalculationSelectableTableView *subview,
-    InputEventHandlerDelegate *inputEventHandlerDelegate,
+    Responder *parentResponder, CalculationSelectableListView *subview,
     LayoutFieldDelegate *layoutFieldDelegate)
     : View(),
       m_mainView(subview),
-      m_expressionInputBar(parentResponder, inputEventHandlerDelegate,
-                           layoutFieldDelegate) {}
+      m_expressionInputBar(parentResponder, layoutFieldDelegate) {}
 
 View *EditExpressionController::ContentView::subviewAtIndex(int index) {
   assert(index >= 0 && index < numberOfSubviews());
@@ -47,29 +45,28 @@ void EditExpressionController::ContentView::reload() {
 }
 
 EditExpressionController::EditExpressionController(
-    Responder *parentResponder,
-    InputEventHandlerDelegate *inputEventHandlerDelegate,
-    HistoryController *historyController, CalculationStore *calculationStore)
+    Responder *parentResponder, HistoryController *historyController,
+    CalculationStore *calculationStore)
     : ViewController(parentResponder),
       m_historyController(historyController),
       m_calculationStore(calculationStore),
       m_contentView(this,
-                    static_cast<CalculationSelectableTableView *>(
+                    static_cast<CalculationSelectableListView *>(
                         m_historyController->view()),
-                    inputEventHandlerDelegate, this) {
+                    this) {
   clearWorkingBuffer();
 }
 
 void EditExpressionController::insertTextBody(const char *text) {
-  Container::activeApp()->setFirstResponder(this);
+  App::app()->setFirstResponder(this);
+  m_contentView.layoutField()->updateCursorBeforeInsertion();
   m_contentView.layoutField()->handleEventWithText(text, false, true);
-  memoizeInput();
 }
 
 void EditExpressionController::didBecomeFirstResponder() {
   m_contentView.mainView()->scrollToBottom();
   m_contentView.layoutField()->setEditing(true);
-  Container::activeApp()->setFirstResponder(m_contentView.layoutField());
+  App::app()->setFirstResponder(m_contentView.layoutField());
 }
 
 void EditExpressionController::restoreInput() {
@@ -100,34 +97,69 @@ void EditExpressionController::viewWillAppear() {
 
 bool EditExpressionController::layoutFieldDidReceiveEvent(
     ::LayoutField *layoutField, Ion::Events::Event event) {
-  bool shouldDuplicateLastCalculation =
-      layoutField->isEditing() && layoutField->shouldFinishEditing(event) &&
-      layoutField->isEmpty();
-  if (inputViewDidReceiveEvent(event, shouldDuplicateLastCalculation)) {
+  assert(m_contentView.layoutField() == layoutField);
+  if (event == Ion::Events::Up) {
+    if (m_calculationStore->numberOfCalculations() > 0) {
+      clearWorkingBuffer();
+      layoutField->setEditing(false);
+      App::app()->setFirstResponder(m_historyController);
+    }
     return true;
   }
-  return layoutFieldDelegateApp()->layoutFieldDidReceiveEvent(layoutField,
-                                                              event);
+  if (event == Ion::Events::Clear && layoutField->isEmpty()) {
+    m_calculationStore->deleteAll();
+    m_historyController->reload();
+    return true;
+  }
+  return MathLayoutFieldDelegate::layoutFieldDidReceiveEvent(layoutField,
+                                                             event);
 }
 
-bool EditExpressionController::layoutFieldDidHandleEvent(
-    Escher::LayoutField *layoutField, bool returnValue, bool layoutDidChange) {
-  return inputViewDidHandleEvent(returnValue);
+void EditExpressionController::layoutFieldDidHandleEvent(
+    Escher::LayoutField *layoutField) {
+  assert(m_contentView.layoutField() == layoutField);
+  /* Memoize on all handled event, even if the text did not change, to properly
+   * update the cursor position. */
+  memoizeInput();
 }
 
 bool EditExpressionController::layoutFieldDidFinishEditing(
-    ::LayoutField *layoutField, Layout layoutR, Ion::Events::Event event) {
-  return inputViewDidFinishEditing(nullptr, layoutR);
-}
-
-void EditExpressionController::layoutFieldDidAbortEditing(
-    ::LayoutField *layoutField) {
-  inputViewDidAbortEditing(nullptr);
+    ::LayoutField *layoutField, Ion::Events::Event event) {
+  assert(!layoutField->isEditing());
+  assert(m_contentView.layoutField() == layoutField);
+  Context *context = App::app()->localContext();
+  if (layoutField->isEmpty()) {
+    if (m_workingBuffer[0] != 0) {
+      /* The input text store in m_workingBuffer might have been correct the
+       * first time but then be too long when replacing ans in another context
+       */
+      if (!isAcceptableText(m_workingBuffer)) {
+        App::app()->displayWarning(I18n::Message::SyntaxError);
+      } else {
+        pushCalculation(m_workingBuffer, context);
+      }
+    }
+    return false;
+  }
+  if (!MathLayoutFieldDelegate::layoutFieldDidFinishEditing(layoutField,
+                                                            event)) {
+    return false;
+  }
+  Layout layout = layoutField->layout();
+  assert(!layout.isUninitialized());
+  layout.serializeParsedExpression(m_workingBuffer, k_cacheBufferSize, context);
+  if (pushCalculation(m_workingBuffer, context)) {
+    layoutField->clearAndSetEditing(true);
+    telemetryReportEvent("Input", m_workingBuffer);
+    return true;
+  }
+  return false;
 }
 
 void EditExpressionController::layoutFieldDidChangeSize(
     ::LayoutField *layoutField) {
-  if (m_contentView.layoutField()->inputViewHeightDidChange()) {
+  assert(m_contentView.layoutField() == layoutField);
+  if (layoutField->inputViewHeightDidChange()) {
     /* Reload the whole view only if the LayoutField's height did actually
      * change. */
     reloadView();
@@ -137,8 +169,24 @@ void EditExpressionController::layoutFieldDidChangeSize(
      * to be relayouted.
      * We force the relayout because the frame stays the same but we need to
      * propagate a relayout to the content of the field scroll view. */
-    m_contentView.layoutField()->layoutSubviews(true);
+    layoutField->layoutSubviews(true);
   }
+}
+
+bool EditExpressionController::isAcceptableExpression(
+    const Poincare::Expression expression) {
+  /* Override MathLayoutFieldDelegate because Store is acceptable, and
+   * ans has an expression. */
+  {
+    Expression ansExpression =
+        App::app()->snapshot()->calculationStore()->ansExpression(
+            App::app()->localContext());
+    if (!ExpressionCanBeSerialized(expression, true, ansExpression,
+                                   App::app()->localContext())) {
+      return false;
+    }
+  }
+  return !expression.isUninitialized();
 }
 
 void EditExpressionController::reloadView() {
@@ -146,74 +194,13 @@ void EditExpressionController::reloadView() {
   m_historyController->reload();
 }
 
-bool EditExpressionController::inputViewDidReceiveEvent(
-    Ion::Events::Event event, bool shouldDuplicateLastCalculation) {
-  if (shouldDuplicateLastCalculation && m_workingBuffer[0] != 0) {
-    /* The input text store in m_workingBuffer might have been correct the first
-     * time but then be too long when replacing ans in another context */
-    Shared::TextFieldDelegateApp *myApp = App::app();
-    if (!myApp->isAcceptableText(m_contentView.layoutField(),
-                                 m_workingBuffer)) {
-      return true;
-    }
-    if (m_calculationStore
-            ->push(m_workingBuffer, myApp->localContext(),
-                   HistoryViewCell::Height)
-            .pointer()) {
-      m_historyController->reload();
-      return true;
-    }
-  }
-  if (event == Ion::Events::Up) {
-    if (m_calculationStore->numberOfCalculations() > 0) {
-      clearWorkingBuffer();
-      m_contentView.layoutField()->setEditing(false);
-      Container::activeApp()->setFirstResponder(m_historyController);
-    }
-    return true;
-  }
-  if (event == Ion::Events::Clear && m_contentView.layoutField()->isEmpty()) {
-    m_calculationStore->deleteAll();
+bool EditExpressionController::pushCalculation(const char *text,
+                                               Poincare::Context *context) {
+  Calculation *calculation = m_calculationStore->push(text, context).pointer();
+  if (calculation) {
+    HistoryViewCell::ComputeCalculationHeights(calculation, context);
     m_historyController->reload();
     return true;
-  }
-  return false;
-}
-
-bool EditExpressionController::inputViewDidHandleEvent(bool returnValue) {
-  /* Memoize on all handled event, even if the text did not change, to properly
-   * update the cursor position. */
-  if (returnValue) {
-    memoizeInput();
-  }
-  return returnValue;
-}
-
-bool EditExpressionController::inputViewDidFinishEditing(const char *text,
-                                                         Layout layoutR) {
-  Context *context = App::app()->localContext();
-  if (layoutR.isUninitialized()) {
-    assert(text);
-    strlcpy(m_workingBuffer, text, k_cacheBufferSize);
-  } else {
-    layoutR.serializeParsedExpression(m_workingBuffer, k_cacheBufferSize,
-                                      context);
-  }
-  if (m_calculationStore
-          ->push(m_workingBuffer, context, HistoryViewCell::Height)
-          .pointer()) {
-    m_historyController->reload();
-    m_contentView.layoutField()->clearAndSetEditing(true);
-    telemetryReportEvent("Input", m_workingBuffer);
-    return true;
-  }
-  return false;
-}
-
-bool EditExpressionController::inputViewDidAbortEditing(const char *text) {
-  if (text != nullptr) {
-    m_contentView.layoutField()->clearAndSetEditing(true);
-    m_contentView.layoutField()->setText(text);
   }
   return false;
 }

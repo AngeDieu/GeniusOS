@@ -17,24 +17,24 @@ bool ChainedTextFieldDelegate::textFieldDidReceiveEvent(
 }
 
 bool ChainedTextFieldDelegate::textFieldDidFinishEditing(
-    AbstractTextField* textField, const char* text, Ion::Events::Event event) {
-  return m_parentDelegate ? m_parentDelegate->textFieldDidFinishEditing(
-                                textField, text, event)
-                          : false;
-}
-
-bool ChainedTextFieldDelegate::textFieldDidAbortEditing(
-    AbstractTextField* textField) {
+    AbstractTextField* textField, Ion::Events::Event event) {
   return m_parentDelegate
-             ? m_parentDelegate->textFieldDidAbortEditing(textField)
+             ? m_parentDelegate->textFieldDidFinishEditing(textField, event)
              : false;
 }
 
-bool ChainedTextFieldDelegate::textFieldDidHandleEvent(
-    AbstractTextField* textField, bool returnValue, bool textDidChange) {
-  return m_parentDelegate ? m_parentDelegate->textFieldDidHandleEvent(
-                                textField, returnValue, textDidChange)
-                          : false;
+void ChainedTextFieldDelegate::textFieldDidAbortEditing(
+    AbstractTextField* textField) {
+  if (m_parentDelegate) {
+    m_parentDelegate->textFieldDidAbortEditing(textField);
+  }
+}
+
+void ChainedTextFieldDelegate::textFieldDidHandleEvent(
+    AbstractTextField* textField) {
+  if (m_parentDelegate) {
+    m_parentDelegate->textFieldDidHandleEvent(textField);
+  }
 }
 
 void ChainedTextFieldDelegate::textFieldDidStartEditing(

@@ -39,19 +39,18 @@ const Layout GlobalContext::LayoutForRecord(Ion::Storage::Record record) {
   if (record.hasExtension(Ion::Storage::expExtension) ||
       record.hasExtension(Ion::Storage::lisExtension) ||
       record.hasExtension(Ion::Storage::matExtension)) {
-    return PoincareHelpers::CreateLayout(
-        ExpressionForActualSymbol(record),
-        AppsContainer::activeApp()->localContext());
+    return PoincareHelpers::CreateLayout(ExpressionForActualSymbol(record),
+                                         Escher::App::app()->localContext());
   } else if (record.hasExtension(Ion::Storage::funcExtension)) {
     ExpiringPointer<ContinuousFunction> f =
         continuousFunctionStore->modelForRecord(record);
     return PoincareHelpers::CreateLayout(
         ExpressionForFunction(Symbol::Builder(f->symbol()), record),
-        AppsContainer::activeApp()->localContext());
+        Escher::App::app()->localContext());
   } else if (record.hasExtension(Ion::Storage::regExtension)) {
     return PoincareHelpers::CreateLayout(
         ExpressionForFunction(Symbol::Builder('x'), record),
-        AppsContainer::activeApp()->localContext());
+        Escher::App::app()->localContext());
   } else {
     assert(record.hasExtension(Ion::Storage::seqExtension));
     return Sequence(record).layout();
@@ -190,8 +189,8 @@ const Expression GlobalContext::expressionForSequence(
   Sequence seq(r);
   Expression rank = symbol.childAtIndex(0).clone();
   bool rankIsInteger = false;
-  PoincareHelpers::CloneAndSimplify(&rank, ctx,
-                                    ReductionTarget::SystemForApproximation);
+  PoincareHelpers::CloneAndSimplify(
+      &rank, ctx, {.target = ReductionTarget::SystemForApproximation});
   double rankValue = PoincareHelpers::ApproximateToScalar<double>(rank, ctx);
   if (rank.type() == ExpressionNode::Type::Rational) {
     Rational n = static_cast<Rational &>(rank);
@@ -210,32 +209,27 @@ const Expression GlobalContext::expressionForSequence(
 }
 
 Ion::Storage::Record::ErrorStatus GlobalContext::setExpressionForActualSymbol(
-    const Expression &expression, const SymbolAbstract &symbol,
+    Expression &expression, const SymbolAbstract &symbol,
     Ion::Storage::Record previousRecord) {
-  Expression expressionToStore = expression;
-  PoincareHelpers::CloneAndSimplify(
-      &expressionToStore, this, ReductionTarget::User,
-      SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined);
+  bool storeApproximation =
+      ExpressionDisplayPermissions::NeverDisplayReductionOfInput(expression,
+                                                                 this);
+  PoincareHelpers::ReductionParameters params = {
+      .symbolicComputation =
+          SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined};
+  PoincareHelpers::CloneAndSimplify(&expression, this, params);
   /* "approximateKeepingUnits" is called because the expression might contain
-   * units, and juste calling "approximate" would return undef
-   */
-  Poincare::Preferences *preferences = Poincare::Preferences::sharedPreferences;
-  Poincare::Preferences::ComplexFormat complexFormat =
-      Poincare::Preferences::UpdatedComplexFormatWithExpressionInput(
-          preferences->complexFormat(), expressionToStore, this);
-  Expression approximation = expressionToStore.approximateKeepingUnits<double>(
-      Poincare::ReductionContext(
-          this, complexFormat, preferences->angleUnit(),
-          GlobalPreferences::sharedGlobalPreferences->unitFormat(),
-          ReductionTarget::User,
-          SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined,
-          Poincare::UnitConversion::Default));
+   * units, and juste calling "approximate" would return undef*/
+
+  Expression approximation = PoincareHelpers::ApproximateKeepingUnits<double>(
+      expression, this, params);
   // Do not store exact derivative, etc.
-  if (ExpressionDisplayPermissions::ShouldOnlyDisplayApproximation(
-          expression, expressionToStore, approximation, this)) {
-    expressionToStore = approximation;
+  if (storeApproximation ||
+      ExpressionDisplayPermissions::ShouldOnlyDisplayApproximation(
+          Expression(), expression, approximation, this)) {
+    expression = approximation;
   }
-  ExpressionNode::Type type = expressionToStore.type();
+  ExpressionNode::Type type = expression.type();
   const char *extension;
   if (type == ExpressionNode::Type::List) {
     extension = Ion::Storage::lisExtension;
@@ -247,8 +241,8 @@ Ion::Storage::Record::ErrorStatus GlobalContext::setExpressionForActualSymbol(
   /* If there is another record competing with this one for its name,
    * it is destroyed directly in Storage, through the record_name_verifier. */
   return Ion::Storage::FileSystem::sharedFileSystem->createRecordWithExtension(
-      symbol.name(), extension, expressionToStore.addressInPool(),
-      expressionToStore.size(), true);
+      symbol.name(), extension, expression.addressInPool(), expression.size(),
+      true);
 }
 
 Ion::Storage::Record::ErrorStatus GlobalContext::setExpressionForFunction(
@@ -260,7 +254,7 @@ Ion::Storage::Record::ErrorStatus GlobalContext::setExpressionForFunction(
   if (!previousRecord.hasExtension(Ion::Storage::funcExtension)) {
     // The previous record was not a function. Create a new model.
     ContinuousFunction newModel =
-        ContinuousFunction::NewModel(&error, symbol.name());
+        continuousFunctionStore->newModel(symbol.name(), &error);
     if (error != Ion::Storage::Record::ErrorStatus::None) {
       return error;
     }

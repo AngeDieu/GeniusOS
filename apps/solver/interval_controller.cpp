@@ -10,17 +10,16 @@ using namespace Escher;
 
 namespace Solver {
 
-IntervalController::IntervalController(
-    Responder *parentResponder,
-    InputEventHandlerDelegate *inputEventHandlerDelegate)
-    : FloatParameterController<double>(parentResponder),
+IntervalController::IntervalController(Responder *parentResponder)
+    : FloatParameterController<double>(parentResponder, &m_instructions),
       m_instructions(I18n::Message::ApproximateSolutionIntervalInstruction,
                      k_messageFormat) {
-  setTopView(&m_instructions);
   m_okButton.setMessage(I18n::Message::ResolveEquation);
+  m_intervalCell[0].label()->setMessage(I18n::Message::XMin);
+  m_intervalCell[1].label()->setMessage(I18n::Message::XMax);
   for (int i = 0; i < k_maxNumberOfCells; i++) {
     m_intervalCell[i].setParentResponder(&m_selectableListView);
-    m_intervalCell[i].setDelegates(inputEventHandlerDelegate, this);
+    m_intervalCell[i].setDelegate(this);
   }
 }
 
@@ -30,21 +29,17 @@ const char *IntervalController::title() {
 
 int IntervalController::numberOfRows() const { return k_maxNumberOfCells + 1; }
 
-void IntervalController::fillCellForRow(HighlightCell *cell, int row) {
-  if (row == numberOfRows() - 1) {
-    return;
+KDCoordinate IntervalController::nonMemoizedRowHeight(int row) {
+  int type = typeAtRow(row);
+  if (type == k_parameterCellType) {
+    return m_intervalCell[row].minimalSizeForOptimalDisplay().height();
   }
-  I18n::Message labels[k_maxNumberOfCells] = {I18n::Message::XMin,
-                                              I18n::Message::XMax};
-  MenuCellWithEditableText<MessageTextView> *myCell =
-      static_cast<MenuCellWithEditableText<MessageTextView> *>(cell);
-  myCell->label()->setMessage(labels[row]);
-  FloatParameterController::fillCellForRow(cell, row);
+  assert(type == k_buttonCellType);
+  return Shared::FloatParameterController<double>::nonMemoizedRowHeight(row);
 }
 
 HighlightCell *IntervalController::reusableParameterCell(int index, int type) {
-  assert(index >= 0);
-  assert(index < 2);
+  assert(0 <= index && index < k_maxNumberOfCells);
   return &m_intervalCell[index];
 }
 
@@ -73,11 +68,8 @@ bool IntervalController::setParameterAtIndex(int parameterIndex, double f) {
 }
 
 bool IntervalController::textFieldDidFinishEditing(AbstractTextField *textField,
-                                                   const char *text,
                                                    Ion::Events::Event event) {
-  if (FloatParameterController::textFieldDidFinishEditing(textField, text,
-                                                          event)) {
-    resetMemoization();
+  if (FloatParameterController::textFieldDidFinishEditing(textField, event)) {
     m_selectableListView.reloadData();
     return true;
   }
@@ -86,9 +78,8 @@ bool IntervalController::textFieldDidFinishEditing(AbstractTextField *textField,
 
 void IntervalController::buttonAction() {
   StackViewController *stack = stackController();
-  App::app()->system()->approximateSolve(
-      textFieldDelegateApp()->localContext());
-  stack->push(App::app()->solutionsControllerStack());
+  App::app()->system()->approximateSolve(App::app()->localContext());
+  stack->push(App::app()->solutionsController());
 }
 
 }  // namespace Solver

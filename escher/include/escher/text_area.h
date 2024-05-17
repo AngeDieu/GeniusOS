@@ -2,30 +2,26 @@
 #define ESCHER_TEXT_AREA_H
 
 #include <assert.h>
-#include <escher/input_event_handler.h>
-#include <escher/text_area_delegate.h>
 #include <escher/text_input.h>
 #include <omg/directions.h>
 #include <string.h>
 
+#include <array>
+
 namespace Escher {
-// See TODO in EditableField
 
-class TextArea : public TextInput, public InputEventHandler {
+class TextArea : public TextInput {
  public:
-  constexpr static int k_indentationSpaces = 2;
+  constexpr static char k_indentation[] = "  ";
+  constexpr static int k_indentationSpaces = std::size(k_indentation) - 1;
+  constexpr static char k_newLine[] = "\n";
 
-  TextArea(Responder* parentResponder, View* contentView,
-           KDFont::Size font = KDFont::Size::Large);
-  void setDelegates(InputEventHandlerDelegate* inputEventHandlerDelegate,
-                    TextAreaDelegate* delegate) {
-    m_inputEventHandlerDelegate = inputEventHandlerDelegate;
-    m_delegate = delegate;
-  }
+  TextArea(Responder* parentResponder, View* contentView);
   bool handleEvent(Ion::Events::Event event) override;
   bool handleEventWithText(const char* text, bool indentation = false,
                            bool forceCursorRightOfText = false) override;
   void setText(char* textBuffer, size_t textBufferSize);
+  bool addXNTCodePoint(CodePoint defaultXNTCodePoint) override;
 
  protected:
   int indentationBeforeCursor() const;
@@ -113,7 +109,10 @@ class TextArea : public TextInput, public InputEventHandler {
   class ContentView : public TextInput::ContentView {
    public:
     ContentView(KDFont::Size font)
-        : TextInput::ContentView(font), m_text(nullptr, 0) {
+        : TextInput::ContentView({.style = {.font = font},
+                                  .horizontalAlignment = KDGlyph::k_alignLeft,
+                                  .verticalAlignment = KDGlyph::k_alignCenter}),
+          m_text(nullptr, 0) {
       m_cursorLocation = m_text.text();
     }
     void drawRect(KDContext* ctx, KDRect rect) const override;
@@ -129,8 +128,7 @@ class TextArea : public TextInput, public InputEventHandler {
     KDSize minimalSizeForOptimalDisplay() const override;
     void setText(char* textBuffer, size_t textBufferSize);
     const char* text() const override { return m_text.text(); }
-    const char* editedText() const override { return m_text.text(); }
-    size_t editedTextLength() const override { return m_text.textLength(); }
+    const char* draftText() const override { return m_text.text(); }
     const Text* getText() const { return &m_text; }
     bool insertTextAtLocation(const char* text, char* location,
                               int textLength = -1) override;
@@ -153,10 +151,19 @@ class TextArea : public TextInput, public InputEventHandler {
 
  private:
   void selectUpDown(OMG::VerticalDirection direction, int step);
-  TextAreaDelegate* m_delegate;
-  // Due to rect size limitation, the editor cannot display more than 1800 lines
+
+  /* KDCoordinates are 16 bits wide. It limits the number of lines
+   * along with the length of lines:
+   * k_maxLines < (2^15-1 - padding) / glyphHeight(big font) = 1800
+   * k_maxLineChars < (2^15-1 - padding) / glyphWidth(big font) = 3200
+   * We have chosen arbitrary values that respect this constraint. */
   constexpr static int k_maxLines = 999;
   constexpr static int k_maxLineChars = 3000;
+
+  static_assert(k_maxLines * KDFont::GlyphHeight(KDFont::Size::Large) <
+                KDCOORDINATE_MAX);
+  static_assert(k_maxLineChars * KDFont::GlyphWidth(KDFont::Size::Large) <
+                KDCOORDINATE_MAX);
 };
 
 }  // namespace Escher

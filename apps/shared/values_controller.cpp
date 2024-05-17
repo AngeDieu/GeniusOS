@@ -23,30 +23,21 @@ ValuesController::ValuesController(Responder *parentResponder,
       ButtonRowDelegate(header, nullptr),
       m_numberOfColumns(0),
       m_numberOfColumnsNeedUpdate(true),
-      m_prefacedTwiceTableView(0, 0, this, &m_selectableTableView, this, this),
+      m_prefacedTwiceTableView(0, 0, this, &m_selectableTableView, this),
       m_firstMemoizedColumn(INT_MAX),
       m_firstMemoizedRow(INT_MAX),
       m_abscissaParameterController(this, this) {
   m_prefacedTwiceTableView.setBackgroundColor(Palette::WallScreenDark);
   m_prefacedTwiceTableView.setCellOverlap(0, 0);
-  m_prefacedTwiceTableView.setMargins(k_margin, k_scrollBarMargin,
-                                      k_scrollBarMargin, k_margin);
+  m_prefacedTwiceTableView.setMargins(k_margins);
 }
 
-void ValuesController::setupSelectableTableViewAndCells(
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate) {
+void ValuesController::setupSelectableTableViewAndCells() {
   int numberOfAbscissaCells = abscissaCellsCount();
   for (int i = 0; i < numberOfAbscissaCells; i++) {
     AbstractEvenOddEditableTextCell *c = abscissaCells(i);
     c->setParentResponder(selectableTableView());
-    c->editableTextCell()->textField()->setDelegates(inputEventHandlerDelegate,
-                                                     this);
-    c->editableTextCell()->textField()->setFont(k_cellFont);
-  }
-  int numberOfAbscissaTitleCells = abscissaTitleCellsCount();
-  for (int i = 0; i < numberOfAbscissaTitleCells; i++) {
-    EvenOddMessageTextCell *c = abscissaTitleCells(i);
-    c->setMessageFont(k_cellFont);
+    c->editableTextCell()->textField()->setDelegate(this);
   }
 }
 
@@ -73,7 +64,7 @@ bool ValuesController::handleEvent(Ion::Events::Event event) {
     if (selectedRow() == -1) {
       header()->setSelectedButton(-1);
       selectableTableView()->selectCellAtLocation(0, 0);
-      Container::activeApp()->setFirstResponder(selectableTableView());
+      App::app()->setFirstResponder(selectableTableView());
       return true;
     }
     return false;
@@ -94,12 +85,8 @@ bool ValuesController::handleEvent(Ion::Events::Event event) {
     int column = selectedColumn();
     intervalAtColumn(column)->deleteElementAtIndex(row - k_numberOfTitleRows);
     // Reload memoization
-    int nRows = numberOfElementsInColumn(column) + k_numberOfTitleRows;
-    for (int i = row; i < nRows; i++) {
-      didChangeCell(column, i);
-    }
-    resetMemoization();  // This is slow but it works
-    selectableTableView()->reloadData();
+    rowWasDeleted(row, column);
+    selectableTableView()->reloadData(true, false);
     return true;
   }
   if (selectedRow() == -1) {
@@ -140,17 +127,16 @@ int ValuesController::numberOfColumns() const {
 void ValuesController::fillCellForLocation(HighlightCell *cell, int column,
                                            int row) {
   fillCellForLocationWithDisplayMode(
-      cell, column, row, Preferences::sharedPreferences->displayMode());
-  int typeAtLoc = typeAtLocation(column, row);
+      cell, column, row, Preferences::sharedPreferences->displayMode(),
+      Preferences::sharedPreferences->numberOfSignificantDigits());
   // The cell is not a title cell and not editable
-  if (typeAtLoc == k_notEditableValueCellType) {
+  if (typeAtLocation(column, row) == k_notEditableValueCellType) {
+    EvenOddExpressionCell *myCell = static_cast<EvenOddExpressionCell *>(cell);
     // Special case: last row
     if (row == numberOfElementsInColumn(column) + k_numberOfTitleRows) {
-      static_cast<EvenOddExpressionCell *>(cell)->setLayout(
-          HorizontalLayout::Builder());
+      myCell->setLayout(HorizontalLayout::Builder());
     } else {
-      static_cast<EvenOddExpressionCell *>(cell)->setLayout(
-          memoizedLayoutForCell(column, row));
+      myCell->setLayout(memoizedLayoutForCell(column, row));
     }
     return;
   }
@@ -297,13 +283,8 @@ void ValuesController::didChangeCell(int column, int row) {
     /* Recomputing the layout might change the column width. To avoid reseting
      * all the memoization, it's only updated by knowing the difference between
      * the previous and the new width.
-     * Do not call `columnWidth` if it's not memoized, since it would call
-     * memoizedLayoutAtIndex() which might not be already computed and will be
-     * computed in the next line.
      * */
-    KDCoordinate previousWidth = columnWidthManager()->sizeAtIndexIsMemoized(i)
-                                     ? columnWidth(i)
-                                     : TableSize1DManager::k_undefinedSize;
+    KDCoordinate previousWidth = columnWidth(i);
     createMemoizedLayout(i, row, nbOfMemoizedColumns * memoizedRow + memoizedI);
     if (previousWidth != TableSize1DManager::k_undefinedSize) {
       updateSizeMemoizationForColumnAfterIndexChanged(i, previousWidth, row);
@@ -315,6 +296,14 @@ int ValuesController::numberOfElementsInColumn(int column) const {
   return const_cast<ValuesController *>(this)
       ->intervalAtColumn(column)
       ->numberOfElements();
+}
+
+KDCoordinate ValuesController::defaultColumnWidth() {
+  KDCoordinate width =
+      PrintFloat::glyphLengthForFloatWithPrecision(
+          Preferences::sharedPreferences->numberOfSignificantDigits()) *
+      KDFont::GlyphWidth(k_cellFont);
+  return std::max(EditableCellTableViewController::defaultColumnWidth(), width);
 }
 
 // Parent controller getters
@@ -359,37 +348,36 @@ void ValuesController::resetLayoutMemoization() {
     assert(titleCell);
     titleCell->setLayout(Layout());
   }
-  resetMemoization();  // reset sizes memoization
-  m_prefacedTwiceTableView.resetDataSourceSizeMemoization();
   m_firstMemoizedColumn = INT_MAX;
   m_firstMemoizedRow = INT_MAX;
 }
 
-Layout ValuesController::memoizedLayoutForCell(int i, int j) {
+Layout ValuesController::memoizedLayoutForCell(int column, int row) {
   const int nbOfMemoizedColumns = k_maxNumberOfDisplayableColumns;
   // Conversion of coordinates from absolute table to values table
-  int valuesI = valuesColumnForAbsoluteColumn(i);
-  int valuesJ = valuesRowForAbsoluteRow(j);
+  int valuesCol = valuesColumnForAbsoluteColumn(column);
+  int valuesRow = valuesRowForAbsoluteRow(row);
   /* Compute the required offset to apply to the memoized table in order to
-   * display cell (i,j) */
-  int offsetI = 0;
-  int offsetJ = 0;
-  if (valuesI < m_firstMemoizedColumn) {
-    offsetI = valuesI - m_firstMemoizedColumn;
-  } else if (valuesI >= m_firstMemoizedColumn + nbOfMemoizedColumns) {
-    offsetI = valuesI - nbOfMemoizedColumns - m_firstMemoizedColumn + 1;
+   * display cell (col,row) */
+  int offsetCol = 0;
+  int offsetRow = 0;
+  if (valuesCol < m_firstMemoizedColumn) {
+    offsetCol = valuesCol - m_firstMemoizedColumn;
+  } else if (valuesCol >= m_firstMemoizedColumn + nbOfMemoizedColumns) {
+    offsetCol = valuesCol - nbOfMemoizedColumns - m_firstMemoizedColumn + 1;
   }
-  if (valuesJ < m_firstMemoizedRow) {
-    offsetJ = valuesJ - m_firstMemoizedRow;
-  } else if (valuesJ >= m_firstMemoizedRow + k_maxNumberOfDisplayableRows) {
-    offsetJ = valuesJ - k_maxNumberOfDisplayableRows - m_firstMemoizedRow + 1;
+  if (valuesRow < m_firstMemoizedRow) {
+    offsetRow = valuesRow - m_firstMemoizedRow;
+  } else if (valuesRow >= m_firstMemoizedRow + k_maxNumberOfDisplayableRows) {
+    offsetRow =
+        valuesRow - k_maxNumberOfDisplayableRows - m_firstMemoizedRow + 1;
   }
-  int offset = -offsetJ * nbOfMemoizedColumns - offsetI;
+  int offset = -offsetRow * nbOfMemoizedColumns - offsetCol;
 
   // Apply the offset
   if (offset != 0) {
-    m_firstMemoizedColumn = m_firstMemoizedColumn + offsetI;
-    m_firstMemoizedRow = m_firstMemoizedRow + offsetJ;
+    m_firstMemoizedColumn = m_firstMemoizedColumn + offsetCol;
+    m_firstMemoizedRow = m_firstMemoizedRow + offsetRow;
     // Shift already memoized cells
     const int numberOfMemoizedCell =
         k_maxNumberOfDisplayableRows * nbOfMemoizedColumns;
@@ -404,34 +392,94 @@ Layout ValuesController::memoizedLayoutForCell(int i, int j) {
       }
     }
     // Compute the buffer of the new cells of the memoized table
-    int maxI = numberOfValuesColumns() - m_firstMemoizedColumn;
-    for (int ii = 0; ii < std::min(nbOfMemoizedColumns, maxI); ii++) {
-      int maxJ = numberOfElementsInColumn(absoluteColumnForValuesColumn(
-                     ii + m_firstMemoizedColumn)) -
-                 m_firstMemoizedRow;
-      for (int jj = 0; jj < std::min(k_maxNumberOfDisplayableRows, maxJ);
-           jj++) {
+    int maxCol = std::min(nbOfMemoizedColumns,
+                          numberOfValuesColumns() - m_firstMemoizedColumn);
+    int maxRow[maxCol];
+    int maxOfMaxRow = -1;
+    for (int col = 0; col < maxCol; col++) {
+      maxRow[col] = std::min(
+          k_maxNumberOfDisplayableRows,
+          numberOfElementsInColumn(
+              absoluteColumnForValuesColumn(col + m_firstMemoizedColumn)) -
+              m_firstMemoizedRow);
+      maxOfMaxRow = std::max(maxOfMaxRow, maxRow[col]);
+    }
+    /* We first loop on rows to step all sequences at the same time.
+     * TODO: split this behavior between app grapher and app sequences? For
+     * sequences, the number of rows is the same for all column, and for
+     * grapher, this would enable us to restore previous loops (avoid row >=
+     * maxRow[col] etc). */
+    for (int row = 0; row < maxOfMaxRow; row++) {
+      for (int col = 0; col < maxCol; col++) {
+        if (row >= maxRow[col]) {
+          continue;
+        }
         // Escape if already filled
-        if (ii >= -offsetI && ii < -offsetI + nbOfMemoizedColumns &&
-            jj >= -offsetJ && jj < -offsetJ + k_maxNumberOfDisplayableRows) {
+        if (col >= -offsetCol && col < -offsetCol + nbOfMemoizedColumns &&
+            row >= -offsetRow &&
+            row < -offsetRow + k_maxNumberOfDisplayableRows) {
           continue;
         }
         createMemoizedLayout(
-            absoluteColumnForValuesColumn(m_firstMemoizedColumn + ii),
-            absoluteRowForValuesRow(m_firstMemoizedRow + jj),
-            jj * nbOfMemoizedColumns + ii);
+            absoluteColumnForValuesColumn(m_firstMemoizedColumn + col),
+            absoluteRowForValuesRow(m_firstMemoizedRow + row),
+            row * nbOfMemoizedColumns + col);
       }
     }
   }
-  return *memoizedLayoutAtIndex((valuesJ - m_firstMemoizedRow) *
+  return *memoizedLayoutAtIndex((valuesRow - m_firstMemoizedRow) *
                                     nbOfMemoizedColumns +
-                                (valuesI - m_firstMemoizedColumn));
+                                (valuesCol - m_firstMemoizedColumn));
+}
+
+void ValuesController::rowWasDeleted(int row, int column) {
+  // Shift layout memoization
+
+  // Conversion of coordinates from absolute table to values table
+  int memoizedRow = valuesRowForAbsoluteRow(row) - m_firstMemoizedRow;
+  if (0 > memoizedRow || memoizedRow >= k_maxNumberOfDisplayableRows) {
+    // The changed row is out of the memoized table
+    return;
+  }
+
+  // Find the abscissa column corresponding to column
+  int abscissaColumn = 0;
+  int nbOfColumns = numberOfColumnsForAbscissaColumn(abscissaColumn);
+  while (column >= nbOfColumns) {
+    abscissaColumn = nbOfColumns;
+    nbOfColumns += numberOfColumnsForAbscissaColumn(abscissaColumn);
+  }
+
+  // Update the memoization of rows below the deleted one:
+  int nbOfColumnsForAbscissa = numberOfColumnsForAbscissaColumn(abscissaColumn);
+  for (int r = memoizedRow; r < k_maxNumberOfDisplayableRows; r++) {
+    for (int i = abscissaColumn + 1;
+         i < abscissaColumn + nbOfColumnsForAbscissa; i++) {
+      int memoizedI = valuesColumnForAbsoluteColumn(i) - m_firstMemoizedColumn;
+      if (memoizedI < 0 || memoizedI >= k_maxNumberOfDisplayableColumns) {
+        // The changed column is out of the memoized table
+        continue;
+      }
+      if (r + 1 < k_maxNumberOfDisplayableRows) {
+        *memoizedLayoutAtIndex(r * k_maxNumberOfDisplayableColumns +
+                               memoizedI) =
+            *memoizedLayoutAtIndex((r + 1) * k_maxNumberOfDisplayableColumns +
+                                   memoizedI);
+      } else {
+        int currentAbsoluteRow = row + r - memoizedRow;
+        if (currentAbsoluteRow < numberOfRowsAtColumn(i) - 1) {
+          createMemoizedLayout(i, currentAbsoluteRow,
+                               r * k_maxNumberOfDisplayableColumns + memoizedI);
+        }
+      }
+    }
+  }
 }
 
 void ValuesController::clearSelectedColumn() {
   intervalAtColumn(selectedColumn())->clear();
   selectCellAtLocation(selectedColumn(), 1);
-  resetMemoization();
+  m_selectableTableView.resetSizeAndOffsetMemoization();
 }
 
 int ValuesController::fillColumnName(int column, char *buffer) {
@@ -486,8 +534,8 @@ void ValuesController::initValueCells() {
     valueCell->setFont(k_cellFont);
     valueCell->setAlignment(KDGlyph::k_alignRight, KDGlyph::k_alignCenter);
     // TODO: Factorize margin computation
-    valueCell->setLeftMargin(EvenOddCell::k_horizontalMargin);
-    valueCell->setRightMargin(EvenOddCell::k_horizontalMargin);
+    valueCell->setMargins(
+        {EvenOddCell::k_horizontalMargin, EvenOddCell::k_horizontalMargin});
   }
 }
 

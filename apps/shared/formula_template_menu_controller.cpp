@@ -17,7 +17,7 @@ FormulaTemplateMenuController::FormulaTemplateMenuController(
     : SelectableListViewController(parentResponder),
       m_storeColumnHelper(storeColumnHelper) {
   m_emptyTemplateCell.label()->setMessage(I18n::Message::Empty);
-  m_selectableListView.setMargins(0);
+  m_selectableListView.resetMargins();
   m_selectableListView.hideScrollBars();
 }
 
@@ -28,7 +28,7 @@ const char *FormulaTemplateMenuController::title() {
 void FormulaTemplateMenuController::viewWillAppear() {
   computeUninitializedLayouts();
   ViewController::viewWillAppear();
-  selectCell(0);
+  selectRow(0);
 }
 
 void FormulaTemplateMenuController::fillCellForRow(HighlightCell *cell,
@@ -64,7 +64,7 @@ bool FormulaTemplateMenuController::handleEvent(Ion::Events::Event event) {
   if (event == Ion::Events::OK || event == Ion::Events::EXE) {
     int i = selectedRow();
     Layout templateLayout = i == 0 ? Layout() : m_layouts[i - 1];
-    Container::activeApp()->modalViewController()->dismissModal();
+    App::app()->modalViewController()->dismissModal();
     m_storeColumnHelper->fillFormulaInputWithTemplate(templateLayout);
     return true;
   }
@@ -165,7 +165,7 @@ void FormulaTemplateMenuController::computeUninitializedLayouts() {
     m_layouts[i - 1] =
         e.createLayout(Poincare::Preferences::PrintFloatMode::Decimal,
                        Preferences::ShortNumberOfSignificantDigits,
-                       Container::activeApp()->localContext());
+                       App::app()->localContext());
   }
 }
 

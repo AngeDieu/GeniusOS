@@ -41,13 +41,11 @@ bool AbstractScrollableView::handleEvent(Ion::Events::Event event) {
     }
   }
   if (translation != KDPointZero) {
-    setContentOffset(contentOffset().translatedBy(translation));
+    translateContentOffsetBy(translation);
     return true;
   }
   return false;
 }
-
-void AbstractScrollableView::reloadScroll() { setContentOffset(KDPointZero); }
 
 KDSize AbstractScrollableView::contentSize() const {
   KDSize viewSize = ScrollView::contentSize();

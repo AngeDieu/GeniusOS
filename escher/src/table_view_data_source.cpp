@@ -6,6 +6,7 @@ void TableViewDataSource::fillCellForLocation(HighlightCell* cell, int column,
                                               int row) {}
 
 KDCoordinate TableViewDataSource::columnWidth(int column, bool withSeparator) {
+  assert(column >= 0);
   KDCoordinate result = TableSize1DManager::k_undefinedSize;
   if (columnWidthManager()) {
     result = columnWidthManager()->computeSizeAtIndex(column);
@@ -22,6 +23,7 @@ KDCoordinate TableViewDataSource::columnWidth(int column, bool withSeparator) {
 }
 
 KDCoordinate TableViewDataSource::rowHeight(int row, bool withSeparator) {
+  assert(row >= 0);
   KDCoordinate result = TableSize1DManager::k_undefinedSize;
   if (rowHeightManager()) {
     result = rowHeightManager()->computeSizeAtIndex(row);
@@ -128,6 +130,11 @@ int TableViewDataSource::rowAfterCumulatedHeight(KDCoordinate offsetY) {
 
 int TableViewDataSource::nonMemoizedColumnAfterCumulatedWidth(
     KDCoordinate offsetX) {
+  assert(offsetX >= 0);
+  if (offsetX == 0) {
+    // Avoid computing width of first column
+    return 0;
+  }
   int nColumns = numberOfColumns();
   KDCoordinate cumulatedWidth = 0;
   for (int i = 0; i < nColumns; i++) {
@@ -141,6 +148,11 @@ int TableViewDataSource::nonMemoizedColumnAfterCumulatedWidth(
 
 int TableViewDataSource::nonMemoizedRowAfterCumulatedHeight(
     KDCoordinate offsetY) {
+  assert(offsetY >= 0);
+  if (offsetY == 0) {
+    // Avoid computing height of first row
+    return 0;
+  }
   int nRows = numberOfRows();
   KDCoordinate cumulatedHeight = 0;
   for (int i = 0; i < nRows; i++) {
@@ -152,21 +164,21 @@ int TableViewDataSource::nonMemoizedRowAfterCumulatedHeight(
   return nRows;
 }
 
-void TableViewDataSource::resetMemoization(bool force) {
+void TableViewDataSource::resetSizeMemoization() {
   if (columnWidthManager()) {
-    columnWidthManager()->resetMemoization(force);
+    columnWidthManager()->resetSizeMemoization(true);
   }
   if (rowHeightManager()) {
-    rowHeightManager()->resetMemoization(force);
+    rowHeightManager()->resetSizeMemoization(true);
   }
 }
 
-void TableViewDataSource::lockMemoization(bool state) {
+void TableViewDataSource::lockSizeMemoization(bool state) {
   if (columnWidthManager()) {
-    columnWidthManager()->lockMemoization(state);
+    columnWidthManager()->lockSizeMemoization(state);
   }
   if (rowHeightManager()) {
-    rowHeightManager()->lockMemoization(state);
+    rowHeightManager()->lockSizeMemoization(state);
   }
 }
 

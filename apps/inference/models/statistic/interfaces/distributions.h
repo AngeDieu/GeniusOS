@@ -1,64 +1,70 @@
 #ifndef INFERENCE_MODELS_STATISTIC_INTERFACES_DISTRIBUTIONS_H
 #define INFERENCE_MODELS_STATISTIC_INTERFACES_DISTRIBUTIONS_H
 
-#include <inference/models/statistic/statistic.h>
-#include <inference/models/statistic/test.h>
 #include <poincare/layout_helper.h>
 
 namespace Inference {
 
-class DistributionInterface {
+class Distribution {
  public:
-  static float XMin() { return -Test::k_displayWidthToSTDRatio; }
-  static float XMax() { return Test::k_displayWidthToSTDRatio; }
+  virtual const char* criticalValueSymbol() const = 0;
+  virtual Poincare::Layout criticalValueSymbolLayout() const = 0;
+  virtual float canonicalDensityFunction(float x,
+                                         double degreesOfFreedom) const = 0;
+  virtual double cumulativeNormalizedDistributionFunction(
+      double x, double degreesOfFreedom) const = 0;
+  virtual double cumulativeNormalizedInverseDistributionFunction(
+      double proba, double degreesOfFreedom) const = 0;
+
+  virtual float yMax(double degreesOfFreedom) const = 0;
 };
 
-class DistributionT : public DistributionInterface {
+class DistributionT : public Distribution {
  public:
-  static Poincare::Layout TestCriticalValueSymbol() {
+  const char* criticalValueSymbol() const override { return "t"; }
+  Poincare::Layout criticalValueSymbolLayout() const override {
     return Poincare::LayoutHelper::String("t", -1);
   }
-  static I18n::Message GraphTitleFormat() {
-    return I18n::Message::StatisticGraphControllerTestTitleFormatTTest;
-  }
-  static float CanonicalDensityFunction(float x, double degreesOfFreedom);
-  static double CumulativeNormalizedDistributionFunction(
-      double x, double degreesOfFreedom);
-  static double CumulativeNormalizedInverseDistributionFunction(
-      double proba, double degreesOfFreedom);
+  float canonicalDensityFunction(float x,
+                                 double degreesOfFreedom) const override;
+  double cumulativeNormalizedDistributionFunction(
+      double x, double degreesOfFreedom) const override;
+  double cumulativeNormalizedInverseDistributionFunction(
+      double proba, double degreesOfFreedom) const override;
 
-  static float YMax(double degreesOfFreedom);
+  float yMax(double degreesOfFreedom) const override;
 };
 
-class DistributionZ : public DistributionInterface {
+class DistributionZ : public Distribution {
  public:
-  static Poincare::Layout TestCriticalValueSymbol() {
+  const char* criticalValueSymbol() const override { return "z"; }
+  Poincare::Layout criticalValueSymbolLayout() const override {
     return Poincare::LayoutHelper::String("z", -1);
   }
-  static I18n::Message GraphTitleFormat() {
-    return I18n::Message::StatisticGraphControllerTestTitleFormatZtest;
-  }
-  static float CanonicalDensityFunction(float x, double degreesOfFreedom);
-  static double CumulativeNormalizedDistributionFunction(
-      double x, double degreesOfFreedom);
-  static double CumulativeNormalizedInverseDistributionFunction(
-      double proba, double degreesOfFreedom);
+  float canonicalDensityFunction(float x,
+                                 double degreesOfFreedom) const override;
+  double cumulativeNormalizedDistributionFunction(
+      double x, double degreesOfFreedom) const override;
+  double cumulativeNormalizedInverseDistributionFunction(
+      double proba, double degreesOfFreedom) const override;
 
-  static float YMax(double degreesOfFreedom);
+  float yMax(double degreesOfFreedom) const override;
 };
 
-class DistributionChi2 : public DistributionInterface {
+class DistributionChi2 : public Distribution {
  public:
-  static Poincare::Layout TestCriticalValueSymbol();
-  static float CanonicalDensityFunction(float x, double degreesOfFreedom);
-  static double CumulativeNormalizedDistributionFunction(
-      double x, double degreesOfFreedom);
-  static double CumulativeNormalizedInverseDistributionFunction(
-      double proba, double degreesOfFreedom);
+  const char* criticalValueSymbol() const override { return "χ2"; }
+  Poincare::Layout criticalValueSymbolLayout() const override;
+  float canonicalDensityFunction(float x,
+                                 double degreesOfFreedom) const override;
+  double cumulativeNormalizedDistributionFunction(
+      double x, double degreesOfFreedom) const override;
+  double cumulativeNormalizedInverseDistributionFunction(
+      double proba, double degreesOfFreedom) const override;
 
-  static float XMin(double degreesOfFreedom);
-  static float XMax(double degreesOfFreedom);
-  static float YMax(double degreesOfFreedom);
+  float xMin(double degreesOfFreedom) const;
+  float xMax(double degreesOfFreedom) const;
+  float yMax(double degreesOfFreedom) const override;
 };
 
 }  // namespace Inference

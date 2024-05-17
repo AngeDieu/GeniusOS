@@ -18,12 +18,12 @@ int ArcCotangentNode::numberOfChildren() const {
 }
 
 template <typename T>
-Complex<T> ArcCotangentNode::computeOnComplex(
+std::complex<T> ArcCotangentNode::computeOnComplex(
     const std::complex<T> c, Preferences::ComplexFormat complexFormat,
     Preferences::AngleUnit angleUnit) {
   if (c == static_cast<T>(0.0)) {
-    return Complex<T>::Builder(Trigonometry::ConvertRadianToAngleUnit(
-        std::complex<T>(M_PI_2), angleUnit));
+    return Trigonometry::ConvertRadianToAngleUnit(std::complex<T>(M_PI_2),
+                                                  angleUnit);
   }
   return ArcTangentNode::computeOnComplex<T>(std::complex<T>(1) / c,
                                              complexFormat, angleUnit);
@@ -48,7 +48,7 @@ int ArcCotangentNode::serialize(char* buffer, int bufferSize,
 Expression ArcCotangentNode::shallowReduce(
     const ReductionContext& reductionContext) {
   ArcCotangent e = ArcCotangent(this);
-  return Trigonometry::shallowReduceInverseAdvancedFunction(e,
+  return Trigonometry::ShallowReduceInverseAdvancedFunction(e,
                                                             reductionContext);
 }
 

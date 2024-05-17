@@ -1,6 +1,9 @@
 #ifndef POINCARE_PRINT_H
 #define POINCARE_PRINT_H
 
+#include <escher/metric.h>
+#include <ion/display_constants.h>
+#include <kandinsky/font.h>
 #include <stdarg.h>
 #include <stddef.h>
 
@@ -51,17 +54,21 @@ class Print {
    * For this method, do not pass a number of significant digits as argument to
    * each printed float/double.
    * ex:
-   *   CustomPrintfWithMaxNumberOfSignificantDigits(
-   *                 buffer, bufferSize, 7,
+   *   CustomPrintfWithMaxNumberOfGlyphs(
+   *                 buffer, bufferSize, 7, maxNumberOfGlyphs
    *                 "Two doubles are %*.*ed and %*.*ed",
    *                 0.0123456789,
    *                 Preferences::PrintFloatMode::Scientific,
    *                 9.8765432109,
    *                 Preferences::PrintFloatMode::Scientific);
    * */
-  static int CustomPrintfWithMaxNumberOfSignificantDigits(
-      char* buffer, size_t bufferSize, int maxNumberOfSignificantDigits,
-      const char* format, ...);
+  constexpr static int k_maxNumberOfSmallGlyphsInScreenWidth =
+      (Ion::Display::Width - 2 * Escher::Metric::CommonLargeMargin) /
+      KDFont::GlyphWidth(KDFont::Size::Small);
+  static int CustomPrintfWithMaxNumberOfGlyphs(char* buffer, size_t bufferSize,
+                                               int maxNumberOfSignificantDigits,
+                                               int maxNumberOfGlyphs,
+                                               const char* format, ...);
 
   static void Capitalize(char* text);
   static void Decapitalize(char* text);

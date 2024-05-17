@@ -10,7 +10,7 @@ namespace Graph {
  *  _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
  * |####|  _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _                   |              |
  * |####|  |                             |                   |              |
- * |####|  |   LayoutView                |                   |              |
+ * |####|  | MainCell                    |                   |              |
  * |####|  |_ _ _ _ _ _ _ _ _ _ _ _ _ _ _|                   | EllipsisView |
  * |####|  _ _ _ _ _ _ _ _ _ _                               |              |
  * |####|  | MessageTextView |                               |              |
@@ -21,7 +21,7 @@ namespace Graph {
  * - Leftmost rectangle is the color indicator.
  * - There are no borders to draw
  * - EllipsisView dictates the minimal height of the cell
- * - LayoutView is cropped in width, but can take significant height
+ * - ExpressionCell is cropped in width, but can take significant height
  * - If inactive, both color indicator and all texts are set to gray
  */
 
@@ -52,27 +52,25 @@ void AbstractFunctionCell::drawRect(KDContext* ctx, KDRect rect) const {
 }
 
 KDSize AbstractFunctionCell::minimalSizeForOptimalDisplay() const {
-  KDCoordinate expressionHeight =
-      layoutView()->minimalSizeForOptimalDisplay().height();
-  KDCoordinate minimalHeight = k_margin + expressionHeight + k_margin;
+  KDCoordinate minimalHeight =
+      mainCell()->minimalSizeForOptimalDisplay().height() + 2 * k_margin;
   if (displayFunctionType()) {
     KDCoordinate messageHeight =
         m_messageTextView.minimalSizeForOptimalDisplay().height();
     minimalHeight += k_messageMargin + messageHeight;
   }
-  KDCoordinate parameterHeight =
-      m_ellipsisView.minimalSizeForOptimalDisplay().height();
-  if (parameterHeight > minimalHeight) {
-    // Leave enough height for parameter's menu elipsis.
-    minimalHeight = parameterHeight;
-  }
   return KDSize(bounds().width(), minimalHeight);
+}
+
+bool AbstractFunctionCell::displayFunctionType() const {
+  return !Poincare::Preferences::sharedPreferences->examMode()
+              .forbidGraphDetails();
 }
 
 View* AbstractFunctionCell::subviewAtIndex(int index) {
   switch (index) {
     case 0:
-      return mainView();
+      return mainCell();
     case 1:
       return &m_ellipsisView;
     default:
@@ -88,12 +86,9 @@ void AbstractFunctionCell::layoutSubviews(bool force) {
                 force);
   KDCoordinate leftMargin = k_colorIndicatorThickness + k_margin;
   KDCoordinate rightMargin = k_margin + k_parametersColumnWidth;
-  KDCoordinate expressionHeight =
-      mainView()->minimalSizeForOptimalDisplay().height();
   KDCoordinate availableWidth = bounds().width() - leftMargin - rightMargin;
-  setChildFrame(mainView(),
-                KDRect(leftMargin, k_margin, availableWidth, expressionHeight),
-                force);
+
+  KDCoordinate totalMessageHeight = 0;
   if (displayFunctionType()) {
     KDCoordinate messageHeight =
         m_messageTextView.minimalSizeForOptimalDisplay().height();
@@ -102,7 +97,18 @@ void AbstractFunctionCell::layoutSubviews(bool force) {
         KDRect(leftMargin, bounds().height() - k_margin - messageHeight,
                availableWidth, messageHeight),
         force);
+    totalMessageHeight = messageHeight + k_messageMargin;
   }
+
+  KDCoordinate expressionHeight =
+      mainCell()->minimalSizeForOptimalDisplay().height();
+  KDCoordinate availableHeight =
+      bounds().height() - totalMessageHeight - 2 * k_margin;
+  setChildFrame(
+      mainCell(),
+      KDRect(leftMargin, k_margin + (availableHeight - expressionHeight) / 2,
+             availableWidth, expressionHeight),
+      force);
 }
 
 void FunctionCell::updateSubviewsBackgroundAfterChangingState() {
@@ -115,7 +121,7 @@ void FunctionCell::updateSubviewsBackgroundAfterChangingState() {
   if (displayFunctionType()) {
     m_messageTextView.setBackgroundColor(m_expressionBackground);
   }
-  layoutView()->setBackgroundColor(m_expressionBackground);
+  expressionCell()->setBackgroundColor(m_expressionBackground);
 }
 
 void FunctionCell::setParameterSelected(bool selected) {

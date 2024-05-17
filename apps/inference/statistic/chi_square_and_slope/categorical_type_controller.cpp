@@ -13,18 +13,18 @@ CategoricalTypeController::CategoricalTypeController(
     Escher::StackViewController* parent, Chi2Test* statistic,
     InputGoodnessController* inputGoodnessController,
     InputHomogeneityController* inputHomogeneityController)
-    : Escher::SelectableCellListPage<
+    : Escher::UniformSelectableListController<
           Escher::MenuCell<Escher::MessageTextView, Escher::EmptyCellWidget,
                            Escher::ChevronView>,
-          k_numberOfCells, Escher::RegularListViewDataSource>(parent),
+          k_numberOfCells>(parent),
       m_statistic(statistic),
       m_inputGoodnessController(inputGoodnessController),
       m_inputHomogeneityController(inputHomogeneityController) {
   selectRow(0);  // Select first row by default
-  cellAtIndex(k_indexOfGoodnessCell)
+  cell(k_indexOfGoodnessCell)
       ->label()
       ->setMessage(I18n::Message::GoodnessOfFit);
-  cellAtIndex(k_indexOfHomogeneityCell)
+  cell(k_indexOfHomogeneityCell)
       ->label()
       ->setMessage(I18n::Message::Homogeneity);
 
@@ -40,7 +40,7 @@ void CategoricalTypeController::stackOpenPage(
 
 bool CategoricalTypeController::handleEvent(Ion::Events::Event event) {
   // canBeActivatedByEvent can be called on any cell with chevron
-  if (cellAtIndex(0)->canBeActivatedByEvent(event)) {
+  if (cell(0)->canBeActivatedByEvent(event)) {
     Escher::ViewController* controller = nullptr;
     CategoricalType type;
     switch (selectedRow()) {

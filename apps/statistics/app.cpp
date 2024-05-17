@@ -48,6 +48,12 @@ void App::Snapshot::reset() {
   Shared::SharedApp::Snapshot::reset();
 }
 
+void App::Snapshot::countryWasUpdated() {
+  m_userPreferences.setDisplayOutliers(
+      GlobalPreferences::sharedGlobalPreferences->outliersStatus() ==
+      CountryPreferences::OutlierDefaultVisibility::Displayed);
+}
+
 constexpr static App::Descriptor sDescriptor;
 
 const App::Descriptor *App::Snapshot::descriptor() const {
@@ -55,7 +61,7 @@ const App::Descriptor *App::Snapshot::descriptor() const {
 }
 
 App::StoreTab::StoreTab()
-    : m_storeController(&m_storeHeader, app(), &app()->m_store, &m_storeHeader,
+    : m_storeController(&m_storeHeader, &app()->m_store, &m_storeHeader,
                         app()->m_context),
       m_storeHeader(&m_storeStackViewController, &m_storeController,
                     &m_storeController),
@@ -87,11 +93,10 @@ App::GraphTab::GraphTab()
                       &m_graphMenuStackViewController, &m_graphTypeController,
                       &app()->m_store),
       m_boxHeader(&m_graphController, &m_boxController, &m_boxController),
-      m_histogramController(&m_histogramHeader, app(), &m_histogramHeader,
-                            &app()->m_tabViewController,
-                            &m_graphMenuStackViewController,
-                            &m_graphTypeController, &app()->m_store,
-                            app()->snapshot()->storeVersion()),
+      m_histogramController(
+          &m_histogramHeader, &m_histogramHeader, &app()->m_tabViewController,
+          &m_graphMenuStackViewController, &m_graphTypeController,
+          &app()->m_store, app()->snapshot()->storeVersion()),
       m_histogramHeader(&m_graphController, &m_histogramController,
                         &m_histogramController),
       m_graphTypeController(&m_graphMenuStackViewController,
@@ -123,8 +128,8 @@ App::App(Snapshot *snapshot, Poincare::Context *parentContext)
       m_store(AppsContainerHelper::sharedAppsContainerGlobalContext(),
               snapshot->userPreferences()),
       m_context(parentContext),
-      m_inputViewController(&m_modalViewController, &m_tabViewController, this,
-                            this),
+      m_inputViewController(&m_modalViewController, &m_tabViewController,
+                            MathLayoutFieldDelegate::Default()),
       m_tabViewController(&m_inputViewController, snapshot, &m_tabs) {
   // Order used in m_graphController constructor
   assert(GraphViewModel::IndexOfGraphView(
@@ -149,7 +154,7 @@ void App::activeViewDidBecomeFirstResponder(
 void App::didBecomeActive(Escher::Window *windows) {
   // Sorted indexes are not kept in the snapshot, they have been invalidated.
   m_store.invalidateSortedIndexes();
-  LayoutFieldDelegateApp::didBecomeActive(windows);
+  SharedApp::didBecomeActive(windows);
 }
 
 }  // namespace Statistics

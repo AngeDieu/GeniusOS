@@ -21,7 +21,7 @@ class StoreParameterController : public ColumnParameterController {
   bool handleEvent(Ion::Events::Event event) override;
   int numberOfRows() const override { return k_numberOfCells; }
   Escher::AbstractMenuCell* cell(int index) override;
-  void fillCellForRow(Escher::HighlightCell* cell, int row) override;
+  void viewWillAppear() override;
   void initializeColumnParameters() override;
 
  protected:
@@ -37,6 +37,10 @@ class StoreParameterController : public ColumnParameterController {
  private:
   ColumnNameHelper* columnNameHelper() override;
   virtual I18n::Message sortMessage() { return I18n::Message::SortValues; }
+  void updateHideCellSwitch() {
+    m_hideCell.accessory()->setState(
+        m_storeColumnHelper->selectedSeriesIsActive());
+  }
 
   Escher::MenuCell<Escher::MessageTextView> m_fillFormula;
   Escher::MenuCell<Escher::MessageTextView, Escher::MessageTextView> m_sortCell;

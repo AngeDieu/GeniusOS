@@ -1,6 +1,7 @@
 #include <drivers/board.h>
 #include <ion.h>
 #include <shared/drivers/board_shared.h>
+#include <userland/drivers/persisting_bytes.h>
 
 #ifndef EPSILON_VERSION
 #error This file expects EPSILON_VERSION to be defined
@@ -11,6 +12,8 @@ extern char _external_apps_flash_start;
 extern char _external_apps_flash_end;
 extern char _external_apps_RAM_start;
 extern char _external_apps_RAM_end;
+extern char _device_name_sector_start;
+extern char _device_name_sector_end;
 }
 
 namespace Ion {
@@ -26,6 +29,8 @@ constexpr UserlandHeader::UserlandHeader()
       m_externalAppsFlashEnd(&_external_apps_flash_end),
       m_externalAppsRAMStart(&_external_apps_RAM_start),
       m_externalAppsRAMEnd(&_external_apps_RAM_end),
+      m_deviceNameFlashStart(&_device_name_sector_start),
+      m_deviceNameFlashEnd(&_device_name_sector_end),
       m_footer(Magic) {}
 
 constexpr UserlandHeader __attribute__((section(".userland_header"), used))

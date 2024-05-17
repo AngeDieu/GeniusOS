@@ -24,24 +24,21 @@ class ExplicitFloatParameterController
   void viewWillAppear() override;
   void viewDidDisappear() override;
   bool handleEvent(Ion::Events::Event event) override;
-
-  void fillCellForRow(Escher::HighlightCell *cell, int row) override;
   bool textFieldShouldFinishEditing(Escher::AbstractTextField *textField,
                                     Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField *textField,
-                                 const char *text,
                                  Ion::Events::Event event) override;
 
  protected:
   Escher::StackViewController *stackController() {
     return static_cast<Escher::StackViewController *>(parentResponder());
   }
-  virtual float parameterAtIndex(int index) = 0;
+  virtual double parameterAtIndex(int index) = 0;
+  virtual void fillParameterCellAtRow(int row);
 
  private:
-  virtual bool setParameterAtIndex(int parameterIndex, float f) = 0;
-  virtual Escher::TextField *textFieldOfCellAtIndex(Escher::HighlightCell *cell,
-                                                    int index) = 0;
+  virtual bool setParameterAtIndex(int parameterIndex, double f) = 0;
+  virtual Escher::TextField *textFieldOfCellAtRow(int row) = 0;
 };
 
 }  // namespace Shared

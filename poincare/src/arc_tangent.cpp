@@ -34,9 +34,9 @@ int ArcTangentNode::serialize(char* buffer, int bufferSize,
 }
 
 template <typename T>
-Complex<T> ArcTangentNode::computeOnComplex(const std::complex<T> c,
-                                            Preferences::ComplexFormat,
-                                            Preferences::AngleUnit angleUnit) {
+std::complex<T> ArcTangentNode::computeOnComplex(
+    const std::complex<T> c, Preferences::ComplexFormat,
+    Preferences::AngleUnit angleUnit) {
   std::complex<T> result;
   if (c.imag() == static_cast<T>(0.) &&
       std::fabs(c.real()) <= static_cast<T>(1.)) {
@@ -65,14 +65,13 @@ Complex<T> ArcTangentNode::computeOnComplex(const std::complex<T> c,
   }
   result =
       ApproximationHelper::NeglectRealOrImaginaryPartIfNeglectable(result, c);
-  return Complex<T>::Builder(
-      Trigonometry::ConvertRadianToAngleUnit(result, angleUnit));
+  return Trigonometry::ConvertRadianToAngleUnit(result, angleUnit);
 }
 
 Expression ArcTangentNode::shallowReduce(
     const ReductionContext& reductionContext) {
   ArcTangent e = ArcTangent(this);
-  return Trigonometry::shallowReduceInverseFunction(e, reductionContext);
+  return Trigonometry::ShallowReduceInverseFunction(e, reductionContext);
 }
 
 bool ArcTangentNode::derivate(const ReductionContext& reductionContext,

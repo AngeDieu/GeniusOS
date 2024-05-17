@@ -16,10 +16,9 @@ class ParametersController : public Shared::FloatParameterController<double>,
                              public Escher::DropdownCallback {
  public:
   ParametersController(Escher::StackViewController* parent,
-                       Escher::InputEventHandlerDelegate* handler,
                        ResultController* resultController);
   const char* title() override;
-  void didBecomeFirstResponder() override;
+  void viewWillAppear() override;
   bool handleEvent(Ion::Events::Event event) override;
   void fillCellForRow(Escher::HighlightCell* cell, int row) override;
   int typeAtRow(int row) const override;
@@ -68,6 +67,7 @@ class ParametersController : public Shared::FloatParameterController<double>,
   char m_titleBuffer[k_titleBufferSize];
 
   ResultController* m_resultController;
+  Escher::MessageTextView m_messageView;
 };
 
 }  // namespace Finance

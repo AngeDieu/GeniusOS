@@ -26,12 +26,7 @@ Expression PointNode::shallowReduce(const ReductionContext& reductionContext) {
 template <typename T>
 Evaluation<T> PointNode::templatedApproximate(
     const ApproximationContext& approximationContext) const {
-  Coordinate2D<T> xy = Point(this).approximate2D<T>(
-      approximationContext.context(), approximationContext.complexFormat(),
-      approximationContext.angleUnit());
-  if (std::isnan(xy.x()) || std::isnan(xy.y())) {
-    return Complex<T>::Undefined();
-  }
+  Coordinate2D<T> xy = Point(this).approximate2D<T>(approximationContext);
   return PointEvaluation<T>::Builder(xy.x(), xy.y());
 }
 
@@ -41,7 +36,9 @@ Expression Point::shallowReduce(ReductionContext reductionContext) {
       SimplificationHelper::BooleanReduction::UndefinedOnBooleans,
       SimplificationHelper::UnitReduction::BanUnits,
       SimplificationHelper::MatrixReduction::UndefinedOnMatrix,
-      SimplificationHelper::ListReduction::DistributeOverLists);
+      SimplificationHelper::ListReduction::DistributeOverLists,
+      SimplificationHelper::PointReduction::UndefinedOnPoint,
+      SimplificationHelper::UndefReduction::DoNotBubbleUpUndef);
   if (!e.isUninitialized()) {
     return e;
   }

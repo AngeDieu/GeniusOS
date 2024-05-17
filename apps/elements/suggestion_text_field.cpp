@@ -14,20 +14,19 @@ void SuggestionTextField::ContentView::drawRect(KDContext* ctx,
                                                 KDRect rect) const {
   AbstractTextField::ContentView::drawRect(ctx, rect);
   if (m_suggestion) {
-    assert(strlen(m_suggestion) >= editedTextLength());
-    ctx->drawString(
-        suggestionSuffix(),
-        glyphFrameAtPosition(text(), text() + editedTextLength()).origin(),
-        {.glyphColor = Palette::GrayDark,
-         .backgroundColor = KDColorWhite,
-         .font = m_font});
+    assert(strlen(m_suggestion) >= draftTextLength());
+    ctx->drawString(suggestionSuffix(),
+                    glyphFrameAtPosition(draftText(), draftTextEnd()).origin(),
+                    {.glyphColor = Palette::GrayDark,
+                     .backgroundColor = KDColorWhite,
+                     .font = m_format.style.font});
   }
 }
 
 KDSize SuggestionTextField::ContentView::minimalSizeForOptimalDisplay() const {
   KDSize size = AbstractTextField::ContentView::minimalSizeForOptimalDisplay();
   return m_suggestion
-             ? KDSize(size.width() + KDFont::Font(m_font)
+             ? KDSize(size.width() + KDFont::Font(m_format.style.font)
                                          ->stringSize(suggestionSuffix())
                                          .width(),
                       size.height())
@@ -41,12 +40,11 @@ void SuggestionTextField::ContentView::setSuggestion(const char* suggestion) {
 
 // SuggestionTextField
 
-SuggestionTextField::SuggestionTextField(
-    Responder* parentResponder,
-    InputEventHandlerDelegate* inputEventHandlerDelegate,
-    TextFieldDelegate* delegate)
-    : AbstractTextField(parentResponder, &m_contentView,
-                        inputEventHandlerDelegate, delegate) {}
+SuggestionTextField::SuggestionTextField(Responder* parentResponder,
+                                         TextFieldDelegate* delegate)
+    : AbstractTextField(parentResponder, &m_contentView, delegate) {
+  setBackgroundColor(KDColorWhite);
+}
 
 bool SuggestionTextField::handleEvent(Ion::Events::Event event) {
   if (cursorAtEndOfText() && m_contentView.suggestion() &&

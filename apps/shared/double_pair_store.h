@@ -41,7 +41,7 @@ class DoublePairStore {
   DoublePairStore(const DoublePairStore &) = delete;
 
   // Call this after initializing the store
-  void initListsFromStorage(bool seriesShouldUpdate = true);
+  void initListsFromStorage(bool delayUpdate = false);
 
   // Clean the pool
   void tidy();
@@ -57,7 +57,10 @@ class DoublePairStore {
   double get(int series, int i, int j) const;
   bool set(double f, int series, int i, int j, bool delayUpdate = false,
            bool setOtherColumnToDefaultIfEmpty = false);
-  bool setList(Poincare::List List, int series, int i, bool delayUpdate = false,
+  /* TODO: The "delayUpdate" parameter is kept for consistency but is currently
+   * always called with true. Should it be removed ? */
+  bool setList(Poincare::List &List, int series, int i,
+               bool delayUpdate = false,
                bool setOtherColumnToDefaultIfEmpty = false);
 
   // Counts
@@ -93,8 +96,7 @@ class DoublePairStore {
   }
   bool hasActiveSeries(
       ActiveSeriesTest activeSeriesTest = &DefaultActiveSeriesTest) const;
-  virtual void updateSeriesValidity(int series,
-                                    bool updateDisplayAdditionalColumn = true);
+  virtual void updateSeriesValidity(int series);
   int numberOfActiveSeries(
       ActiveSeriesTest activeSeriesTest = &DefaultActiveSeriesTest) const;
   int seriesIndexFromActiveSeriesIndex(
@@ -155,10 +157,8 @@ class DoublePairStore {
   }
   /* This must be called each time the lists are modified.
    * It deletes the pairs of empty values and the trailing undef values,
-   * updates the valid series, and stores the lists in the storage
-   * TODO: find a better way than adding bool updateDisplayAdditionalColumn */
-  virtual bool updateSeries(int series, bool delayUpdate = false,
-                            bool updateDisplayAdditionalColumn = true);
+   * updates the valid series, and stores the lists in the storage. */
+  virtual bool updateSeries(int series, bool delayUpdate = false);
   virtual bool valueValidInColumn(double value, int relativeColumn) const {
     return !std::isnan(value) && value >= -Poincare::Range1D::k_maxFloat &&
            value <= Poincare::Range1D::k_maxFloat;

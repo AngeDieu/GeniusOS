@@ -1,7 +1,6 @@
 #include "app.h"
 
 #include <apps/apps_container.h>
-#include <apps/shared/text_field_delegate_app.h>
 
 #include "images/confidence_interval.h"
 #include "images/significance_test.h"
@@ -23,7 +22,7 @@ App *App::Snapshot::unpack(Container *container) {
 }
 
 App::App(Snapshot *snapshot, Poincare::Context *parentContext)
-    : LayoutFieldDelegateApp(snapshot, &m_inputViewController),
+    : MathApp(snapshot, &m_inputViewController),
       m_testGraphController(&m_stackViewController,
                             static_cast<Test *>(snapshot->statistic())),
       m_intervalGraphController(&m_stackViewController,
@@ -33,16 +32,20 @@ App::App(Snapshot *snapshot, Poincare::Context *parentContext)
           static_cast<HomogeneityTest *>(snapshot->statistic())),
       m_inputHomogeneityController(
           &m_stackViewController, &m_homogeneityResultsController,
-          static_cast<HomogeneityTest *>(snapshot->statistic()), this),
+          static_cast<HomogeneityTest *>(snapshot->statistic())),
+      m_goodnessResultsController(
+          &m_stackViewController, &m_testGraphController,
+          &m_intervalGraphController,
+          static_cast<GoodnessTest *>(snapshot->statistic())),
       m_inputGoodnessController(
-          &m_stackViewController, &m_resultsController,
-          static_cast<GoodnessTest *>(snapshot->statistic()), this),
+          &m_stackViewController, &m_goodnessResultsController,
+          static_cast<GoodnessTest *>(snapshot->statistic())),
       m_inputSlopeController(&m_stackViewController, &m_resultsController,
-                             snapshot->statistic(), this, parentContext),
+                             snapshot->statistic(), parentContext),
       m_resultsController(&m_stackViewController, snapshot->statistic(),
                           &m_testGraphController, &m_intervalGraphController),
       m_inputController(&m_stackViewController, &m_resultsController,
-                        snapshot->statistic(), this),
+                        snapshot->statistic()),
       m_typeController(&m_stackViewController, &m_hypothesisController,
                        &m_inputController, snapshot->statistic()),
       m_categoricalTypeController(
@@ -50,7 +53,7 @@ App::App(Snapshot *snapshot, Poincare::Context *parentContext)
           static_cast<Chi2Test *>(snapshot->statistic()),
           &m_inputGoodnessController, &m_inputHomogeneityController),
       m_hypothesisController(&m_stackViewController, &m_inputController,
-                             &m_inputSlopeController, this,
+                             &m_inputSlopeController,
                              static_cast<Test *>(snapshot->statistic())),
       m_testController(&m_stackViewController, &m_hypothesisController,
                        &m_typeController, &m_categoricalTypeController,
@@ -64,7 +67,7 @@ App::App(Snapshot *snapshot, Poincare::Context *parentContext)
       m_stackViewController(&m_modalViewController, &m_menuController,
                             StackViewController::Style::GrayGradation),
       m_inputViewController(&m_modalViewController, &m_stackViewController,
-                            &m_inputSlopeController, &m_inputSlopeController),
+                            Shared::MathLayoutFieldDelegate::Default()),
       m_bufferDestructor(nullptr) {}
 
 void App::didBecomeActive(Window *window) {
@@ -72,12 +75,34 @@ void App::didBecomeActive(Window *window) {
       *queue = snapshot()->pageQueue();
   int queueLength = queue->length();
   Escher::ViewController *currentController = &m_menuController;
+  bool stop = false;
+  bool resultsWereRecomputed = false;
   for (int i = 0; i < queueLength; i++) {
     /* The queue is refilled dynamically when "stackOpenPage"ing which prevents
      * from popping until the queue is empty. */
     Escher::ViewController *controller = queue->queuePop();
+    if (stop) {
+      continue;
+    }
     currentController->stackOpenPage(controller);
     currentController = controller;
+
+    if (currentController == &m_inputSlopeController) {
+      // X1/Y1 data might have changed outside the app.
+      if (!snapshot()->statistic()->validateInputs()) {
+        // If input were invalidated, just stop here.
+        stop = true;
+      } else {
+        // Recompute results
+        snapshot()->statistic()->compute();
+        resultsWereRecomputed = true;
+      }
+    } else if (resultsWereRecomputed &&
+               currentController == &m_resultsController &&
+               !snapshot()->statistic()->isGraphable()) {
+      // The results changed and can't be graphed anymore
+      stop = true;
+    }
   }
   Escher::App::didBecomeActive(window);
 }
@@ -97,7 +122,8 @@ void App::cleanBuffer(DynamicCellsDataSourceDestructor *destructor) {
   if (m_bufferDestructor) {
     m_bufferDestructor->dynamicCellsTableView()->selectColumn(0);
     m_bufferDestructor->dynamicCellsTableView()->selectRow(-1);
-    m_bufferDestructor->dynamicCellsTableView()->resetDataSourceMemoization();
+    m_bufferDestructor->dynamicCellsTableView()
+        ->resetSizeAndOffsetMemoization();
     m_bufferDestructor->destroyCells();
   }
   m_bufferDestructor = destructor;

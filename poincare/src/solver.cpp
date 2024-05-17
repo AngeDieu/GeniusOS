@@ -18,7 +18,9 @@ Solver<T>::Solver(T xStart, T xEnd, const char *unknown, Context *context,
       m_unknown(unknown),
       m_complexFormat(complexFormat),
       m_angleUnit(angleUnit),
-      m_lastInterest(Interest::None) {}
+      m_lastInterest(Interest::None),
+      m_growthSpeed(sizeof(T) == sizeof(double) ? GrowthSpeed::Precise
+                                                : GrowthSpeed::Fast) {}
 
 template <typename T>
 Coordinate2D<T> Solver<T>::next(FunctionEvaluation f, const void *aux,
@@ -87,16 +89,17 @@ Coordinate2D<T> Solver<T>::next(const Expression &e, BracketTest test,
   if (e.recursivelyMatches(Expression::IsRandom, m_context)) {
     return Coordinate2D<T>(NAN, NAN);
   }
-  FunctionEvaluationParameters parameters = {.context = m_context,
-                                             .unknown = m_unknown,
-                                             .expression = e,
-                                             .complexFormat = m_complexFormat,
-                                             .angleUnit = m_angleUnit};
+  ApproximationContext approximationContext(m_context, m_complexFormat,
+                                            m_angleUnit);
+  FunctionEvaluationParameters parameters = {
+      .approximationContext = approximationContext,
+      .unknown = m_unknown,
+      .expression = e};
   FunctionEvaluation f = [](T x, const void *aux) {
     const FunctionEvaluationParameters *p =
         reinterpret_cast<const FunctionEvaluationParameters *>(aux);
-    return p->expression.approximateWithValueForSymbol(
-        p->unknown, x, p->context, p->complexFormat, p->angleUnit);
+    return p->expression.approximateWithValueForSymbol(p->unknown, x,
+                                                       p->approximationContext);
   };
 
   return next(f, &parameters, test, hone, &DiscontinuityTestForExpression);
@@ -176,12 +179,13 @@ Coordinate2D<T> Solver<T>::nextIntersection(const Expression &e1,
                               .cloneAndSimplify(reductionContext);
   }
   nextRoot(*memoizedDifference);
+  ApproximationContext approxContext(m_context, m_complexFormat, m_angleUnit);
   if (m_lastInterest == Interest::Root) {
     m_lastInterest = Interest::Intersection;
-    T y1 = e1.approximateWithValueForSymbol<T>(m_unknown, m_xStart, m_context,
-                                               m_complexFormat, m_angleUnit);
-    T y2 = e2.approximateWithValueForSymbol<T>(m_unknown, m_xStart, m_context,
-                                               m_complexFormat, m_angleUnit);
+    T y1 =
+        e1.approximateWithValueForSymbol<T>(m_unknown, m_xStart, approxContext);
+    T y2 =
+        e2.approximateWithValueForSymbol<T>(m_unknown, m_xStart, approxContext);
     if (!std::isfinite(y1) || !std::isfinite(y2)) {
       /* Sometimes, with expressions e1 and e2 that take extreme values like x^x
        * or undef expressions in specific points like x^2/x, the root of the
@@ -300,7 +304,7 @@ bool Solver<T>::DiscontinuityTestForExpression(T x1, T x2, const void *aux) {
   const Solver<T>::FunctionEvaluationParameters *p =
       reinterpret_cast<const Solver<T>::FunctionEvaluationParameters *>(aux);
   return p->expression.isDiscontinuousBetweenValuesForSymbol(
-      p->unknown, x1, x2, p->context, p->complexFormat, p->angleUnit);
+      p->unknown, x1, x2, p->approximationContext);
 };
 
 template <typename T>
@@ -470,10 +474,10 @@ T Solver<T>::nextX(T x, T direction, T slope) const {
    *   i.e. 0.1 < |(t+dt)/t| < 10
    * - there is a minimal value for dt, to allow crossing zero.
    * - always sample a minimal number of points in the whole interval. */
-  constexpr T baseGrowthSpeed =
-      sizeof(T) == sizeof(double) ? static_cast<T>(1.01) : static_cast<T>(1.05);
-  static_assert(baseGrowthSpeed > static_cast<T>(1.),
-                "Growth speed must be greater than 1");
+  T baseGrowthSpeed = m_growthSpeed == GrowthSpeed::Precise
+                          ? static_cast<T>(1.01)
+                          : static_cast<T>(1.05);
+  assert(baseGrowthSpeed > static_cast<T>(1.));
   constexpr T maximalGrowthSpeed = static_cast<T>(10.);
   constexpr T growthSpeedAcceleration = static_cast<T>(1e-2);
   /* Increase density between 0.1 and 100 */
@@ -544,9 +548,9 @@ Coordinate2D<T> Solver<T>::nextPossibleRootInChild(const Expression &e,
     ebis.replaceChildAtIndexInPlace(childIndex, Rational::Builder(0));
     /* This comparison relies on the fact that it is false for a NAN
      * approximation. */
+    ApproximationContext approxContext(m_context, m_complexFormat, m_angleUnit);
     if (std::fabs(ebis.approximateWithValueForSymbol<T>(
-            m_unknown, xRoot, m_context, m_complexFormat, m_angleUnit)) <
-        NullTolerance(xRoot)) {
+            m_unknown, xRoot, approxContext)) < NullTolerance(xRoot)) {
       return Coordinate2D<T>(xRoot, k_zero);
     }
   }
@@ -594,16 +598,17 @@ Coordinate2D<T> Solver<T>::nextRootInAddition(const Expression &e) const {
         [](const Expression e, Context *context, void *aux) {
           const Solver<T> *solver = static_cast<const Solver<T> *>(aux);
           T exponent = k_NAN;
+          ApproximationContext approximationContext(
+              context, solver->m_complexFormat, solver->m_angleUnit);
           if (e.type() == ExpressionNode::Type::SquareRoot) {
             exponent = static_cast<T>(0.5);
           } else if (e.type() == ExpressionNode::Type::Power) {
-            exponent = e.childAtIndex(1).approximateToScalar<T>(
-                context, solver->m_complexFormat, solver->m_angleUnit);
+            exponent =
+                e.childAtIndex(1).approximateToScalar<T>(approximationContext);
           } else if (e.type() == ExpressionNode::Type::NthRoot) {
             exponent =
                 static_cast<T>(1.) /
-                e.childAtIndex(1).approximateToScalar<T>(
-                    context, solver->m_complexFormat, solver->m_angleUnit);
+                e.childAtIndex(1).approximateToScalar<T>(approximationContext);
           }
           if (std::isnan(exponent)) {
             return false;

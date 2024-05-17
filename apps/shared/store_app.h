@@ -2,16 +2,15 @@
 #define STORE_APP_H
 
 #include <apps/shared/double_pair_store.h>
-#include <apps/shared/layout_field_delegate_app.h>
-#include <apps/shared/shared_app.h>
+#include <apps/shared/math_app.h>
 #include <apps/shared/store_controller.h>
 #include <escher/tab_view_data_source.h>
 
 namespace Shared {
 
-class StoreApp : public LayoutFieldDelegateApp {
+class StoreApp : public MathApp {
  public:
-  class Snapshot : public Shared::SharedApp::Snapshot,
+  class Snapshot : public Shared::MathApp::Snapshot,
                    public Escher::TabViewDataSource {
    public:
     Snapshot();
@@ -30,7 +29,7 @@ class StoreApp : public LayoutFieldDelegateApp {
   };
 
   static StoreApp *storeApp() {
-    return static_cast<StoreApp *>(Escher::Container::activeApp());
+    return static_cast<StoreApp *>(Escher::App::app());
   }
 
   Snapshot *storeAppSnapshot() const {
@@ -38,7 +37,7 @@ class StoreApp : public LayoutFieldDelegateApp {
   }
 
  protected:
-  using LayoutFieldDelegateApp::LayoutFieldDelegateApp;
+  using MathApp::MathApp;
   virtual StoreController *storeController() = 0;
 
  private:

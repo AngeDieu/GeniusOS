@@ -1,11 +1,14 @@
 #ifndef CALCULATION_CALCULATION_H
 #define CALCULATION_CALCULATION_H
 
-#include <apps/constant.h>
+#include <apps/calculation/additional_results/additional_results_type.h>
+#include <apps/shared/poincare_helpers.h>
 #include <poincare/context.h>
 #include <poincare/expression.h>
 
-#include "../shared/poincare_helpers.h"
+#if __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 namespace Calculation {
 
@@ -13,10 +16,10 @@ class CalculationStore;
 
 // clang-format off
 /* A calculation is:
- *  |     uint8_t   |KDCoordinate|  KDCoordinate  |  uint8_t  |   ...     |      ...       |         ...           |          ...          |
- *  |m_displayOutput|  m_height  |m_expandedHeight|m_equalSign|m_inputText|m_exactOuputText|m_approximateOuputText1|m_approximateOuputText2|
- *                                                                                               with maximal           with displayed
- *                                                                                            significant digits      significant digits
+ *  |     uint8_t   |  uint8_t  |KDCoordinate|  KDCoordinate  |   ...     |      ...        |          ...           |           ...          |
+ *  |m_displayOutput|m_equalSign|  m_height  |m_expandedHeight|m_inputText|m_exactOutputText|m_approximateOutputText1|m_approximateOutputText2|
+ *                                                                                                 with maximal            with displayed
+ *                                                                                              significant digits       significant digits
  *
  * */
 // clang-format on
@@ -36,45 +39,24 @@ class Calculation {
     ExactAndApproximateToggle
   };
 
-  struct AdditionalInformations {
-    bool integer : 1;
-    bool rational : 1;
-    bool directTrigonometry : 1;
-    bool inverseTrigonometry : 1;
-    bool unit : 1;
-    bool matrix : 1;
-    bool vector : 1;
-    bool complex : 1;
-    bool function : 1;
-    bool scientificNotation : 1;
-    bool isEmpty() const {
-      return !(integer || rational || directTrigonometry ||
-               inverseTrigonometry || unit || matrix || vector || complex ||
-               function || scientificNotation);
-    }
-  };
-
-  static bool DisplaysExact(DisplayOutput d) {
-    return d != DisplayOutput::ApproximateOnly;
-  }
-
-  /* It is not really the minimal size, but it clears enough space for most
-   * calculations instead of clearing less space, then fail to serialize, clear
-   * more space, fail to serialize, clear more space, etc., until reaching
-   * sufficient free space. */
-  constexpr static int k_minimalSize =
-      sizeof(uint8_t) + 2 * sizeof(KDCoordinate) + sizeof(uint8_t) +
-      k_numberOfExpressions * Constant::MaxSerializedExpressionSize;
-
-  Calculation()
+  Calculation(Poincare::Preferences::ComplexFormat complexFormat,
+              Poincare::Preferences::AngleUnit angleUnit)
       : m_displayOutput(DisplayOutput::Unknown),
+        m_equalSign(EqualSign::Unknown),
+        m_complexFormat(complexFormat),
+        m_angleUnit(angleUnit),
         m_height(-1),
-        m_expandedHeight(-1),
-        m_equalSign(EqualSign::Unknown) {
+        m_expandedHeight(-1) {
     assert(sizeof(m_inputText) == 0);
   }
   bool operator==(const Calculation& c);
   Calculation* next() const;
+
+  // Reduction properties
+  Poincare::Preferences::ComplexFormat complexFormat() {
+    return m_complexFormat;
+  }
+  Poincare::Preferences::AngleUnit angleUnit() { return m_angleUnit; }
 
   // Texts
   enum class NumberOfSignificantDigits { Maximal, UserDefined };
@@ -101,31 +83,51 @@ class Calculation {
 
   // Heights
   KDCoordinate height(bool expanded);
+  void setHeights(KDCoordinate height, KDCoordinate expandedHeight);
 
   // Displayed output
   DisplayOutput displayOutput(Poincare::Context* context);
-  void forceDisplayOutput(DisplayOutput d) { m_displayOutput = d; }
-  EqualSign exactAndApproximateDisplayedOutputsEqualSign(
-      Poincare::Context* context);
+  void createOutputLayouts(Poincare::Layout* exactOutput,
+                           Poincare::Layout* approximateOutput,
+                           Poincare::Context* context,
+                           bool canChangeDisplayOutput,
+                           KDCoordinate maxVisibleWidth, KDFont::Size font);
+  EqualSign equalSign(Poincare::Context* context);
 
-  // Additional Informations
-  AdditionalInformations additionalInformations();
+  void fillExpressionsForAdditionalResults(
+      Poincare::Expression* input, Poincare::Expression* exactOutput,
+      Poincare::Expression* approximateOutput);
+  AdditionalResultsType additionalResultsType();
 
  private:
   constexpr static KDCoordinate k_heightComputationFailureHeight = 50;
-  constexpr static const char* k_maximalIntegerWithAdditionalInformation =
-      "10000000000000000";
-
-  void setHeights(KDCoordinate height, KDCoordinate expandedHeight);
+  static bool DisplaysExact(DisplayOutput d) {
+    return d != DisplayOutput::ApproximateOnly;
+  }
+  void forceDisplayOutput(DisplayOutput d) { m_displayOutput = d; }
 
   /* Buffers holding text expressions have to be longer than the text written
    * by user (of maximum length TextField::MaxBufferSize()) because when we
    * print an expression we add omitted signs (multiplications, parenthesis...)
    */
   DisplayOutput m_displayOutput;
-  KDCoordinate m_height __attribute__((packed));
-  KDCoordinate m_expandedHeight __attribute__((packed));
   EqualSign m_equalSign;
+  /* Memoize the parameters used for computing the outputs in case they change
+   * later in the shared preferences and we need to compute additional
+   * results. */
+  Poincare::Preferences::ComplexFormat m_complexFormat;
+  Poincare::Preferences::AngleUnit m_angleUnit;
+#if __EMSCRIPTEN__
+  // See comment about emscripten alignment in Function::RecordDataBuffer
+  static_assert(
+      sizeof(emscripten_align1_short) == sizeof(KDCoordinate),
+      "emscripten_align1_short should have the same size as KDCoordinate");
+  emscripten_align1_short m_height;
+  emscripten_align1_short m_expandedHeight;
+#else
+  KDCoordinate m_height;
+  KDCoordinate m_expandedHeight;
+#endif
   char m_inputText[0];  // MUST be the last member variable
 };
 

@@ -58,8 +58,7 @@ Layout ListNode::createLayout(Preferences::PrintFloatMode floatDisplayMode,
 
 // Helper functions
 int ListNode::extremumIndex(const ApproximationContext& approximationContext,
-                            bool minimum,
-                            bool returnMinusOneIfCantApproximate) {
+                            bool minimum) {
   int numberOfElements = numberOfChildren();
   float currentExtremumValue = NAN;
   int returnIndex = -1;
@@ -68,16 +67,12 @@ int ListNode::extremumIndex(const ApproximationContext& approximationContext,
     float newValue =
         child->approximate(static_cast<float>(0), approximationContext)
             .toScalar();
-    /* Return -1 if the child approximation is undef but the child is not
-     * directly the expression "undef" or "nonreal" */
-    if (returnMinusOneIfCantApproximate && !child->isUndefined() &&
-        std::isnan(newValue)) {
+    if (std::isnan(newValue)) {
       return -1;
     }
-    bool newIsGreater =
-        Helpers::FloatIsGreater(newValue, currentExtremumValue, minimum);
-    if (returnIndex < 0 || (minimum && !newIsGreater) ||
-        (!minimum && newIsGreater)) {
+    assert(!std::isnan(currentExtremumValue) || returnIndex < 0);
+    if (returnIndex < 0 || (minimum && newValue < currentExtremumValue) ||
+        (!minimum && newValue > currentExtremumValue)) {
       returnIndex = i;
       currentExtremumValue = newValue;
     }
@@ -88,11 +83,12 @@ int ListNode::extremumIndex(const ApproximationContext& approximationContext,
 template <typename T>
 Evaluation<T> ListNode::extremumApproximation(
     const ApproximationContext& approximationContext, bool minimum) {
-  if (numberOfChildren() == 0) {
+  int index = extremumIndex(approximationContext, minimum);
+  if (index < 0) {
     return Complex<T>::Undefined();
   }
-  return childAtIndex(extremumIndex(approximationContext, minimum, false))
-      ->approximate(static_cast<T>(0), approximationContext);
+  return childAtIndex(index)->approximate(static_cast<T>(0),
+                                          approximationContext);
 }
 
 template <typename T>
@@ -138,12 +134,14 @@ Expression ListNode::shallowReduce(const ReductionContext& reductionContext) {
 
 template <typename T>
 Evaluation<T> ListNode::templatedApproximate(
-    const ApproximationContext& approximationContext) const {
+    const ApproximationContext& approximationContext, bool keepUndef) const {
   ListComplex<T> list = ListComplex<T>::Builder();
   for (ExpressionNode* c : children()) {
-    list.addChildAtIndexInPlace(c->approximate(T(), approximationContext),
-                                list.numberOfChildren(),
-                                list.numberOfChildren());
+    Evaluation<T> eval = c->approximate(T(), approximationContext);
+    if (keepUndef || !eval.isUndefined()) {
+      int n = list.numberOfChildren();
+      list.addChildAtIndexInPlace(eval, n, n);
+    }
   }
   return std::move(list);
 }
@@ -159,36 +157,42 @@ Expression List::Ones(int length) {
 }
 
 Expression List::shallowReduce(ReductionContext reductionContext) {
+  Expression myParent = parent();
+  bool isDependenciesList =
+      !myParent.isUninitialized() &&
+      myParent.type() == ExpressionNode::Type::Dependency &&
+      myParent.indexOfChild(*this) == Dependency::k_indexOfDependenciesList;
+
   // A list can't contain a matrix or a list
-  if (node()->hasMatrixOrListChild(reductionContext.context())) {
-    Expression myParent = parent();
-    bool isDependenciesList =
-        !myParent.isUninitialized() &&
-        myParent.type() == ExpressionNode::Type::Dependency &&
-        myParent.indexOfChild(*this) == Dependency::k_indexOfDependenciesList;
-    // If it's a list of dependencies, it can contain matrices and lists.
-    if (!isDependenciesList) {
-      return replaceWithUndefinedInPlace();
-    }
+  if (!isDependenciesList &&
+      node()->hasMatrixOrListChild(reductionContext.context())) {
+    return replaceWithUndefinedInPlace();
   }
 
-  // Bubble up dependencies of children
-  Expression e =
-      SimplificationHelper::bubbleUpDependencies(*this, reductionContext);
+  /* We do not reduce a list to undef when a child is undef because undef and
+   * {undef} are different objects. */
+  SimplificationHelper::UndefReduction undefReduction =
+      isDependenciesList
+          ? SimplificationHelper::UndefReduction::BubbleUpUndef
+          : SimplificationHelper::UndefReduction::DoNotBubbleUpUndef;
+
+  Expression e = SimplificationHelper::defaultShallowReduce(
+      *this, &reductionContext,
+      SimplificationHelper::BooleanReduction::DefinedOnBooleans,
+      SimplificationHelper::UnitReduction::KeepUnits,
+      SimplificationHelper::MatrixReduction::DefinedOnMatrix,
+      SimplificationHelper::ListReduction::DoNotDistributeOverLists,
+      SimplificationHelper::PointReduction::DefinedOnPoint, undefReduction);
   if (!e.isUninitialized()) {
     return e;
   }
-
-  /* We bypass the reduction to undef in case of undef children, as {undef} and
-   * undef are different objects. */
   return *this;
 }
 
 Expression List::extremum(const ReductionContext& reductionContext,
                           bool minimum) {
   const ApproximationContext approximationContext(reductionContext, true);
-  int extremumIndex =
-      node()->extremumIndex(approximationContext, minimum, true);
+  int extremumIndex = node()->extremumIndex(approximationContext, minimum);
   if (extremumIndex < 0) {
     return Undefined::Builder();
   }
@@ -199,17 +203,35 @@ bool List::isListOfPoints(Context* context) const {
   int n = numberOfChildren();
   for (int i = 0; i < n; i++) {
     Expression e = childAtIndex(i);
-    if (IsSymbolic(e, context)) {
-      Expression ve = context->expressionForSymbolAbstract(
-          static_cast<SymbolAbstract&>(e), false);
-      if (!(ve.isUninitialized() || IsPoint(ve, context))) {
+    if (IsSymbolic(e)) {
+      if (!context) {
         return false;
       }
-    } else if (!IsPoint(e, context)) {
+      Expression ve = context->expressionForSymbolAbstract(
+          static_cast<SymbolAbstract&>(e), false);
+      if (!(ve.isUninitialized() || IsPoint(ve))) {
+        return false;
+      }
+    } else if (!IsPoint(e)) {
       return false;
     }
   }
   return true;
+}
+
+template <typename T>
+Expression List::approximateAndRemoveUndefAndSort(
+    const ApproximationContext& approximationContext) const {
+  if (isUninitialized()) {
+    return Undefined::Builder();
+  }
+  Evaluation<T> eval =
+      node()->templatedApproximate<T>(approximationContext, false);
+  if (eval.type() != EvaluationNode<T>::Type::ListComplex) {
+    return Undefined::Builder();
+  }
+  static_cast<ListComplex<T>&>(eval).sort();
+  return eval.complexToExpression(approximationContext.complexFormat());
 }
 
 template Evaluation<float> ListNode::templatedApproximate(
@@ -231,4 +253,9 @@ template Evaluation<float> ListNode::productOfElements<float>(
     const ApproximationContext& approximationContext);
 template Evaluation<double> ListNode::productOfElements<double>(
     const ApproximationContext& approximationContext);
+
+template Expression List::approximateAndRemoveUndefAndSort<float>(
+    const ApproximationContext& approximationContext) const;
+template Expression List::approximateAndRemoveUndefAndSort<double>(
+    const ApproximationContext& approximationContext) const;
 }  // namespace Poincare

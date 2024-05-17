@@ -32,9 +32,8 @@ void InputHomogeneityTableCell::fillCellForLocation(Escher::HighlightCell *cell,
       (row == 0 && column != 0 && column == numberOfColumns() - 1 &&
        column < k_maxNumberOfColumns)) {
     /* The last column/row is empty and has its title grayed out. */
-    InferenceEvenOddBufferCell *typedCell =
-        static_cast<InferenceEvenOddBufferCell *>(cell);
-    typedCell->setTextColor(Palette::GrayDark);
+    static_cast<InferenceEvenOddBufferCell *>(cell)->setTextColor(
+        Palette::GrayDark);
   }
 }
 
@@ -47,12 +46,12 @@ int InputHomogeneityTableCell::fillColumnName(int column, char *buffer) {
   return length;
 }
 
-void InputHomogeneityTableCell::willDisplayInnerCellAtLocation(
+void InputHomogeneityTableCell::fillInnerCellForLocation(
     Escher::HighlightCell *cell, int column, int row) {
   InferenceEvenOddEditableCell *myCell =
       static_cast<InferenceEvenOddEditableCell *>(cell);
-  willDisplayValueCellAtLocation(myCell->editableTextCell()->textField(),
-                                 myCell, column, row, tableModel());
+  fillValueCellForLocation(myCell->editableTextCell()->textField(), myCell,
+                           column, row, tableModel());
 }
 
 void InputHomogeneityTableCell::createCells() {
@@ -69,13 +68,6 @@ void InputHomogeneityTableCell::createCells() {
                            k_homogeneityTableNumberOfReusableInnerCells>::
         createCellsWithOffset(k_homogeneityTableNumberOfReusableHeaderCells *
                               sizeof(InferenceEvenOddBufferCell));
-    /* We could equivalently use
-     * DynamicCellsDataSource<InferenceEvenOddEditableCell,
-     * k_homogeneityTableNumberOfReusableInnerCells>::m_delegate */
-    DynamicCellsDataSource<
-        InferenceEvenOddBufferCell,
-        k_homogeneityTableNumberOfReusableHeaderCells>::m_delegate->tableView()
-        ->reloadData(false);
   }
 }
 

@@ -80,13 +80,15 @@ void Device::poll() {
      * address 0; */
     setAddress(0);
     // Flush the FIFOs
-    m_ep0.reset();
+    flushFIFOs();
     m_ep0.setup();
     /* In setup(), we should set the MPSIZ field in OTG_DIEPCTL0 to the maximum
      * packet size depending on the enumeration speed (found in OTG_DSTS). We
      * should always get FullSpeed, so we set the packet size accordingly. */
   }
 }
+
+void Device::flushFIFOs() { m_ep0.reset(); }
 
 bool Device::isSoftDisconnected() const { return OTG.DCTL()->getSDIS(); }
 
@@ -108,7 +110,7 @@ bool Device::processSetupInRequest(SetupPacket* request,
       return getStatus(transferBuffer, transferBufferLength,
                        transferBufferMaxLength);
     case (int)Request::SetAddress:
-      // Make sure the request is adress is valid.
+      // Make sure the request is address is valid.
       assert(request->wValue() < 128);
       /* According to the reference manual, the address should be set after the
        * Status stage of the current transaction, but this is not true.

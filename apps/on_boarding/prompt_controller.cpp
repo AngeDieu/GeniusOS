@@ -1,8 +1,7 @@
 #include "prompt_controller.h"
 
+#include <apps/apps_container.h>
 #include <assert.h>
-
-#include "../apps_container.h"
 
 using namespace Escher;
 
@@ -63,10 +62,9 @@ PromptController::PromptController(const I18n::Message* messages,
 bool PromptController::handleEvent(Ion::Events::Event event) {
   if (event.isKeyPress() && event != Ion::Events::Back &&
       event != Ion::Events::OnOff) {
-    Container::activeApp()->modalViewController()->dismissModal();
+    App::app()->modalViewController()->dismissModal();
     AppsContainer* appsContainer = AppsContainer::sharedAppsContainer();
-    if (appsContainer->activeApp()->snapshot() ==
-        appsContainer->onBoardingAppSnapshot()) {
+    if (App::app()->snapshot() == appsContainer->onBoardingAppSnapshot()) {
       appsContainer->switchToBuiltinApp(appsContainer->homeAppSnapshot());
     }
     return true;

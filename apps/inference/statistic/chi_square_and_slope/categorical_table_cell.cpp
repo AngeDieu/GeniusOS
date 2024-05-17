@@ -27,7 +27,7 @@ void CategoricalTableCell::didBecomeFirstResponder() {
   if (selectedRow() < 0) {
     selectRow(1);
   }
-  Escher::Container::activeApp()->setFirstResponder(&m_selectableTableView);
+  Escher::App::app()->setFirstResponder(&m_selectableTableView);
 }
 
 bool CategoricalTableCell::handleEvent(Ion::Events::Event e) {
@@ -65,12 +65,12 @@ InputCategoricalTableCell::InputCategoricalTableCell(
       m_statistic(statistic),
       m_numberOfRows(0),
       m_numberOfColumns(0) {
-  m_selectableTableView.setBottomMargin(k_bottomMargin);
+  m_selectableTableView.margins()->setBottom(k_bottomMargin);
 }
 
 bool InputCategoricalTableCell::textFieldShouldFinishEditing(
     AbstractTextField *textField, Ion::Events::Event event) {
-  return event == Ion::Events::OK || event == Ion::Events::EXE ||
+  return TextFieldDelegate::textFieldShouldFinishEditing(textField, event) ||
          (event == Ion::Events::Right &&
           m_selectableTableView.selectedColumn() <
               tableViewDataSource()->numberOfColumns() - 1) ||
@@ -83,10 +83,9 @@ bool InputCategoricalTableCell::textFieldShouldFinishEditing(
 }
 
 bool InputCategoricalTableCell::textFieldDidFinishEditing(
-    Escher::AbstractTextField *textField, const char *text,
-    Ion::Events::Event event) {
-  double p = textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
-  if (textFieldDelegateApp()->hasUndefinedValue(p, false, false)) {
+    Escher::AbstractTextField *textField, Ion::Events::Event event) {
+  double p = ParseInputFloatValue<double>(textField->draftText());
+  if (HasUndefinedValue(p)) {
     return false;
   }
   int row = m_selectableTableView.selectedRow(),
@@ -107,7 +106,7 @@ bool InputCategoricalTableCell::textFieldDidFinishEditing(
       (column == tableViewDataSource()->numberOfColumns() - 1 &&
        relativeColumn(tableViewDataSource()->numberOfColumns()) <
            tableModel()->maxNumberOfColumns())) {
-    recomputeDimensions();
+    recomputeDimensionsAndReload();
   }
   m_selectableTableView.reloadCellAtLocation(column, row);
   m_selectableTableView.selectCellAtClippedLocation(column, row);
@@ -138,7 +137,7 @@ void InputCategoricalTableCell::initCell(InferenceEvenOddEditableCell,
   InferenceEvenOddEditableCell *c =
       static_cast<InferenceEvenOddEditableCell *>(cell);
   c->setParentResponder(&m_selectableTableView);
-  c->editableTextCell()->textField()->setDelegates(App::app(), this);
+  c->editableTextCell()->textField()->setDelegate(this);
 }
 
 bool InputCategoricalTableCell::deleteSelectedValue() {
@@ -160,12 +159,10 @@ bool InputCategoricalTableCell::deleteSelectedValue() {
     /* Due to an initial number of rows/ols of 2, we cannot ensure that at most
      * one row and one col have been deleted here */
     m_selectableTableView.deselectTable();
-    if (!recomputeDimensions()) {
-      /* A row has been deleted, but size didn't change, meaning the number of
-       * non-empty rows was k_maxNumberOfRows. However, recomputeData may have
-       * moved up multiple cells, m_inputTableView should be reloaded. */
-      m_selectableTableView.reloadData(false);
-    }
+    /* A row has been deleted, but size didn't change, meaning the number of
+     * non-empty rows was k_maxNumberOfRows. However, recomputeData may have
+     * moved up multiple cells, m_inputTableView should be reloaded. */
+    recomputeDimensionsAndReload(true);
     m_selectableTableView.selectCellAtClippedLocation(col, row, true);
     return true;
   }
@@ -186,26 +183,30 @@ void InputCategoricalTableCell::clearSelectedColumn() {
   tableModel()->deleteParametersInColumn(relativeColumn(column));
   tableModel()->recomputeData();
   m_selectableTableView.deselectTable();
-  m_selectableTableView.setContentOffset(KDPointZero);
-  if (!recomputeDimensions()) {
-    m_selectableTableView.reloadData(false);
-  }
+  m_selectableTableView.resetScroll();
+  recomputeDimensionsAndReload(true, true);
   m_selectableTableView.selectCellAtClippedLocation(column, 1, false);
 }
 
-bool InputCategoricalTableCell::recomputeDimensions() {
+bool InputCategoricalTableCell::recomputeDimensionsAndReload(
+    bool forceReloadTableCell, bool forceReloadPage) {
   Chi2Test::Index2D dimensions = tableModel()->computeDimensions();
-  if (m_numberOfRows == dimensions.row && m_numberOfColumns == dimensions.col) {
-    return false;
+  bool didChange = false;
+  if (m_numberOfRows != dimensions.row || m_numberOfColumns != dimensions.col) {
+    m_numberOfRows = dimensions.row;
+    m_numberOfColumns = dimensions.col;
+    didChange = true;
   }
-  m_numberOfRows = dimensions.row;
-  m_numberOfColumns = dimensions.col;
   /* Relayout when inner table changes size. We need to reload the table because
    * its width might change but it won't relayout as its frame isn't changed by
    * the InputCategoricalController */
-  m_selectableTableView.reloadData(false);
-  categoricalController()->selectableListView()->reloadData(false);
-  return true;
+  if (didChange || forceReloadTableCell) {
+    m_selectableTableView.reloadData(false);
+  }
+  if (didChange || forceReloadPage) {
+    categoricalController()->selectableListView()->reloadData(false);
+  }
+  return didChange;
 }
 
 Table *InputCategoricalTableCell::tableModel() {
@@ -249,13 +250,13 @@ HighlightCell *DoubleColumnTableCell::reusableCell(int i, int type) {
 
 void DoubleColumnTableCell::fillCellForLocation(Escher::HighlightCell *cell,
                                                 int column, int row) {
-  if (row == 0) {  // Header
+  if (typeAtLocation(column, row) == k_typeOfHeaderCells) {
     return;
   }
   InferenceEvenOddEditableCell *myCell =
       static_cast<InferenceEvenOddEditableCell *>(cell);
-  willDisplayValueCellAtLocation(myCell->editableTextCell()->textField(),
-                                 myCell, column, row - 1, tableModel());
+  fillValueCellForLocation(myCell->editableTextCell()->textField(), myCell,
+                           column, row - 1, tableModel());
 }
 
 }  // namespace Inference

@@ -16,10 +16,8 @@ class EditableExpressionCell : public Bordered,
                                public HighlightCell,
                                public Responder {
  public:
-  EditableExpressionCell(
-      Responder* parentResponder = nullptr,
-      InputEventHandlerDelegate* inputEventHandlerDelegate = nullptr,
-      LayoutFieldDelegate* layoutDelegate = nullptr);
+  EditableExpressionCell(Responder* parentResponder = nullptr,
+                         LayoutFieldDelegate* layoutDelegate = nullptr);
   LayoutField* layoutField() { return &m_layoutField; }
   void setHighlighted(bool highlight) override;
   Responder* responder() override { return this; }
@@ -31,13 +29,16 @@ class EditableExpressionCell : public Bordered,
   void drawRect(KDContext* ctx, KDRect rect) const override;
 
  private:
-  constexpr static KDCoordinate k_minimalHeigh =
+  constexpr static KDCoordinate k_minimalHeight =
       Metric::ExpressionInputBarMinimalHeight;
-  constexpr static KDCoordinate k_margin = Metric::LayoutViewMargin;
-  // topMargin has + 1 to look the same as when the separator was included in it
-  constexpr static KDCoordinate k_topMargin = k_margin + 1;
+  constexpr static KDCoordinate k_maximalHeight = 0.6 * Ion::Display::Height;
   constexpr static KDCoordinate k_separatorThickness =
       Metric::CellSeparatorThickness;
+  // topMargin has + 1 to look the same as when the separator was included in it
+  constexpr static KDMargins k_margins = {
+      {Metric::LayoutViewMargin, Metric::LayoutViewMargin},
+      {Metric::LayoutViewMargin + k_separatorThickness,
+       Metric::LayoutViewMargin}};
   LayoutField m_layoutField;
   char m_expressionBody[Poincare::PrintFloat::k_maxFloatCharSize];
 };

@@ -13,8 +13,7 @@ using namespace Escher;
 namespace Statistics {
 
 HistogramParameterController::HistogramParameterController(
-    Responder *parentResponder,
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate, Store *store)
+    Responder *parentResponder, Store *store)
     : FloatParameterController<double>(parentResponder),
       m_store(store),
       m_confirmPopUpController(
@@ -26,8 +25,12 @@ HistogramParameterController::HistogramParameterController(
               this)) {
   for (int i = 0; i < k_numberOfCells; i++) {
     m_cells[i].setParentResponder(&m_selectableListView);
-    m_cells[i].setDelegates(inputEventHandlerDelegate, this);
+    m_cells[i].setDelegate(this);
   }
+  m_cells[0].label()->setMessage(I18n::Message::RectangleWidth);
+  m_cells[0].subLabel()->setMessage(I18n::Message::RectangleWidthDescription);
+  m_cells[1].label()->setMessage(I18n::Message::BarStart);
+  m_cells[1].subLabel()->setMessage(I18n::Message::BarStartDescrition);
 }
 
 void HistogramParameterController::viewWillAppear() {
@@ -42,22 +45,13 @@ const char *HistogramParameterController::title() {
   return I18n::translate(I18n::Message::StatisticsGraphSettings);
 }
 
-void HistogramParameterController::fillCellForRow(HighlightCell *cell,
-                                                  int row) {
-  if (row == numberOfRows() - 1) {
-    return;
+KDCoordinate HistogramParameterController::nonMemoizedRowHeight(int row) {
+  int type = typeAtRow(row);
+  if (type == k_parameterCellType) {
+    return m_cells[row].minimalSizeForOptimalDisplay().height();
   }
-  MenuCellWithEditableText<MessageTextView, MessageTextView> *myCell =
-      static_cast<MenuCellWithEditableText<MessageTextView, MessageTextView> *>(
-          cell);
-  I18n::Message labels[k_numberOfCells] = {I18n::Message::RectangleWidth,
-                                           I18n::Message::BarStart};
-  I18n::Message sublabels[k_numberOfCells] = {
-      I18n::Message::RectangleWidthDescription,
-      I18n::Message::BarStartDescrition};
-  myCell->label()->setMessage(labels[row]);
-  myCell->subLabel()->setMessage(sublabels[row]);
-  FloatParameterController::fillCellForRow(cell, row);
+  assert(type == k_buttonCellType);
+  return Shared::FloatParameterController<double>::nonMemoizedRowHeight(row);
 }
 
 bool HistogramParameterController::handleEvent(Ion::Events::Event event) {
@@ -88,7 +82,7 @@ bool HistogramParameterController::setParameterAtIndex(int parameterIndex,
   const double nextFirstDrawnBarAbscissa =
       parameterIndex == 0 ? m_tempFirstDrawnBarAbscissa : value;
   if (!authorizedParameters(nextBarWidth, nextFirstDrawnBarAbscissa)) {
-    Container::activeApp()->displayWarning(I18n::Message::ForbiddenValue);
+    App::app()->displayWarning(I18n::Message::ForbiddenValue);
     return false;
   }
   if (parameterIndex == 0) {
@@ -125,6 +119,12 @@ bool HistogramParameterController::authorizedParameters(
     double barWidth, double firstDrawnBarAbscissa) {
   if (barWidth < 0.0) {
     // The bar width cannot be negative
+    return false;
+  }
+  // TODO: Histogram range is in float so we can't go over k_maxFloat
+  if (firstDrawnBarAbscissa > Poincare::Range1D::k_maxFloat ||
+      firstDrawnBarAbscissa < -Poincare::Range1D::k_maxFloat ||
+      barWidth > Poincare::Range1D::k_maxFloat) {
     return false;
   }
   assert(DoublePairStore::k_numberOfSeries > 0);

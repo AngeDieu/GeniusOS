@@ -11,7 +11,6 @@ class SingleInteractiveCurveViewRangeController : public SingleRangeController {
  public:
   SingleInteractiveCurveViewRangeController(
       Escher::Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
       InteractiveCurveViewRange* interactiveCurveViewRange,
       MessagePopUpController* confirmPopUpController);
 

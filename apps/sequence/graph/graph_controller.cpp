@@ -15,28 +15,24 @@ using namespace Escher;
 
 namespace Sequence {
 
-GraphController::GraphController(
-    Responder *parentResponder,
-    Escher::InputEventHandlerDelegate *inputEventHandlerDelegate,
-    Escher::ButtonRowController *header, CurveViewRange *interactiveRange,
-    CurveViewCursor *cursor, int *selectedCurveIndex,
-    SequenceStore *sequenceStore)
-    : FunctionGraphController(parentResponder, inputEventHandlerDelegate,
-                              header, interactiveRange, &m_view, cursor,
-                              selectedCurveIndex),
-      m_bannerView(this, inputEventHandlerDelegate, this),
+GraphController::GraphController(Responder *parentResponder,
+                                 Escher::ButtonRowController *header,
+                                 CurveViewRange *interactiveRange,
+                                 CurveViewCursor *cursor,
+                                 int *selectedCurveIndex,
+                                 SequenceStore *sequenceStore)
+    : FunctionGraphController(parentResponder, header, interactiveRange,
+                              &m_view, cursor, selectedCurveIndex),
+      m_bannerView(this, this),
       m_view(sequenceStore, interactiveRange, m_cursor, &m_bannerView,
              &m_cursorView),
       m_graphRange(interactiveRange),
-      m_curveParameterController(inputEventHandlerDelegate, this,
-                                 &m_cobwebController, interactiveRange,
+      m_curveParameterController(this, &m_cobwebController, interactiveRange,
                                  m_cursor),
       m_sequenceSelectionController(this),
-      m_termSumController(this, inputEventHandlerDelegate, &m_view,
-                          interactiveRange, m_cursor),
-      m_cobwebController(this, inputEventHandlerDelegate, &m_view,
-                         interactiveRange, m_cursor, &m_bannerView,
-                         &m_cursorView, sequenceStore),
+      m_termSumController(this, &m_view, interactiveRange, m_cursor),
+      m_cobwebController(this, &m_view, interactiveRange, m_cursor,
+                         &m_bannerView, &m_cursorView, sequenceStore),
       m_sequenceStore(sequenceStore) {
   m_graphRange->setDelegate(this);
 }
@@ -49,12 +45,12 @@ I18n::Message GraphController::emptyMessage() {
 }
 
 void GraphController::viewWillAppear() {
+  m_view.setCursorView(&m_cursorView);
+  m_cursorView.resetMemoization();
   if (m_cobwebController.stepIsInitialized()) {
     moveToRank(m_cobwebController.rankAtCurrentStep());
     m_cobwebController.resetStep();
   }
-  m_view.setCursorView(&m_cursorView);
-  m_cursorView.resetMemoization();
   m_smallestRank = m_sequenceStore->smallestInitialRank();
   FunctionGraphController::viewWillAppear();
 }
@@ -72,12 +68,9 @@ float GraphController::interestingXMin() const {
 }
 
 bool GraphController::textFieldDidFinishEditing(AbstractTextField *textField,
-                                                const char *text,
                                                 Ion::Events::Event event) {
-  Shared::TextFieldDelegateApp *myApp = textFieldDelegateApp();
-  double floatBody =
-      textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
-  if (myApp->hasUndefinedValue(floatBody)) {
+  double floatBody = ParseInputFloatValue<double>(textField->draftText());
+  if (HasUndefinedValue(floatBody)) {
     return false;
   }
   floatBody = std::fmax(0, std::round(floatBody));
@@ -86,9 +79,7 @@ bool GraphController::textFieldDidFinishEditing(AbstractTextField *textField,
 }
 
 void GraphController::moveToRank(int n) {
-  double y =
-      xyValues(selectedCurveIndex(), n, textFieldDelegateApp()->localContext())
-          .y();
+  double y = xyValues(selectedCurveIndex(), n, App::app()->localContext()).y();
   m_cursor->moveTo(n, n, y);
   panToMakeCursorVisible();
   reloadBannerView();
@@ -97,12 +88,6 @@ void GraphController::moveToRank(int n) {
 
 Range2D GraphController::optimalRange(bool computeX, bool computeY,
                                       Range2D originalRange) const {
-  Zoom::Function2DWithContext<float> evaluator = [](float x, const void *model,
-                                                    Context *context) {
-    const Shared::Sequence *s = static_cast<const Shared::Sequence *>(model);
-    return s->evaluateXYAtParameter(x, context);
-  };
-
   Range2D result;
   if (computeX) {
     float xMin = interestingXMin();
@@ -111,14 +96,22 @@ Range2D GraphController::optimalRange(bool computeX, bool computeY,
     *result.x() = *originalRange.x();
   }
   if (computeY) {
+    Poincare::Context *context = App::app()->localContext();
     Zoom zoom(result.xMin(), result.xMax(),
-              InteractiveCurveViewRange::NormalYXRatio(),
-              textFieldDelegateApp()->localContext(), k_maxFloat);
+              InteractiveCurveViewRange::NormalYXRatio(), context, k_maxFloat);
     int nbOfActiveModels = functionStore()->numberOfActiveFunctions();
+    Shared::Sequence *sequences[nbOfActiveModels];
     for (int i = 0; i < nbOfActiveModels; i++) {
-      Shared::Sequence *s =
-          functionStore()->modelForRecord(recordAtCurveIndex(i));
-      zoom.fitFullFunction(evaluator, s);
+      sequences[i] = functionStore()->modelForRecord(recordAtCurveIndex(i));
+    }
+    int min = std::ceil(result.xMin());
+    int max = std::floor(result.xMax());
+    /* Loop first on abscissa so that sequences step ranks together. */
+    for (int n = min; n <= max; n++) {
+      for (int i = 0; i < nbOfActiveModels; i++) {
+        zoom.fitPoint(sequences[i]->evaluateXYAtParameter(static_cast<float>(n),
+                                                          context));
+      }
     }
     *result.y() = *zoom.range(true, false).y();
   }
@@ -151,7 +144,7 @@ bool GraphController::moveCursorHorizontally(OMG::HorizontalDirection direction,
     return false;
   }
   double y = s->evaluateXYAtParameter(static_cast<double>(x),
-                                      textFieldDelegateApp()->localContext())
+                                      App::app()->localContext())
                  .y();
   m_cursor->moveTo(x, x, y);
   return true;

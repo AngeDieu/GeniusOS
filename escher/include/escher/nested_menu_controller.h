@@ -3,13 +3,13 @@
 
 #include <escher/chevron_view.h>
 #include <escher/container.h>
+#include <escher/editable_fiel_help_box.h>
+#include <escher/editable_field.h>
 #include <escher/highlight_cell.h>
-#include <escher/input_event_handler.h>
 #include <escher/list_view_data_source.h>
 #include <escher/menu_cell.h>
 #include <escher/message_text_view.h>
 #include <escher/metric.h>
-#include <escher/pervasive_box.h>
 #include <escher/selectable_list_view.h>
 #include <escher/stack_view_controller.h>
 #include <ion.h>
@@ -21,7 +21,7 @@ class NestedMenuController : public StackViewController,
                              public StandardMemoizedListViewDataSource,
                              public SelectableListViewDataSource,
                              public SelectableListViewDelegate,
-                             public PervasiveBox {
+                             public EditableFieldHelpBox {
  public:
   NestedMenuController(Responder* parentResponder,
                        I18n::Message title = (I18n::Message)0);
@@ -30,7 +30,7 @@ class NestedMenuController : public StackViewController,
   // StackViewController
   bool handleEvent(Ion::Events::Event event) override;
   void didBecomeFirstResponder() override {
-    Container::activeApp()->setFirstResponder(&m_listController);
+    App::app()->setFirstResponder(&m_listController);
   }
   void viewWillAppear() override;
 
@@ -89,9 +89,8 @@ class NestedMenuController : public StackViewController,
 
    private:
     constexpr static int k_maxTitleLength =
-        (Ion::Display::Width - Metric::PopUpLeftMargin -
-         2 * Metric::CellSeparatorThickness - Metric::CellLeftMargin -
-         Metric::CellRightMargin - Metric::PopUpRightMargin) /
+        (Ion::Display::Width - Metric::PopUpMargins.width() -
+         2 * Metric::CellSeparatorThickness - Metric::CellMargins.width()) /
         KDFont::GlyphWidth(KDFont::Size::Small);
     constexpr static int k_maxModelTreeDepth =
         StackViewController::k_maxNumberOfChildren - 1;

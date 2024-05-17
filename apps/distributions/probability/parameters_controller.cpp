@@ -11,10 +11,9 @@ namespace Distributions {
 /* Parameters Controller */
 
 ParametersController::ParametersController(
-    Escher::StackViewController *parentResponder,
-    InputEventHandlerDelegate *inputEventHandlerDelegate,
-    Distribution *distribution, CalculationController *calculationController)
-    : FloatParameterController<double>(parentResponder),
+    Escher::StackViewController *parentResponder, Distribution *distribution,
+    CalculationController *calculationController)
+    : FloatParameterController<double>(parentResponder, &m_headerView),
       m_headerView(I18n::Message::DefineParameters, k_messageFormat),
       m_bottomView(I18n::Message::LeaveAFieldEmpty, k_messageFormat),
       m_distribution(distribution),
@@ -23,9 +22,8 @@ ParametersController::ParametersController(
   m_okButton.setMessage(I18n::Message::Next);
   for (int i = 0; i < k_maxNumberOfCells; i++) {
     m_menuListCell[i].setParentResponder(&m_selectableListView);
-    m_menuListCell[i].setDelegates(inputEventHandlerDelegate, this);
+    m_menuListCell[i].setDelegate(this);
   }
-  setTopView(&m_headerView);
 }
 
 const char *ParametersController::title() {
@@ -50,8 +48,6 @@ void ParametersController::viewWillAppear() {
   } else {
     setBottomView(nullptr);
   }
-  resetMemoization();
-  m_selectableListView.reloadData();
   FloatParameterController::viewWillAppear();
 }
 
@@ -60,9 +56,10 @@ int ParametersController::numberOfRows() const {
 }
 
 void ParametersController::fillCellForRow(HighlightCell *cell, int row) {
-  if (row == numberOfRows() - 1) {
+  if (typeAtRow(row) == k_buttonCellType) {
     return;
   }
+  assert(typeAtRow(row) == k_parameterCellType);
   MenuCellWithEditableText<LayoutView, MessageTextView> *myCell =
       static_cast<MenuCellWithEditableText<LayoutView, MessageTextView> *>(
           cell);
@@ -74,6 +71,16 @@ void ParametersController::fillCellForRow(HighlightCell *cell, int row) {
     return;
   }
   FloatParameterController::fillCellForRow(cell, row);
+}
+
+KDCoordinate ParametersController::nonMemoizedRowHeight(int row) {
+  int type = typeAtRow(row);
+  if (type == k_parameterCellType) {
+    MenuCellWithEditableText<LayoutView, MessageTextView> tempCell;
+    return protectedNonMemoizedRowHeight(&tempCell, row);
+  }
+  assert(type == k_buttonCellType);
+  return Shared::FloatParameterController<double>::nonMemoizedRowHeight(row);
 }
 
 HighlightCell *ParametersController::reusableParameterCell(int index,
@@ -101,7 +108,7 @@ double ParametersController::parameterAtIndex(int index) {
 
 bool ParametersController::setParameterAtIndex(int parameterIndex, double f) {
   if (!m_distribution->authorizedParameterAtIndex(f, parameterIndex)) {
-    Container::activeApp()->displayWarning(I18n::Message::ForbiddenValue);
+    App::app()->displayWarning(I18n::Message::ForbiddenValue);
     return false;
   }
   m_distribution->setParameterAtIndex(f, parameterIndex);
@@ -110,10 +117,8 @@ bool ParametersController::setParameterAtIndex(int parameterIndex, double f) {
 }
 
 bool ParametersController::textFieldDidFinishEditing(
-    AbstractTextField *textField, const char *text, Ion::Events::Event event) {
-  if (FloatParameterController::textFieldDidFinishEditing(textField, text,
-                                                          event)) {
-    resetMemoization();
+    AbstractTextField *textField, Ion::Events::Event event) {
+  if (FloatParameterController::textFieldDidFinishEditing(textField, event)) {
     m_selectableListView.reloadData();
     return true;
   }

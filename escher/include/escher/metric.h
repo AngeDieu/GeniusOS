@@ -4,39 +4,30 @@
 #include <ion/display.h>
 #include <kandinsky/coordinate.h>
 #include <kandinsky/font.h>
+#include <kandinsky/margins.h>
 
 namespace Escher {
 
 class Metric {
  public:
   // Common margins
-  constexpr static KDCoordinate CommonMargin = 14;
-  constexpr static KDCoordinate ScrollViewBarThickness = 2;
-  constexpr static KDCoordinate CommonBottomMargin = CommonMargin;
+  constexpr static KDMargins CommonMargins = KDMargins(14);
   constexpr static KDCoordinate CommonLargeMargin = 10;
-  constexpr static KDCoordinate CommonLeftMargin = CommonMargin;
-  constexpr static KDCoordinate CommonMenuMargin =
-      (CommonMargin - ScrollViewBarThickness) / 2;
-  constexpr static KDCoordinate CommonRightMargin = CommonMargin;
   constexpr static KDCoordinate CommonSmallMargin = 5;
-  constexpr static KDCoordinate CommonTopMargin = CommonMargin;
+  constexpr static KDCoordinate ScrollViewBarThickness = 2;
+  constexpr static KDCoordinate CommonMenuMargin =
+      (CommonMargins.left() - ScrollViewBarThickness) / 2;
 
   // General cell margins
-  constexpr static KDCoordinate BigCellMargin = 8;
-  constexpr static KDCoordinate CellBottomMargin = BigCellMargin;
-  constexpr static KDCoordinate CellHorizontalElementMargin = BigCellMargin;
-  constexpr static KDCoordinate CellLeftMargin = BigCellMargin;
-  constexpr static KDCoordinate CellRightMargin = BigCellMargin;
-  constexpr static KDCoordinate CellTopMargin = BigCellMargin;
+  constexpr static KDMargins CellMargins = KDMargins(8);
+  constexpr static KDCoordinate CellHorizontalElementMargin =
+      CellMargins.left();
   constexpr static KDCoordinate CellSeparatorThickness = 1;
   constexpr static KDCoordinate CellVerticalElementMargin = 4;
 
   // Pop-up margins
-  constexpr static KDCoordinate PopUpMargin = 27;
-  constexpr static KDCoordinate PopUpBottomMargin = 55;
-  constexpr static KDCoordinate PopUpLeftMargin = PopUpMargin;
-  constexpr static KDCoordinate PopUpRightMargin = PopUpMargin;
-  constexpr static KDCoordinate PopUpTopMargin = PopUpMargin;
+  constexpr static KDMargins PopUpMargins = {27, 27, 27, 55};
+  constexpr static KDMargins PopUpMarginsNoBottom = {27, 27, 27, 0};
 
   // Misc margins
   constexpr static KDCoordinate BannerTextMargin = 2;
@@ -44,7 +35,7 @@ class Metric {
   constexpr static KDCoordinate LayoutViewMargin = 5;
   constexpr static KDCoordinate ExpressionInputBarMinimalHeight = 37;
   constexpr static KDCoordinate EditableExpressionAdditionalMargin =
-      BigCellMargin - LayoutViewMargin;
+      CellMargins.left() - LayoutViewMargin;
   constexpr static KDCoordinate FractionAndConjugateHorizontalMargin = 2;
   constexpr static KDCoordinate FractionAndConjugateHorizontalOverflow = 2;
   constexpr static KDCoordinate MinimalBracketAndParenthesisChildHeight = 16;
@@ -60,6 +51,10 @@ class Metric {
   constexpr static KDCoordinate ButtonRowEmbossedStyleHeightLarge = 52;
   constexpr static KDCoordinate ButtonRowEmbossedStyleHeightMarginSmall = 6;
   constexpr static KDCoordinate ButtonRowEmbossedStyleHeightMarginLarge = 8;
+
+  // Color indicators
+  constexpr static KDCoordinate HorizontalColorIndicatorThickness = 2;
+  constexpr static KDCoordinate VerticalColorIndicatorThickness = 3;
 
   // Misc
   constexpr static KDCoordinate TitleBarHeight = 18;

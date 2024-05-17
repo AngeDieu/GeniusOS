@@ -15,9 +15,6 @@ class AbstractEvenOddEditableTextCell : public EvenOddCell, public Responder {
   Responder* responder() override { return this; }
   const char* text() const override { return editableTextCell()->text(); }
   void didBecomeFirstResponder() override;
-  void setFont(KDFont::Size font) {
-    editableTextCell()->textField()->setFont(font);
-  }
 
  private:
   constexpr static KDCoordinate k_rightMargin = Escher::Metric::SmallCellMargin;
@@ -31,17 +28,14 @@ class AbstractEvenOddEditableTextCell : public EvenOddCell, public Responder {
   void layoutSubviews(bool force = false) override;
 };
 
-template <int NumberOfSignificantDigits =
-              Poincare::Preferences::VeryLargeNumberOfSignificantDigits>
+template <int NumberOfSignificantDigits>
 class EvenOddEditableTextCell : public AbstractEvenOddEditableTextCell {
  public:
-  EvenOddEditableTextCell(
-      Responder* parentResponder = nullptr,
-      InputEventHandlerDelegate* inputEventHandlerDelegate = nullptr,
-      TextFieldDelegate* delegate = nullptr,
-      KDGlyph::Format format = k_smallCellDefaultFormat)
+  EvenOddEditableTextCell(Responder* parentResponder = nullptr,
+                          TextFieldDelegate* delegate = nullptr,
+                          KDGlyph::Format format = k_smallCellDefaultFormat)
       : AbstractEvenOddEditableTextCell(parentResponder),
-        m_editableCell(this, inputEventHandlerDelegate, delegate, format) {}
+        m_editableCell(this, delegate, format) {}
 
   AbstractEditableTextCell* editableTextCell() override {
     return &m_editableCell;

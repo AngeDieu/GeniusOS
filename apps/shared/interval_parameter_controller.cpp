@@ -11,22 +11,22 @@ IntervalParameterController::SharedTempIntervalParameters() {
 }
 
 IntervalParameterController::IntervalParameterController(
-    Responder *parentResponder,
-    InputEventHandlerDelegate *inputEventHandlerDelegate)
+    Responder *parentResponder)
     : FloatParameterController<double>(parentResponder),
       m_interval(nullptr),
       m_title(I18n::Message::IntervalSet),
-      m_startMessage(I18n::Message::XStart),
-      m_endMessage(I18n::Message::XEnd),
       m_confirmPopUpController(Invocation::Builder<IntervalParameterController>(
           [](IntervalParameterController *controller, void *sender) {
             controller->stackController()->pop();
             return true;
           },
           this)) {
+  I18n::Message messages[k_totalNumberOfCell] = {
+      I18n::Message::XStart, I18n::Message::XEnd, I18n::Message::Step};
   for (int i = 0; i < k_totalNumberOfCell; i++) {
     m_intervalCells[i].setParentResponder(&m_selectableListView);
-    m_intervalCells[i].setDelegates(inputEventHandlerDelegate, this);
+    m_intervalCells[i].setDelegate(this);
+    m_intervalCells[i].label()->setMessage(messages[i]);
   }
 }
 
@@ -43,24 +43,19 @@ int IntervalParameterController::numberOfRows() const {
   return k_totalNumberOfCell + 1;
 }
 
-void IntervalParameterController::setStartEndMessages(
-    I18n::Message startMessage, I18n::Message endMessage) {
-  m_startMessage = startMessage;
-  m_endMessage = endMessage;
+KDCoordinate IntervalParameterController::nonMemoizedRowHeight(int row) {
+  int type = typeAtRow(row);
+  if (type == k_parameterCellType) {
+    return m_intervalCells[row].minimalSizeForOptimalDisplay().height();
+  }
+  assert(type == k_buttonCellType);
+  return Shared::FloatParameterController<double>::nonMemoizedRowHeight(row);
 }
 
-void IntervalParameterController::fillCellForRow(HighlightCell *cell, int row) {
-  if (row == numberOfRows() - 1) {
-    return;
-  }
-
-  MenuCellWithEditableText<MessageTextView> *myCell =
-      static_cast<MenuCellWithEditableText<MessageTextView> *>(cell);
-  assert(row >= 0 && row < 3);
-  I18n::Message m = row == 0 ? m_startMessage
-                             : (row == 1 ? m_endMessage : I18n::Message::Step);
-  myCell->label()->setMessage(m);
-  FloatParameterController::fillCellForRow(cell, row);
+void IntervalParameterController::setStartEndMessages(
+    I18n::Message startMessage, I18n::Message endMessage) {
+  m_intervalCells[0].label()->setMessage(startMessage);
+  m_intervalCells[1].label()->setMessage(endMessage);
 }
 
 double IntervalParameterController::parameterAtIndex(int index) {
@@ -73,7 +68,7 @@ double IntervalParameterController::parameterAtIndex(int index) {
 bool IntervalParameterController::setParameterAtIndex(int parameterIndex,
                                                       double f) {
   if (f <= 0.0f && parameterIndex == 2) {
-    Container::activeApp()->displayWarning(I18n::Message::ForbiddenValue);
+    App::app()->displayWarning(I18n::Message::ForbiddenValue);
     return false;
   }
   double start =
@@ -81,7 +76,7 @@ bool IntervalParameterController::setParameterAtIndex(int parameterIndex,
   double end = parameterIndex == 1 ? f : SharedTempIntervalParameters()->end();
   if (start > end) {
     if (parameterIndex == 1) {
-      Container::activeApp()->displayWarning(I18n::Message::ForbiddenValue);
+      App::app()->displayWarning(I18n::Message::ForbiddenValue);
       return false;
     }
     double g = f + 1.0;

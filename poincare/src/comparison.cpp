@@ -21,8 +21,9 @@ const char* ComparisonNode::ComparisonOperatorString(OperatorType type) {
 }
 
 Layout ComparisonNode::ComparisonOperatorLayout(OperatorType type) {
+  const char* operatorString = ComparisonOperatorString(type);
   Layout result = LayoutHelper::StringToCodePointsLayout(
-      ComparisonOperatorString(type), strlen(ComparisonOperatorString(type)));
+      operatorString, strlen(operatorString));
   assert(result.type() == LayoutNode::Type::CodePointLayout ||
          result.type() == LayoutNode::Type::CombinedCodePointsLayout);
   return result;
@@ -210,6 +211,14 @@ int ComparisonNode::serialize(char* buffer, int bufferSize,
   return numberOfChar;
 }
 
+bool ComparisonNode::childNeedsSystemParenthesesAtSerialization(
+    const TreeNode* child) const {
+  int i = indexOfChild(child);
+  Expression e = Comparison(this).childAtIndex(i);
+  // Factorials can mess up with equal signs
+  return e.recursivelyMatches(Expression::IsFactorial, nullptr);
+}
+
 Evaluation<float> ComparisonNode::approximate(
     SinglePrecision p, const ApproximationContext& approximationContext) const {
   return templatedApproximate<float>(approximationContext);
@@ -252,7 +261,8 @@ Evaluation<T> ComparisonNode::templatedApproximate(
        * so the fact that it's strictly greater or not is not important. */
       leftChildIsGreater = BinaryToTrinaryBool(scalarDifference > 0.0);
       chidlrenAreEqual =
-          BinaryToTrinaryBool(std::fabs(scalarDifference) <= epsilon);
+          BinaryToTrinaryBool(std::isfinite(scalarDifference) &&
+                              std::fabs(scalarDifference) <= epsilon);
     }
     TrinaryBoolean truthValue = TruthValueOfOperator(
         m_operatorsList[i - 1], chidlrenAreEqual, leftChildIsGreater);

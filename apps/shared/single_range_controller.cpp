@@ -9,13 +9,13 @@ namespace Shared {
 
 SingleRangeController::SingleRangeController(
     Responder *parentResponder,
-    InputEventHandlerDelegate *inputEventHandlerDelegate,
     Shared::MessagePopUpController *confirmPopUpController)
     : FloatParameterController<float>(parentResponder),
+      m_autoParam(false),
       m_confirmPopUpController(confirmPopUpController) {
   for (int i = 0; i < k_numberOfTextCells; i++) {
     m_boundsCells[i].setParentResponder(&m_selectableListView);
-    m_boundsCells[i].setDelegates(inputEventHandlerDelegate, this);
+    m_boundsCells[i].setDelegate(this);
   }
   m_autoCell.label()->setMessage(I18n::Message::DefaultSetting);
 }
@@ -55,6 +55,7 @@ void SingleRangeController::fillCellForRow(Escher::HighlightCell *cell,
     m_autoCell.accessory()->setState(m_autoParam);
     return;
   }
+  assert(type == k_buttonCellType || type == k_parameterCellType);
   FloatParameterController<float>::fillCellForRow(cell, row);
 }
 
@@ -84,9 +85,13 @@ HighlightCell *SingleRangeController::reusableParameterCell(int index,
 
 bool SingleRangeController::setParameterAtIndex(int parameterIndex, float f) {
   assert(parameterIndex == 1 || parameterIndex == 2);
-  parameterIndex == 1 ? m_rangeParam.setMin(f, limit())
-                      : m_rangeParam.setMax(f, limit());
+  parameterIndex == 1 ? m_rangeParam.setMinKeepingValid(f, limit())
+                      : m_rangeParam.setMaxKeepingValid(f, limit());
   return true;
+}
+
+void SingleRangeController::setRange(float min, float max) {
+  m_rangeParam = Range1D::ValidRangeBetween(min, max, limit());
 }
 
 TextField *SingleRangeController::textFieldOfCellAtIndex(HighlightCell *cell,
@@ -102,14 +107,12 @@ void SingleRangeController::buttonAction() {
 }
 
 bool SingleRangeController::textFieldDidFinishEditing(
-    Escher::AbstractTextField *textField, const char *text,
-    Ion::Events::Event event) {
-  bool result = FloatParameterController<float>::textFieldDidFinishEditing(
-      textField, text, event);
-  if (result) {
+    Escher::AbstractTextField *textField, Ion::Events::Event event) {
+  if (FloatParameterController::textFieldDidFinishEditing(textField, event)) {
     setAutoStatus(false);
+    return true;
   }
-  return result;
+  return false;
 }
 
 float SingleRangeController::parameterAtIndex(int index) {
@@ -124,7 +127,6 @@ void SingleRangeController::setAutoStatus(bool autoParam) {
   m_autoParam = autoParam;
   if (m_autoParam) {
     setAutoRange();
-    resetMemoization();
     m_selectableListView.reloadData();
   } else {
     m_selectableListView.reloadCell(0);

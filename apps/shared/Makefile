@@ -35,6 +35,7 @@ app_shared_test_src = $(addprefix apps/shared/,\
 )
 
 app_shared_src = $(addprefix apps/shared/,\
+  app_with_store_menu.cpp \
   banner_view.cpp \
   buffer_function_title_cell.cpp \
   calculus_column_parameter_controller.cpp \
@@ -48,7 +49,6 @@ app_shared_src = $(addprefix apps/shared/,\
   editable_cell_table_view_controller.cpp \
   explicit_float_parameter_controller.cpp \
   expression_display_permissions.cpp \
-  layout_field_delegate_app.cpp \
   expression_function_title_cell.cpp \
   expression_model_list_controller.cpp \
   float_parameter_controller.cpp \
@@ -62,24 +62,20 @@ app_shared_src = $(addprefix apps/shared/,\
   function_title_cell.cpp \
   function_zoom_and_pan_curve_view_controller.cpp \
   go_to_parameter_controller.cpp \
-  input_event_handler_delegate_app.cpp \
   interactive_curve_view_controller.cpp \
   interval.cpp \
   interval_parameter_controller.cpp \
-  layout_field_delegate.cpp \
   list_parameter_controller.cpp \
   localization_controller.cpp \
+  math_field_delegate.cpp \
+  math_toolbox_controller.cpp \
+  math_variable_box_controller.cpp \
   memoized_cursor_view.cpp \
   menu_controller.cpp \
-  message_view.cpp \
   ok_view.cpp \
   parameter_text_field_delegate.cpp \
-  prefaced_table_view.cpp \
-  prefaced_twice_table_view.cpp \
   range_parameter_controller.cpp \
   round_cursor_view.cpp \
-  scrollable_multiple_layouts_view.cpp \
-  scrollable_two_layouts_cell.cpp \
   sequence.cpp \
   sequence_context.cpp \
   sequence_store.cpp \
@@ -93,9 +89,6 @@ app_shared_src = $(addprefix apps/shared/,\
   store_menu_controller.cpp \
   sum_graph_controller.cpp \
   tab_table_controller.cpp \
-  text_field_delegate.cpp \
-  text_field_delegate_app.cpp \
-  text_field_with_extension.cpp \
   values_controller.cpp \
   values_parameter_controller.cpp \
   vertical_cursor_view.cpp \

@@ -12,19 +12,9 @@ class EditorView : public Escher::Responder,
                    public Escher::ScrollViewDelegate {
  public:
   EditorView(Escher::Responder* parentResponder, App* pythonDelegate);
-  PythonTextArea::AutocompletionType autocompletionType(
-      const char** autocompletionBeginning,
-      const char** autocompletionEnd) const {
-    return m_textArea.autocompletionType(nullptr, autocompletionBeginning,
-                                         autocompletionEnd);
-  }
   bool isAutocompleting() const;
   void resetSelection();
-  void setTextAreaDelegates(
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      Escher::TextAreaDelegate* delegate) {
-    m_textArea.setDelegates(inputEventHandlerDelegate, delegate);
-  }
+  void removeAutocompletionText();
   const char* text() const { return m_textArea.text(); }
   void setText(char* textBuffer, size_t textBufferSize) {
     m_textArea.setText(textBuffer, textBufferSize);

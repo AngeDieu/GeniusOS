@@ -77,16 +77,15 @@ UnitNode::DimensionVector UnitNode::DimensionVector::FromBaseUnits(
     if (factor.type() == ExpressionNode::Type::Power) {
       Expression exp = factor.childAtIndex(1);
       assert(exp.type() == ExpressionNode::Type::Rational);
-      // Using the closest integer to the exponent.
-      float exponentFloat = static_cast<const Rational&>(exp)
-                                .node()
-                                ->templatedApproximate<float>();
-      if (exponentFloat != std::round(exponentFloat)) {
+      if (!static_cast<Rational&>(exp).isInteger()) {
         /* If non-integer exponents are found, we return a null vector so that
          * Multiplication::shallowBeautify will not attempt to find derived
          * units. */
         return nullVector;
       }
+      float exponentFloat = static_cast<const Rational&>(exp)
+                                .node()
+                                ->templatedApproximate<float>();
       /* We limit to INT_MAX / 3 because an exponent might get bigger with
        * simplification. As a worst case scenario, (_s²_m²_kg/_A²)^n should be
        * simplified to (_s^5_S)^n. If 2*n is under INT_MAX, 5*n might not. */
@@ -1154,11 +1153,9 @@ static void chooseBestRepresentativeAndPrefixForValueOnSingleUnit(
     Expression childExponent = factor.childAtIndex(1);
     assert(factor.childAtIndex(0).type() == ExpressionNode::Type::Unit);
     assert(factor.childAtIndex(1).type() == ExpressionNode::Type::Rational);
-    exponent =
-        static_cast<Rational&>(childExponent)
-            .approximateToScalar<double>(reductionContext.context(),
-                                         reductionContext.complexFormat(),
-                                         reductionContext.angleUnit());
+    ApproximationContext approximationContext(reductionContext);
+    exponent = static_cast<Rational&>(childExponent)
+                   .approximateToScalar<double>(approximationContext);
     factor = factor.childAtIndex(0);
   }
   assert(factor.type() == ExpressionNode::Type::Unit);
@@ -1215,7 +1212,7 @@ bool Unit::ShouldDisplayAdditionalOutputs(double value, Expression unit,
 int Unit::SetAdditionalExpressions(Expression units, double value,
                                    Expression* dest, int availableLength,
                                    const ReductionContext& reductionContext,
-                                   Expression exactOutput) {
+                                   const Expression exactOutput) {
   if (units.isUninitialized()) {
     return 0;
   }
@@ -1260,8 +1257,8 @@ Expression Unit::BuildSplit(double value, const Unit* units, int length,
     return Multiplication::Builder(Number::FloatNumber(basedValue), units[0]);
   }
   double err =
-      std::pow(10.0, Poincare::PrintFloat::k_numberOfStoredSignificantDigits -
-                         1 - std::ceil(log10(std::fabs(basedValue))));
+      std::pow(10.0, Poincare::PrintFloat::k_maxNumberOfSignificantDigits - 1 -
+                         std::ceil(log10(std::fabs(basedValue))));
   double remain = std::round(basedValue * err) / err;
 
   Addition res = Addition::Builder();
@@ -1317,9 +1314,8 @@ Expression Unit::ConvertTemperatureUnits(
   }
 
   const Prefix* startPrefix = static_cast<Unit&>(startUnit).node()->prefix();
-  double value = e.approximateToScalar<double>(reductionContext.context(),
-                                               reductionContext.complexFormat(),
-                                               reductionContext.angleUnit());
+  ApproximationContext approximationContext(reductionContext);
+  double value = e.approximateToScalar<double>(approximationContext);
   return Multiplication::Builder(
       Float<double>::Builder(TemperatureRepresentative::ConvertTemperatures(
                                  value * std::pow(10., startPrefix->exponent()),
@@ -1355,15 +1351,15 @@ bool Unit::IsForbiddenTemperatureProduct(Expression e) {
     return true;
   }
   Expression p = e.parent();
-  if (p.isUninitialized() || p.type() == ExpressionNode::Type::UnitConvert ||
-      p.type() == ExpressionNode::Type::Store) {
+  if (p.isUninitialized() || p.isOfType({ExpressionNode::Type::UnitConvert,
+                                         ExpressionNode::Type::Store})) {
     return false;
   }
   Expression pp = p.parent();
-  return !(p.type() == ExpressionNode::Type::Opposite &&
-           (pp.isUninitialized() ||
-            pp.type() == ExpressionNode::Type::UnitConvert ||
-            pp.type() == ExpressionNode::Type::Store));
+  return !(
+      p.type() == ExpressionNode::Type::Opposite &&
+      (pp.isUninitialized() || pp.isOfType({ExpressionNode::Type::UnitConvert,
+                                            ExpressionNode::Type::Store})));
 }
 
 bool Unit::AllowImplicitAddition(
@@ -1431,11 +1427,12 @@ Expression Unit::shallowReduce(ReductionContext reductionContext) {
       node()->representative() !=
           k_temperatureRepresentatives + k_kelvinRepresentativeIndex) {
     Expression p = parent();
-    if (p.isUninitialized() || p.type() == ExpressionNode::Type::UnitConvert ||
-        p.type() == ExpressionNode::Type::Store ||
+    if (p.isUninitialized() ||
+        p.isOfType({ExpressionNode::Type::UnitConvert,
+                    ExpressionNode::Type::Store,
+                    ExpressionNode::Type::Opposite}) ||
         (p.type() == ExpressionNode::Type::Multiplication &&
-         p.numberOfChildren() == 2) ||
-        p.type() == ExpressionNode::Type::Opposite) {
+         p.numberOfChildren() == 2)) {
       /* If the parent is a UnitConvert, the temperature is always legal.
        * Otherwise, we need to wait until the reduction of the multiplication
        * to fully detect forbidden forms. */

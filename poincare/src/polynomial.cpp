@@ -33,14 +33,15 @@ int Polynomial::QuadraticPolynomialRoots(Expression a, Expression b,
                                          Expression c, Expression *root1,
                                          Expression *root2, Expression *delta,
                                          ReductionContext reductionContext,
-                                         bool approximateSolutions,
+                                         bool *approximateSolutions,
                                          bool beautifyRoots) {
   assert(root1 && root2 && delta);
   assert(!(a.isUninitialized() || b.isUninitialized() || c.isUninitialized()));
 
+  bool approximate = approximateSolutions ? *approximateSolutions : false;
+
   Context *context = reductionContext.context();
-  Preferences::ComplexFormat complexFormat = reductionContext.complexFormat();
-  Preferences::AngleUnit angleUnit = reductionContext.angleUnit();
+  ApproximationContext approximationContext(reductionContext);
 
   *delta = Subtraction::Builder(
       Power::Builder(b.clone(), Rational::Builder(2)),
@@ -56,8 +57,7 @@ int Polynomial::QuadraticPolynomialRoots(Expression a, Expression b,
   TrinaryBoolean deltaNull = delta->isNull(context);
   if (deltaNull == TrinaryBoolean::True ||
       (deltaNull == TrinaryBoolean::Unknown &&
-       delta->approximateToScalar<double>(context, complexFormat, angleUnit) ==
-           0.)) {
+       delta->approximateToScalar<double>(approximationContext) == 0.)) {
     *root1 = Division::Builder(
         Opposite::Builder(b.clone()),
         Multiplication::Builder(Rational::Builder(2), a.clone()));
@@ -69,8 +69,7 @@ int Polynomial::QuadraticPolynomialRoots(Expression a, Expression b,
     TrinaryBoolean aPositive = a.isPositive(context);
     if (aPositive != TrinaryBoolean::True &&
         (aPositive == TrinaryBoolean::False ||
-         a.approximateToScalar<double>(context, complexFormat, angleUnit) <
-             0.)) {
+         a.approximateToScalar<double>(approximationContext) < 0.)) {
       // Coefficient a is negative, swap root1 and root 2 to preseverve order.
       offset = 1;
     }
@@ -85,18 +84,24 @@ int Polynomial::QuadraticPolynomialRoots(Expression a, Expression b,
         Multiplication::Builder(Rational::Builder(2), a.clone()));
   }
 
-  if (!approximateSolutions) {
+  if (!approximate) {
     *root1 = root1->cloneAndReduceOrSimplify(reductionContext, beautifyRoots);
     *root2 = root2->cloneAndReduceOrSimplify(reductionContext, beautifyRoots);
     if (root1->type() == ExpressionNode::Type::Undefined ||
         (!multipleRoot && root2->type() == ExpressionNode::Type::Undefined)) {
       // Simplification has been interrupted, recompute approximated roots.
+      approximate = true;
+      if (approximateSolutions) {
+        *approximateSolutions = true;
+      }
       return QuadraticPolynomialRoots(a, b, c, root1, root2, delta,
-                                      reductionContext, true, beautifyRoots);
+                                      reductionContext, &approximate,
+                                      beautifyRoots);
     }
   } else {
-    *root1 = root1->approximate<double>(context, complexFormat, angleUnit);
-    *root2 = root2->approximate<double>(context, complexFormat, angleUnit);
+    *delta = delta->approximate<double>(approximationContext);
+    *root1 = root1->approximate<double>(approximationContext);
+    *root2 = root2->approximate<double>(approximationContext);
   }
   assert(!(root1->isUninitialized() || root2->isUninitialized()));
 
@@ -109,21 +114,16 @@ int Polynomial::QuadraticPolynomialRoots(Expression a, Expression b,
 }
 
 static bool rootSmallerThan(const Expression *root1, const Expression *root2,
-                            Context *context,
-                            Preferences::ComplexFormat complexFormat,
-                            Preferences::AngleUnit angleUnit) {
+                            const ApproximationContext *approximationContext) {
   if (root2->type() == ExpressionNode::Type::Undefined ||
       root2->type() == ExpressionNode::Type::Nonreal) {
     return true;
   }
-  if (root1->type() == ExpressionNode::Type::Undefined ||
-      root1->type() == ExpressionNode::Type::Nonreal) {
+  if (root1->isUndefined()) {
     return false;
   }
-  float r1 =
-      root1->approximateToScalar<float>(context, complexFormat, angleUnit);
-  float r2 =
-      root2->approximateToScalar<float>(context, complexFormat, angleUnit);
+  float r1 = root1->approximateToScalar<float>(*approximationContext);
+  float r2 = root2->approximateToScalar<float>(*approximationContext);
 
   if (!std::isnan(r1) || !std::isnan(r2)) {
     // std::isnan(r1) => (r1 <= r2) is false
@@ -131,24 +131,20 @@ static bool rootSmallerThan(const Expression *root1, const Expression *root2,
   }
 
   // r1 and r2 aren't finite, compare the real part
-  float rr1 =
-      RealPart::Builder(root1->clone())
-          .approximateToScalar<float>(context, complexFormat, angleUnit);
-  float rr2 =
-      RealPart::Builder(root2->clone())
-          .approximateToScalar<float>(context, complexFormat, angleUnit);
+  float rr1 = RealPart::Builder(root1->clone())
+                  .approximateToScalar<float>(*approximationContext);
+  float rr2 = RealPart::Builder(root2->clone())
+                  .approximateToScalar<float>(*approximationContext);
 
   if (rr1 != rr2) {
     return rr1 <= rr2;
   }
 
   // Compare the imaginary part
-  float ir1 =
-      ImaginaryPart::Builder(root1->clone())
-          .approximateToScalar<float>(context, complexFormat, angleUnit);
-  float ir2 =
-      ImaginaryPart::Builder(root2->clone())
-          .approximateToScalar<float>(context, complexFormat, angleUnit);
+  float ir1 = ImaginaryPart::Builder(root1->clone())
+                  .approximateToScalar<float>(*approximationContext);
+  float ir2 = ImaginaryPart::Builder(root2->clone())
+                  .approximateToScalar<float>(*approximationContext);
   return ir1 <= ir2;
 }
 
@@ -164,8 +160,7 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
            d.isUninitialized()));
 
   Context *context = reductionContext.context();
-  Preferences::ComplexFormat complexFormat = reductionContext.complexFormat();
-  Preferences::AngleUnit angleUnit = reductionContext.angleUnit();
+  ApproximationContext approximationContext(reductionContext);
 
   const Expression coefficients[] = {d, c, b, a};
   constexpr int degree = 3;
@@ -218,10 +213,10 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
     if (delta->numberOfDescendants(true) >
         k_maxNumberOfNodesBeforeApproximatingDelta) {
       // Delta is too complex anyway, approximate it.
-      *delta = delta->approximate<double>(context, complexFormat, angleUnit);
+      *delta = delta->approximate<double>(approximationContext);
     }
   } else {
-    *delta = delta->approximate<double>(context, complexFormat, angleUnit);
+    *delta = delta->approximate<double>(approximationContext);
   }
   assert(!delta->isUninitialized());
   if (delta->type() == ExpressionNode::Type::Undefined) {
@@ -240,25 +235,24 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
    * (even though in most case it would be caught by the following case) in
    * case c is null. */
   if (d.isNull(context) == TrinaryBoolean::True ||
-      d.approximateToScalar<double>(context, complexFormat, angleUnit) == 0.) {
+      d.approximateToScalar<double>(approximationContext) == 0.) {
     *root1 = Rational::Builder(0);
   }
   /* Polynoms of the form "ax^3+d=0" have a simple solutions : x1 = sqrt(-d/a,3)
    * x2 = roots[1] * x1 and x3 = roots[2] * x1. */
   if (root1->isUninitialized() &&
       (b.isNull(context) == TrinaryBoolean::True ||
-       b.approximateToScalar<double>(context, complexFormat, angleUnit) ==
-           0.) &&
+       b.approximateToScalar<double>(approximationContext) == 0.) &&
       (c.isNull(context) == TrinaryBoolean::True ||
-       c.approximateToScalar<double>(context, complexFormat, angleUnit) ==
-           0.)) {
+       c.approximateToScalar<double>(approximationContext) == 0.)) {
     *root1 = NthRoot::Builder(
         Division::Builder(Opposite::Builder(d.clone()), a.clone()),
         Rational::Builder(3));
     *root1 = root1->cloneAndReduceOrSimplify(reductionContext, beautifyRoots);
     if (root1->numberOfDescendants(true) * 2 >
             k_maxNumberOfNodesBeforeApproximatingDelta ||
-        (complexFormat == Preferences::ComplexFormat::Polar &&
+        (reductionContext.complexFormat() ==
+             Preferences::ComplexFormat::Polar &&
          !equationIsReal)) {
       /* Approximate roots if root1 is uninitialized, too big (roots 2 and 3
        * might be twice root1's size), or if complex format is Polar, which can
@@ -313,7 +307,7 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
                   .cloneAndSimplify(reductionContext);
     Expression delta2;
     QuadraticPolynomialRoots(a.clone(), beta, gamma, root2, root3, &delta2,
-                             reductionContext, false, beautifyRoots);
+                             reductionContext, nullptr, beautifyRoots);
     assert(!root2->isUninitialized() && !root3->isUninitialized());
   } else if (root1->isUninitialized()) {
     /* We did not manage to find any simple root : we resort to using Cardano's
@@ -323,7 +317,7 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
       deltaSign = 0;
     } else {
       double deltaValue =
-          delta->approximateToScalar<double>(context, complexFormat, angleUnit);
+          delta->approximateToScalar<double>(approximationContext);
       /* A complex delta (NAN deltaValue) must be handled like a negative delta
        * This ternary operator's condition order is important here. */
       deltaSign = deltaValue == 0. ? 0 : deltaValue > 0. ? 1 : -1;
@@ -337,8 +331,7 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
             .cloneAndSimplify(reductionContext);
     if (deltaSign == 0) {
       if (delta0.isNull(context) == TrinaryBoolean::True ||
-          delta0.approximateToScalar<double>(context, complexFormat,
-                                             angleUnit) == 0.) {
+          delta0.approximateToScalar<double>(approximationContext) == 0.) {
         // -b / 3a
         *root1 = Division::Builder(
             b.clone(),
@@ -385,14 +378,12 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
       ReductionContext complexContext = reductionContext;
       complexContext.setComplextFormat(Preferences::ComplexFormat::Cartesian);
       complexContext.setTarget(ReductionTarget::SystemForApproximation);
+      ApproximationContext approximationComplexContext(complexContext);
       Expression cardano =
           CardanoNumber(delta0, delta1, &approximate, complexContext);
       if (cardano.type() == ExpressionNode::Type::Undefined ||
-          cardano.recursivelyMatches(
-              [](const Expression e, Context *context) {
-                return e.type() == ExpressionNode::Type::Undefined ||
-                       e.type() == ExpressionNode::Type::Infinity;
-              },
+          cardano.deepIsOfType(
+              {ExpressionNode::Type::Undefined, ExpressionNode::Type::Infinity},
               context)) {
         if (approximateSolutions) {
           *approximateSolutions = true;
@@ -442,9 +433,8 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
                * the imaginary part that might have appeared. */
               roots[i] = RealPart::Builder(roots[i]);
             }
-            roots[i] = roots[i].approximate<double>(
-                context, complexContext.complexFormat(),
-                complexContext.angleUnit());
+            roots[i] =
+                roots[i].approximate<double>(approximationComplexContext);
             if (equationIsReal && deltaSign < 0) {
               /* We know there is exactly one real root (and two complex
                * conjugate). Because of approximation errors, this real root can
@@ -453,8 +443,7 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
                */
               float im = std::fabs(
                   ImaginaryPart::Builder(roots[i]).approximateToScalar<float>(
-                      context, complexContext.complexFormat(),
-                      complexContext.angleUnit()));
+                      approximationComplexContext));
               if (im < minimalImaginaryPart) {
                 minimalImaginaryPart = im;
                 loneRealRootIndex = i;
@@ -468,8 +457,7 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
         if (loneRealRootIndex >= 0) {
           roots[loneRealRootIndex] =
               RealPart::Builder(roots[loneRealRootIndex])
-                  .approximate<double>(context, complexContext.complexFormat(),
-                                       complexContext.angleUnit());
+                  .approximate<double>(approximationComplexContext);
         }
         *root1 = roots[0];
         *root2 = roots[1];
@@ -506,9 +494,12 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
                                   beautifyRoots);
     }
   } else {
-    *root1 = root1->approximate<double>(context, complexFormat, angleUnit);
-    *root2 = root2->approximate<double>(context, complexFormat, angleUnit);
-    *root3 = root3->approximate<double>(context, complexFormat, angleUnit);
+    *root1 = root1->approximate<double>(approximationContext);
+    *root2 = root2->approximate<double>(approximationContext);
+    *root3 = root3->approximate<double>(approximationContext);
+    /* Approximate delta in case it was not already (if it was, this cost no
+     * time anyway). */
+    *delta = delta->approximate<double>(approximationContext);
   }
 
   /* Remove duplicates */
@@ -527,7 +518,7 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
 
   /* Sort the roots. The real roots go first, in ascending order, then the
    * complex roots in order of ascending imaginary part. */
-  void *pack[] = {root1, root2, root3, context, &complexFormat, &angleUnit};
+  void *pack[] = {root1, root2, root3, &approximationContext};
   Helpers::Sort(
       [](int i, int j, void *ctx, int n) {  // Swap method
         assert(i < n && j < n);
@@ -541,13 +532,9 @@ int Polynomial::CubicPolynomialRoots(Expression a, Expression b, Expression c,
         assert(i < n && j < n);
         void **pack = reinterpret_cast<void **>(ctx);
         Expression **tab = reinterpret_cast<Expression **>(pack);
-        Context *context = reinterpret_cast<Context *>(pack[3]);
-        Preferences::ComplexFormat complexFormat =
-            *reinterpret_cast<Preferences::ComplexFormat *>(pack[4]);
-        Preferences::AngleUnit angleUnit =
-            *reinterpret_cast<Preferences::AngleUnit *>(pack[5]);
-        return rootSmallerThan(tab[j], tab[i], context, complexFormat,
-                               angleUnit);
+        ApproximationContext *approximationContext =
+            reinterpret_cast<ApproximationContext *>(pack[3]);
+        return rootSmallerThan(tab[j], tab[i], approximationContext);
       },
       pack, degree);
 
@@ -682,6 +669,7 @@ Expression Polynomial::CardanoNumber(Expression delta0, Expression delta1,
    *     risk of subtracting two very close numbers when delta0 << delta1. */
 
   Expression C;
+  ApproximationContext approximationContext(reductionContext);
   if (delta0.isNull(reductionContext.context()) == TrinaryBoolean::True) {
     C = delta1.clone();
   } else {
@@ -692,8 +680,7 @@ Expression Polynomial::CardanoNumber(Expression delta0, Expression delta1,
             Power::Builder(delta0.clone(), Rational::Builder(3)))));
     Expression diff;
     if (SignFunction::Builder(delta1).approximateToScalar<double>(
-            reductionContext.context(), reductionContext.complexFormat(),
-            reductionContext.angleUnit()) <= 0.0) {
+            approximationContext) <= 0.0) {
       diff = Subtraction::Builder(delta1.clone(), rootDeltaDifference);
     } else {
       diff = Addition::Builder(delta1.clone(), rootDeltaDifference);
@@ -704,9 +691,7 @@ Expression Polynomial::CardanoNumber(Expression delta0, Expression delta1,
           .cloneAndSimplify(reductionContext);
 
   if (C.isNull(reductionContext.context()) == TrinaryBoolean::Unknown) {
-    C = C.approximate<double>(reductionContext.context(),
-                              reductionContext.complexFormat(),
-                              reductionContext.angleUnit());
+    C = C.approximate<double>(approximationContext);
     *approximate = true;
   } else {
     *approximate = false;

@@ -22,7 +22,7 @@ EquationModelsParameterController::EquationModelsParameterController(
       m_equationStore(equationStore),
       m_listController(listController) {
   m_emptyModelCell.label()->setMessage(I18n::Message::Empty);
-  m_selectableListView.setMargins(0);
+  m_selectableListView.resetMargins();
   m_selectableListView.hideScrollBars();
   for (int i = 0; i < k_numberOfExpressionCells; i++) {
     Poincare::Expression e =
@@ -40,7 +40,7 @@ const char* EquationModelsParameterController::title() {
 
 void EquationModelsParameterController::viewWillAppear() {
   ViewController::viewWillAppear();
-  selectCell(0);
+  selectRow(0);
 }
 
 bool EquationModelsParameterController::handleEvent(Ion::Events::Event event) {
@@ -51,14 +51,11 @@ bool EquationModelsParameterController::handleEvent(Ion::Events::Event event) {
     }
     assert(error == Ion::Storage::Record::ErrorStatus::None);
     m_listController->editSelectedRecordWithText(k_models[selectedRow()]);
-    Container::activeApp()->modalViewController()->dismissModal();
+    App::app()->modalViewController()->dismissModal();
     m_listController->editExpression(Ion::Events::OK);
     return true;
   }
-  if (m_listController->handleEventOnExpressionInTemplateMenu(event)) {
-    return true;
-  }
-  return false;
+  return m_listController->handleEventOnExpressionInTemplateMenu(event);
 }
 
 int EquationModelsParameterController::numberOfRows() const {

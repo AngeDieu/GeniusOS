@@ -1,13 +1,12 @@
 #include "store_menu_controller.h"
 
-#include <apps/shared/layout_field_delegate_app.h>
 #include <escher/clipboard.h>
 #include <escher/invocation.h>
 #include <poincare/store.h>
 
+#include "app_with_store_menu.h"
 #include "expression_display_permissions.h"
 #include "poincare_helpers.h"
-#include "text_field_delegate_app.h"
 
 using namespace Poincare;
 using namespace Escher;
@@ -15,22 +14,11 @@ using namespace Escher;
 namespace Shared {
 
 StoreMenuController::InnerListController::InnerListController(
-    StoreMenuController* dataSource, SelectableListViewDelegate* delegate)
+    StoreMenuController* dataSource)
     : ViewController(dataSource),
-      m_selectableListView(this, dataSource, dataSource, delegate) {
-  m_selectableListView.setMargins(0);
+      m_selectableListView(this, dataSource, dataSource) {
+  m_selectableListView.resetMargins();
   m_selectableListView.hideScrollBars();
-}
-
-void StoreMenuController::open() {
-  Container::activeApp()->displayModalViewController(
-      this, KDGlyph::k_alignCenter, KDGlyph::k_alignCenter, 0,
-      Metric::PopUpLeftMargin, 0, Metric::PopUpRightMargin, true);
-}
-
-void StoreMenuController::close() {
-  m_cell.layoutField()->setEditing(false);
-  Container::activeApp()->modalViewController()->dismissModal();
 }
 
 void StoreMenuController::InnerListController::didBecomeFirstResponder() {
@@ -43,7 +31,7 @@ StoreMenuController::StoreMenuController()
       m_stackViewController(nullptr, &m_listController,
                             StackViewController::Style::PurpleWhite, false),
       m_listController(this),
-      m_cell(this, nullptr, this),
+      m_cell(this, this),
       m_abortController(Invocation::Builder<StoreMenuController>(
                             [](StoreMenuController* storeMenu, void* sender) {
                               /* Close the warning and then the store menu which
@@ -65,18 +53,16 @@ StoreMenuController::StoreMenuController()
   m_abortController.setContentMessage(I18n::Message::InvalidInputWarning);
   /* We need to set the width early since minimalSizeForOptimalDisplay will be
    * called before willDisplayCell. */
-  view()->setChildFrame(&m_cell,
-                        KDRect(0, 0,
-                               Ion::Display::Width - Metric::PopUpLeftMargin -
-                                   Metric::PopUpRightMargin,
-                               0),
-                        false);
+  view()->setChildFrame(
+      &m_cell,
+      KDRect(0, 0, Ion::Display::Width - Metric::PopUpMargins.width(), 0),
+      false);
   m_cell.layoutField()->setTextEditionBuffer(
       m_savedDraftTextBuffer, AbstractTextField::MaxBufferSize());
 }
 
 void StoreMenuController::didBecomeFirstResponder() {
-  Container::activeApp()->setFirstResponder(&m_listController);
+  App::app()->setFirstResponder(&m_listController);
   m_cell.layoutField()->reload();
 }
 
@@ -92,11 +78,23 @@ void StoreMenuController::setText(const char* text) {
   m_preventReload = false;
 }
 
+void StoreMenuController::open() {
+  App::app()->displayModalViewController(
+      this, KDGlyph::k_alignCenter, KDGlyph::k_alignCenter,
+      {Metric::PopUpMargins.horizontal(), {}}, true);
+}
+
+void StoreMenuController::close() {
+  m_cell.layoutField()->setEditing(false);
+  App::app()->modalViewController()->dismissModal();
+}
+
 void StoreMenuController::fillCellForRow(HighlightCell* cell, int row) {
   m_cell.reloadCell();
 }
 
 void StoreMenuController::layoutFieldDidChangeSize(LayoutField* layoutField) {
+  assert(layoutField == m_cell.layoutField());
   if (m_preventReload) {
     return;
   }
@@ -104,7 +102,7 @@ void StoreMenuController::layoutFieldDidChangeSize(LayoutField* layoutField) {
    * layout but it will also call layoutFieldDidChangeSize. We set this
    * boolean to break the cycle. */
   m_preventReload = true;
-  Container::activeApp()->modalViewController()->reloadModal();
+  App::app()->modalViewController()->reloadModal();
   m_preventReload = false;
 }
 
@@ -116,21 +114,19 @@ void StoreMenuController::openAbortWarning() {
    * embedded pop-up. */
   displayModalViewController(&m_abortController, KDGlyph::k_alignCenter,
                              KDGlyph::k_alignCenter);
-  Container::activeApp()->modalViewController()->reloadModal();
+  App::app()->modalViewController()->reloadModal();
 }
 
 bool StoreMenuController::parseAndStore(const char* text) {
-  LayoutFieldDelegateApp* app =
-      static_cast<LayoutFieldDelegateApp*>(Container::activeApp());
-  Poincare::Context* context = app->localContext();
+  AppWithStoreMenu* app = static_cast<AppWithStoreMenu*>(App::app());
+  Context* context = app->localContext();
   Expression input = Expression::Parse(text, context);
   if (input.isUninitialized()) {
     openAbortWarning();
     return false;
   }
   Expression reducedExp = input;
-  PoincareHelpers::CloneAndSimplify(&reducedExp, context,
-                                    Poincare::ReductionTarget::User);
+  PoincareHelpers::CloneAndSimplify(&reducedExp, context);
   if (reducedExp.type() != ExpressionNode::Type::Store) {
     openAbortWarning();
     return false;
@@ -160,32 +156,28 @@ bool StoreMenuController::parseAndStore(const char* text) {
 }
 
 bool StoreMenuController::layoutFieldDidFinishEditing(
-    Escher::LayoutField* layoutField, Poincare::Layout layoutR,
-    Ion::Events::Event event) {
+    Escher::LayoutField* layoutField, Ion::Events::Event event) {
+  assert(layoutField == m_cell.layoutField());
+  assert(!layoutField->isEditing());
   constexpr size_t bufferSize = TextField::MaxBufferSize();
   char buffer[bufferSize];
-  layoutR.serializeForParsing(buffer, bufferSize);
-  return parseAndStore(buffer);
+  Layout layout = layoutField->layout();
+  layout.serializeForParsing(buffer, bufferSize);
+  if (parseAndStore(buffer)) {
+    layoutField->clearLayout();
+    return true;
+  }
+  return false;
 }
 
 void StoreMenuController::layoutFieldDidAbortEditing(
     Escher::LayoutField* layoutField) {
+  assert(layoutField == m_cell.layoutField());
   /* Since dismissing the controller will call layoutFieldDidChangeSize, we need
    * to set the flag to avoid reloadData from happening which would otherwise
    * setFirstResponder on the store menu while it is hidden. */
   m_preventReload = true;
   close();
-}
-
-bool StoreMenuController::layoutFieldDidReceiveEvent(
-    Escher::LayoutField* layoutField, Ion::Events::Event event) {
-  if (event == Ion::Events::Sto) {
-    layoutField->handleEventWithText("→");
-    return true;
-  }
-  // We short circuit the LayoutFieldDelegate to avoid calls to displayWarning
-  return textFieldDelegateApp()->fieldDidReceiveEvent(layoutField, layoutField,
-                                                      event);
 }
 
 }  // namespace Shared

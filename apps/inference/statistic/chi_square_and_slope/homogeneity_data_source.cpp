@@ -13,9 +13,7 @@ HomogeneityTableDataSource::HomogeneityTableDataSource()
                              k_homogeneityTableNumberOfReusableHeaderCells>(
           this),
       m_headerPrefix(I18n::Message::Group),
-      m_topLeftCell(Escher::Palette::WallScreenDark) {
-  m_topLeftCell.hide();
-}
+      m_topLeftCell(Escher::Palette::WallScreenDark) {}
 
 void HomogeneityTableDataSource::initCell(InferenceEvenOddBufferCell,
                                           void *cell, int index) {
@@ -82,7 +80,7 @@ void HomogeneityTableDataSource::fillCellForLocation(
     myCell->setTextColor(KDColorBlack);
   } else {
     assert(type == k_typeOfInnerCells);
-    willDisplayInnerCellAtLocation(cell, column - 1, row - 1);
+    fillInnerCellForLocation(cell, column - 1, row - 1);
   }
 }
 

@@ -58,10 +58,10 @@ int PopupItemView::numberOfSubviews() const {
 }
 
 View *PopupItemView::subviewAtIndex(int i) {
-  assert(i >= 0 && ((m_isPoppingUp && i == 0) || (i < 2)));
   if (i == 0) {
     return m_cell;
   }
+  assert(i == 1 && !m_isPoppingUp);
   return &m_caret;
 }
 
@@ -76,26 +76,15 @@ void PopupItemView::drawRect(KDContext *ctx, KDRect rect) const {
 }
 
 Dropdown::DropdownPopupController::DropdownPopupController(
-    Responder *parentResponder, ListViewDataSource *listDataSource,
+    Responder *parentResponder, ExplicitListViewDataSource *listDataSource,
     Dropdown *dropdown, DropdownCallback *callback)
-    : ViewController(parentResponder),
+    : ExplicitSelectableListViewController(parentResponder),
       m_listViewDataSource(listDataSource),
       m_memoizedCellWidth(-1),
-      m_selectionDataSource(),
-      m_selectableListView(this, this, &m_selectionDataSource),
       m_borderingView(&m_selectableListView),
       m_callback(callback),
       m_dropdown(dropdown) {
-  m_selectableListView.setMargins(0);
-}
-
-void Dropdown::DropdownPopupController::didBecomeFirstResponder() {
-  resetMemoization();
-  if (m_selectionDataSource.selectedRow() < 0) {
-    m_selectionDataSource.selectRow(0);
-    m_selectableListView.reloadData(false);
-  }
-  Container::activeApp()->setFirstResponder(&m_selectableListView);
+  m_selectableListView.resetMargins();
 }
 
 bool Dropdown::DropdownPopupController::handleEvent(Ion::Events::Event e) {
@@ -104,11 +93,11 @@ bool Dropdown::DropdownPopupController::handleEvent(Ion::Events::Event e) {
   }
   if (e == Ion::Events::OK || e == Ion::Events::EXE) {
     // Set correct inner cell
-    int row = m_selectionDataSource.selectedRow();
-    selectRow(row);
+    int row = selectedRow();
+    m_dropdown->selectRow(row);
     close();
     if (m_callback) {
-      m_callback->onDropdownSelected(m_selectionDataSource.selectedRow());
+      m_callback->onDropdownSelected(selectedRow());
     }
     return true;
   }
@@ -119,68 +108,50 @@ bool Dropdown::DropdownPopupController::handleEvent(Ion::Events::Event e) {
   return false;
 }
 
-void Dropdown::DropdownPopupController::selectRow(int row) {
-  m_selectionDataSource.selectRow(row);
-  m_dropdown->setInnerCell(innerCellAtIndex(row));
+void Dropdown::DropdownPopupController::open() {
+  m_selectableListView.resetSizeAndOffsetMemoization();
+  int nRows = numberOfRows();
+  for (int row = 0; row < nRows; row++) {
+    m_popupViews[row].setPopping(true);
+  }
+  m_selectableListView.layoutSubviews();
 }
 
 void Dropdown::DropdownPopupController::close() {
   m_dropdown->layoutSubviews(true);
-  Container::activeApp()->modalViewController()->dismissModal();
-}
-
-KDPoint Dropdown::DropdownPopupController::topLeftCornerForSelection(
-    View *originView) {
-  KDPoint borderOffset = KDPoint(-BorderingView::k_separatorThickness,
-                                 -BorderingView::k_separatorThickness);
-  return Container::activeApp()
-      ->modalView()
-      ->pointFromPointInView(originView, KDPointZero)
-      .translatedBy(borderOffset);
+  App::app()->modalViewController()->dismissModal();
 }
 
 KDCoordinate Dropdown::DropdownPopupController::defaultColumnWidth() {
   if (m_memoizedCellWidth < 0) {
-    HighlightCell *cell = reusableCell(0, 0);
-    fillCellForRow(cell, 0);
-    m_memoizedCellWidth = cell->minimalSizeForOptimalDisplay().width();
+    m_memoizedCellWidth =
+        m_popupViews[0].minimalSizeForOptimalDisplay().width();
   }
   return m_memoizedCellWidth;
 }
 
-KDCoordinate Dropdown::DropdownPopupController::nonMemoizedRowHeight(int row) {
-  HighlightCell *cell = reusableCell(0, 0);
-  fillCellForRow(cell, 0);
-  return cell->minimalSizeForOptimalDisplay().height();
+void Dropdown::DropdownPopupController::init() {
+  int nRows = numberOfRows();
+  for (int row = 0; row < nRows; row++) {
+    m_popupViews[row].setInnerCell(innerCellAtRow(row));
+  }
+  if (selectedRow() < 0 || selectedRow() >= nRows) {
+    selectRow(0);
+  }
 }
 
-PopupItemView *Dropdown::DropdownPopupController::reusableCell(int index,
-                                                               int type) {
-  assert(index >= 0 && index < numberOfRows());
-  return &m_popupViews[index];
-}
-
-void Dropdown::DropdownPopupController::fillCellForRow(HighlightCell *cell,
-                                                       int row) {
-  PopupItemView *popupView = static_cast<PopupItemView *>(cell);
-  popupView->setInnerCell(
-      m_listViewDataSource->reusableCell(row, typeAtRow(row)));
-  popupView->setPopping(true);
-  m_listViewDataSource->fillCellForRow(popupView->innerCell(), row);
-}
-
-void Dropdown::DropdownPopupController::resetMemoization(bool force) {
+void Dropdown::DropdownPopupController::resetSizeMemoization() {
   m_memoizedCellWidth = -1;
-  MemoizedListViewDataSource::resetMemoization(force);
+  ExplicitListViewDataSource::resetSizeMemoization();
 }
 
-HighlightCell *Dropdown::DropdownPopupController::innerCellAtIndex(int index) {
+HighlightCell *Dropdown::DropdownPopupController::innerCellAtRow(int row) {
   return m_listViewDataSource->reusableCell(
-      index, m_listViewDataSource->typeAtRow(index));
+      row, m_listViewDataSource->typeAtRow(row));
 }
 
 Dropdown::Dropdown(Responder *parentResponder,
-                   ListViewDataSource *listDataSource,
+                   ExplicitListViewDataSource *listDataSource,
                    DropdownCallback *callback)
     : Responder(parentResponder),
       m_popup(this, listDataSource, this, callback) {
@@ -195,41 +166,26 @@ bool Dropdown::handleEvent(Ion::Events::Event e) {
   return false;
 }
 
-void Dropdown::reloadAllCells() {
-  // Reload popup list
-  m_popup.resetMemoization();  // Reset computed width
-  m_popup.m_selectableListView.reloadData(false);
-  if (!m_isPoppingUp) {
-    /* Build the innerCell so that is has the right width.
-     * Mimicking Dropdown::DropdownPopupController::fillCellForRow
-     * without altering highlight status and popping status.
-     * TODO : rework this entire class so that this isn't necessary. */
-    int index = m_popup.m_selectionDataSource.selectedRow();
-    PopupItemView *cell =
-        static_cast<PopupItemView *>(m_popup.reusableCell(index, 0));
-    cell->setInnerCell(m_popup.innerCellAtIndex(index));
-    m_popup.m_listViewDataSource->fillCellForRow(cell->innerCell(), index);
-  }
-  PopupItemView::reloadCell();
+void Dropdown::init() {
+  m_popup.init();
+  setInnerCell(m_popup.innerCellAtRow(m_popup.selectedRow()));
 }
 
-void Dropdown::init() {
-  if (m_popup.m_selectionDataSource.selectedRow() < 0 ||
-      m_popup.m_selectionDataSource.selectedRow() >= m_popup.numberOfRows()) {
-    m_popup.m_selectionDataSource.selectRow(0);
-  }
-  setInnerCell(
-      m_popup.innerCellAtIndex(m_popup.m_selectionDataSource.selectedRow()));
+void Dropdown::selectRow(int row) {
+  m_popup.selectRow(row);
+  setInnerCell(m_popup.innerCellAtRow(row));
 }
 
 void Dropdown::open() {
-  // Reload popup list
-  m_popup.resetMemoization();
-  m_popup.m_selectableListView.reloadData(false);
-
-  KDPoint topLeftAngle = m_popup.topLeftCornerForSelection(this);
-  Container::activeApp()->displayModalViewController(
-      &m_popup, 0.f, 0.f, topLeftAngle.y(), topLeftAngle.x());
+  m_popup.open();
+  KDPoint borderOffset = KDPoint(-BorderingView::k_separatorThickness,
+                                 -BorderingView::k_separatorThickness);
+  KDPoint topLeftAngle = App::app()
+                             ->modalView()
+                             ->pointFromPointInView(this, KDPointZero)
+                             .translatedBy(borderOffset);
+  App::app()->displayModalViewController(
+      &m_popup, 0.f, 0.f, {{topLeftAngle.x(), 0}, {topLeftAngle.y(), 0}});
 }
 
 void Dropdown::close() { m_popup.close(); }

@@ -199,18 +199,43 @@ QUIZ_CASE(poincare_properties_is_rational_number) {
                    .isAlternativeFormOfRationalNumber());
 }
 
+void assert_expression_has_property_or_not(const char* expression,
+                                           Context* context,
+                                           Expression::ExpressionTest test,
+                                           bool hasProperty) {
+  Expression e = parse_expression(expression, context, false);
+  quiz_assert_print_if_failure(
+      e.recursivelyMatches(test, context) == hasProperty, expression);
+}
+
+void assert_expression_has_property_or_not(
+    const char* expression, Context* context,
+    Expression::SimpleExpressionTest test, bool hasProperty) {
+  Expression e = parse_expression(expression, context, false);
+  quiz_assert_print_if_failure(
+      e.recursivelyMatches(test, context) == hasProperty, expression);
+}
+
 void assert_expression_has_property(const char* expression, Context* context,
                                     Expression::ExpressionTest test) {
-  Expression e = parse_expression(expression, context, false);
-  quiz_assert_print_if_failure(e.recursivelyMatches(test, context), expression);
+  assert_expression_has_property_or_not(expression, context, test, true);
+}
+
+void assert_expression_has_property(const char* expression, Context* context,
+                                    Expression::SimpleExpressionTest test) {
+  assert_expression_has_property_or_not(expression, context, test, true);
 }
 
 void assert_expression_has_not_property(const char* expression,
                                         Context* context,
                                         Expression::ExpressionTest test) {
-  Expression e = parse_expression(expression, context, false);
-  quiz_assert_print_if_failure(!e.recursivelyMatches(test, context),
-                               expression);
+  assert_expression_has_property_or_not(expression, context, test, false);
+}
+
+void assert_expression_has_not_property(const char* expression,
+                                        Context* context,
+                                        Expression::SimpleExpressionTest test) {
+  assert_expression_has_property_or_not(expression, context, test, false);
 }
 
 QUIZ_CASE(poincare_properties_is_approximate) {
@@ -274,6 +299,20 @@ QUIZ_CASE(poincare_properties_is_infinity) {
   Ion::Storage::FileSystem::sharedFileSystem->recordNamed("a.exp").destroy();
 }
 
+QUIZ_CASE(poincare_properties_in_parametric) {
+  Shared::GlobalContext context;
+  assert_expression_has_property("2x+1", &context, Expression::IsSymbolic);
+  assert_expression_has_not_property("diff(x^2,x,3)", &context,
+                                     Expression::IsSymbolic);
+  assert_expression_has_property("diff(y^2+x^2,x,3)", &context,
+                                 Expression::IsSymbolic);
+  assert_reduce_and_store("1+inf→x");
+  assert_expression_has_property("x", &context, Expression::IsInfinity);
+  assert_expression_has_not_property("diff(x^2,x,3)", &context,
+                                     Expression::IsInfinity);
+  Ion::Storage::FileSystem::sharedFileSystem->recordNamed("x.exp").destroy();
+}
+
 void assert_reduced_expression_sign(
     const char* expression, Poincare::TrinaryBoolean isPositive,
     Preferences::ComplexFormat complexFormat = Cartesian,
@@ -281,9 +320,9 @@ void assert_reduced_expression_sign(
     Preferences::UnitFormat unitFormat = MetricUnitFormat) {
   Shared::GlobalContext globalContext;
   Expression e = parse_expression(expression, &globalContext, false);
-  e = e.cloneAndReduce(
-      ReductionContext(&globalContext, complexFormat, angleUnit, unitFormat,
-                       ReductionTarget::SystemForApproximation));
+  e = e.cloneAndReduce(ReductionContext(&globalContext, complexFormat,
+                                        angleUnit, unitFormat,
+                                        SystemForApproximation));
   quiz_assert_print_if_failure(e.isPositive(&globalContext) == isPositive,
                                expression);
 }
@@ -425,14 +464,14 @@ void assert_sign_sets_to(
   Shared::GlobalContext context;
   TrinaryBoolean eSign = e.isPositive(&context);
   assert(eSign == TrinaryBoolean::True || eSign == TrinaryBoolean::False);
-  double eValue =
-      e.approximateToScalar<double>(&context, complexFormat, angleUnit);
-  Expression f = e.setSign(
-      isPositive == TrinaryBoolean::True,
-      ReductionContext(&context, complexFormat, angleUnit, unitFormat, User));
+  ReductionContext reductionContext(&context, complexFormat, angleUnit,
+                                    unitFormat, User);
+  ApproximationContext approximationContext(reductionContext);
+  double eValue = e.approximateToScalar<double>(approximationContext);
+  Expression f =
+      e.setSign(isPositive == TrinaryBoolean::True, reductionContext);
   quiz_assert(f.isPositive(&context) == isPositive);
-  double fValue =
-      f.approximateToScalar<double>(&context, complexFormat, angleUnit);
+  double fValue = f.approximateToScalar<double>(approximationContext);
   quiz_assert(fValue == (eSign == isPositive ? eValue : -eValue) ||
               (std::isnan(fValue) == std::isnan(eValue)));
 }
@@ -488,9 +527,9 @@ void assert_expression_is_real(const char* expression) {
   Shared::GlobalContext context;
   // isReal can be call only on reduced expressions
   Expression e = parse_expression(expression, &context, false)
-                     .cloneAndReduce(ReductionContext(
-                         &context, Cartesian, Radian, MetricUnitFormat,
-                         ReductionTarget::SystemForApproximation));
+                     .cloneAndReduce(ReductionContext(&context, Cartesian,
+                                                      Radian, MetricUnitFormat,
+                                                      SystemForApproximation));
   quiz_assert_print_if_failure(e.isReal(&context), expression);
 }
 
@@ -498,9 +537,9 @@ void assert_expression_is_not_real(const char* expression) {
   Shared::GlobalContext context;
   // isReal can be call only on reduced expressions
   Expression e = parse_expression(expression, &context, false)
-                     .cloneAndReduce(ReductionContext(
-                         &context, Cartesian, Radian, MetricUnitFormat,
-                         ReductionTarget::SystemForApproximation));
+                     .cloneAndReduce(ReductionContext(&context, Cartesian,
+                                                      Radian, MetricUnitFormat,
+                                                      SystemForApproximation));
   quiz_assert_print_if_failure(!e.isReal(&context), expression);
 }
 
@@ -532,6 +571,8 @@ QUIZ_CASE(poincare_properties_is_real) {
   assert_expression_is_not_real("2^(3.4i)");
   assert_expression_is_not_real("(-2)^0.4");
   assert_expression_is_not_real("abs(sum({0}×k,k,0,0))");
+  assert_expression_is_not_real("randint(randintnorep(0,0,0)×i,0)");
+  assert_expression_is_real("randint(1)");
 }
 
 void assert_reduced_expression_polynomial_degree(
@@ -742,28 +783,25 @@ QUIZ_CASE(poincare_properties_get_polynomial_coefficients) {
   const char* coefficient0[] = {"2", "1", "1", 0};
   assert_reduced_expression_has_polynomial_coefficient("x^2+x+2", "x",
                                                        coefficient0);
-  const char* coefficient1[] = {"12+(-6)×π", "12", "3",
-                                0};  // 3×x^2+12×x-6×π+12
+  const char* coefficient1[] = {"12+(-6)×π", "12", "3", 0};
   assert_reduced_expression_has_polynomial_coefficient("3×(x+2)^2-6×π", "x",
                                                        coefficient1);
-  // TODO: decomment when enable 3-degree polynomes
-  // const char * coefficient2[] = {"2+32×x", "2", "6", "2", 0};
-  // //2×n^3+6×n^2+2×n+2+32×x
-  // assert_reduced_expression_has_polynomial_coefficient("2×(n+1)^3-4n+32×x",
-  // "n", coefficient2);
-  const char* coefficient3[] = {"1", "-π", "1", 0};  // x^2-π×x+1
+  const char* coefficient2[] = {"2+32×x", "2", "6", "2", 0};
+  assert_reduced_expression_has_polynomial_coefficient("2×(n+1)^3-4n+32×x", "n",
+                                                       coefficient2);
+  const char* coefficient3[] = {"1", "-π", "1", 0};
   assert_reduced_expression_has_polynomial_coefficient("x^2-π×x+1", "x",
                                                        coefficient3);
 
   // f: x→x^2+Px+1
   assert_reduce_and_store("1+π×x+x^2→f(x)");
-  const char* coefficient4[] = {"1", "π", "1", 0};  // x^2+π×x+1
+  const char* coefficient4[] = {"1", "π", "1", 0};
   assert_reduced_expression_has_polynomial_coefficient("f(x)", "x",
                                                        coefficient4);
-  const char* coefficient5[] = {"0", "i", 0};  // √(-1)x
+  const char* coefficient5[] = {"0", "i", 0};
   assert_reduced_expression_has_polynomial_coefficient("√(-1)x", "x",
                                                        coefficient5);
-  const char* coefficient6[] = {Nonreal::Name(), 0};  // √(-1)x
+  const char* coefficient6[] = {Nonreal::Name(), 0};
   assert_reduced_expression_has_polynomial_coefficient("√(-1)x", "x",
                                                        coefficient6, Real);
 
@@ -820,14 +858,14 @@ void assert_additional_results_compute_to(
   constexpr int maxNumberOfResults = 5;
   assert(length <= maxNumberOfResults);
   Expression additional[maxNumberOfResults];
-  ReductionContext reductionContext =
-      ReductionContext(&globalContext, Cartesian, Degree, unitFormat, User,
-                       ReplaceAllSymbolsWithUndefined, DefaultUnitConversion);
+  ReductionContext reductionContext(
+      &globalContext, Cartesian, Degree, unitFormat, User,
+      ReplaceAllSymbolsWithUndefined, DefaultUnitConversion);
+  ApproximationContext approximationContext(reductionContext);
   Expression units;
   Expression e = parse_expression(expression, &globalContext, false)
                      .cloneAndReduceAndRemoveUnit(reductionContext, &units);
-  double value =
-      e.approximateToScalar<double>(&globalContext, Cartesian, Degree);
+  double value = e.approximateToScalar<double>(approximationContext);
 
   if (!Unit::ShouldDisplayAdditionalOutputs(value, units, unitFormat)) {
     quiz_assert(length == 0);
@@ -839,8 +877,7 @@ void assert_additional_results_compute_to(
 
   quiz_assert(numberOfResults == length);
   for (int i = 0; i < length; i++) {
-    assert_expression_serialize_to(additional[i], results[i],
-                                   Preferences::PrintFloatMode::Decimal);
+    assert_expression_serializes_to(additional[i], results[i], DecimalMode);
   }
 }
 
@@ -994,11 +1031,10 @@ void assert_is_continuous_between_values(const char* expression, float x1,
                                          float x2, bool isContinuous) {
   Shared::GlobalContext context;
   Expression e = parse_expression(expression, &context, false);
+  ApproximationContext approximationContext(&context, Cartesian, Degree);
   quiz_assert_print_if_failure(
       !isContinuous == e.isDiscontinuousBetweenValuesForSymbol(
-                           "x", x1, x2, &context,
-                           Preferences::ComplexFormat::Cartesian,
-                           Preferences::AngleUnit::Degree),
+                           "x", x1, x2, approximationContext),
       expression);
 }
 
@@ -1069,6 +1105,8 @@ QUIZ_CASE(poincare_expression_is_linear_combination_of_pattern) {
       });
 
   assert_is_linear_pattern_of_sin_or_cos("5*cos(3x+2)", false, 5.0, 3.0, 2.0);
+  assert_is_linear_pattern_of_sin_or_cos("5*cos(3x+2)+π*cos(3x+2)", false,
+                                         8.1415926535897931, 3.0, 2.0);
   assert_is_linear_pattern_of_sin_or_cos("1-cos(3x+2)/5", true, -0.2, 3.0, 2.0);
   assert_is_linear_pattern_of_sin_or_cos("sin(x)", true, 1.0, 1.0,
                                          -1.0 * M_PI_2);
@@ -1080,8 +1118,7 @@ void assert_deep_is_symbolic(const char* expression, bool isSymbolic) {
   e = e.cloneAndReduce(
       ReductionContext::DefaultReductionContextForAnalysis(&context));
   quiz_assert_print_if_failure(
-      e.deepIsSymbolic(&context, SymbolicComputation::DoNotReplaceAnySymbol) ==
-          isSymbolic,
+      e.deepIsSymbolic(&context, DoNotReplaceAnySymbol) == isSymbolic,
       expression);
 }
 

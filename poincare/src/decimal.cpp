@@ -1,9 +1,9 @@
 #include <assert.h>
 #include <ion/unicode/utf8_decoder.h>
 #include <ion/unicode/utf8_helper.h>
+#include <omg/ieee754.h>
 #include <poincare/code_point_layout.h>
 #include <poincare/decimal.h>
-#include <poincare/ieee754.h>
 #include <poincare/infinity.h>
 #include <poincare/layout_helper.h>
 #include <poincare/multiplication.h>
@@ -172,7 +172,7 @@ int DecimalNode::convertToText(char *buffer, int bufferSize,
   int exponent = m_exponent;
 
   // Round the integer if m_mantissa > 10^numberOfSignificantDigits-1
-  char tempBuffer[PrintFloat::k_numberOfStoredSignificantDigits + 1];
+  char tempBuffer[PrintFloat::k_maxNumberOfSignificantDigits + 1];
   Integer m = unsignedMantissa();
   int numberOfDigitsInMantissa = Integer::NumberOfBase10DigitsWithoutSign(m);
   if (numberOfDigitsInMantissa > numberOfSignificantDigits) {
@@ -233,8 +233,8 @@ int DecimalNode::convertToText(char *buffer, int bufferSize,
   }
 
   // Serialize the mantissa
-  int mantissaLength = m.serialize(
-      tempBuffer, PrintFloat::k_numberOfStoredSignificantDigits + 1);
+  int mantissaLength =
+      m.serialize(tempBuffer, PrintFloat::k_maxNumberOfSignificantDigits + 1);
 
   // Assert that m is not +/-inf
   assert(strcmp(tempBuffer, Infinity::Name(false)) != 0);
@@ -266,7 +266,7 @@ int DecimalNode::convertToText(char *buffer, int bufferSize,
    *   we force the scientific mode to avoid inventing digits
    * - the number would be too long if we print it as a natural decimal */
   if (mode == Preferences::PrintFloatMode::Engineering ||
-      numberOfRequiredDigits > PrintFloat::k_numberOfStoredSignificantDigits ||
+      numberOfRequiredDigits > PrintFloat::k_maxNumberOfSignificantDigits ||
       forceScientificMode) {
     if (mantissaLength > 1 &&
         (mode != Preferences::PrintFloatMode::Engineering ||
@@ -292,6 +292,9 @@ int DecimalNode::convertToText(char *buffer, int bufferSize,
       int decimalMarkerPosition = currentChar + numberOfCharsToShift - 1;
       currentChar +=
           strlcpy(buffer + currentChar, tempBuffer, bufferSize - currentChar);
+      if (currentChar >= bufferSize - 1) {
+        return bufferSize - 1;
+      }
       assert(UTF8Decoder::CharSizeOfCodePoint(buffer[decimalMarkerPosition]) ==
              1);
       for (int i = 0; i < numberOfCharsToShift; i++) {
@@ -436,7 +439,7 @@ Decimal Decimal::Builder(const char *integralPart, int integralPartLength,
                          const char *fractionalPart, int fractionalPartLength,
                          int exponent) {
   /* Create a Decimal whose mantissa has less than
-   * k_numberOfStoredSignificantDigits. We round exceeding number if necessary.
+   * k_maxNumberOfSignificantDigits. We round exceeding number if necessary.
    */
   Integer zero(0);
   Integer base(10);
@@ -447,8 +450,8 @@ Decimal Decimal::Builder(const char *integralPart, int integralPartLength,
   }
   // TODO: set a FLAG to tell that a rounding happened?
   bool rounding =
-      integralPartLength > PrintFloat::k_numberOfStoredSignificantDigits &&
-      integralPart[PrintFloat::k_numberOfStoredSignificantDigits] >= '5';
+      integralPartLength > PrintFloat::k_maxNumberOfSignificantDigits &&
+      integralPart[PrintFloat::k_maxNumberOfSignificantDigits] >= '5';
   /* At this point, the exponent has already been computed. In the very special
    * case where all the significant digits of the mantissa are 9, rounding up
    * must increment the exponent. For instance, rounding up 0.99...9 (whose
@@ -458,8 +461,8 @@ Decimal Decimal::Builder(const char *integralPart, int integralPartLength,
   bool incrementExponentAfterRoundingUp = true;
   // Cap the length of the integralPart
   integralPartLength =
-      integralPartLength > PrintFloat::k_numberOfStoredSignificantDigits
-          ? PrintFloat::k_numberOfStoredSignificantDigits
+      integralPartLength > PrintFloat::k_maxNumberOfSignificantDigits
+          ? PrintFloat::k_maxNumberOfSignificantDigits
           : integralPartLength;
   // Special case for ??00000000000
   if (fractionalPartLength == 0) {
@@ -481,16 +484,16 @@ Decimal Decimal::Builder(const char *integralPart, int integralPartLength,
       fractionalPartLength--;
     }
   }
-  rounding = rounding ||
-             (fractionalPart &&
-              integralPartLength + fractionalPartLength >
-                  PrintFloat::k_numberOfStoredSignificantDigits &&
-              fractionalPart[PrintFloat::k_numberOfStoredSignificantDigits -
-                             integralPartLength] >= '5');
+  rounding =
+      rounding || (fractionalPart &&
+                   integralPartLength + fractionalPartLength >
+                       PrintFloat::k_maxNumberOfSignificantDigits &&
+                   fractionalPart[PrintFloat::k_maxNumberOfSignificantDigits -
+                                  integralPartLength] >= '5');
   fractionalPartLength =
       integralPartLength + fractionalPartLength >
-              PrintFloat::k_numberOfStoredSignificantDigits
-          ? PrintFloat::k_numberOfStoredSignificantDigits - integralPartLength
+              PrintFloat::k_maxNumberOfSignificantDigits
+          ? PrintFloat::k_maxNumberOfSignificantDigits - integralPartLength
           : fractionalPartLength;
   while (incrementExponentAfterRoundingUp && integralPartLength-- > 0) {
     incrementExponentAfterRoundingUp = (*(integralPart++) == '9');
@@ -517,7 +520,7 @@ Decimal Decimal::Builder(const char *integralPart, int integralPartLength,
 template <typename T>
 Decimal Decimal::Builder(T f) {
   assert(!std::isnan(f) && !std::isinf(f));
-  int exp = IEEE754<T>::exponentBase10(f);
+  int exp = OMG::IEEE754<T>::exponentBase10(f);
   /* We keep 7 significant digits for if the the Decimal was built from a float
    * and 14 significant digits if it was built from a double. This roughly
    * correspond to the respective precision of float and double. */

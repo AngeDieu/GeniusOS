@@ -6,7 +6,6 @@
 
 #include <cmath>
 
-#include "../../shared/text_field_delegate.h"
 #include "../app.h"
 
 extern "C" {
@@ -20,23 +19,25 @@ using namespace Escher;
 
 namespace Sequence {
 
-TermSumController::TermSumController(
-    Responder* parentResponder,
-    Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-    GraphView* graphView, CurveViewRange* graphRange, CurveViewCursor* cursor)
-    : SumGraphController(parentResponder, inputEventHandlerDelegate, graphView,
-                         graphRange, cursor) {}
+TermSumController::TermSumController(Responder* parentResponder,
+                                     GraphView* graphView,
+                                     CurveViewRange* graphRange,
+                                     CurveViewCursor* cursor)
+    : SumGraphController(parentResponder, graphView, graphRange, cursor) {}
 
 const char* TermSumController::title() {
   return I18n::translate(I18n::Message::TermSum);
 }
 
 bool TermSumController::moveCursorHorizontallyToPosition(double position) {
-  if (position < 0.0) {
+  ExpiringPointer<Shared::Sequence> sequence =
+      App::app()->functionStore()->modelForRecord(selectedRecord());
+  int initialRank = sequence->initialRank();
+  int intPosition = std::round(position);
+  if (intPosition < initialRank) {
     return false;
   }
-  return SumGraphController::moveCursorHorizontallyToPosition(
-      std::round(position));
+  return SumGraphController::moveCursorHorizontallyToPosition(intPosition);
 }
 
 I18n::Message TermSumController::legendMessageAtStep(Step step) {

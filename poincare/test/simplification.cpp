@@ -210,6 +210,8 @@ QUIZ_CASE(poincare_simplification_addition) {
       "\u00122×2^\u00122×√(3)×e^\u0012π\u0013\u0013\u0013");
   assert_parsed_expression_simplify_to("((4π+5)/10)-2.3",
                                        "\u00122×π-9\u0013/5");
+  assert_parsed_expression_simplify_to("4×_°+3×_'+2×_\"-(3×_°+2×_'+1×_\")",
+                                       "\u00123661×π\u0013/648000×_rad");
   assert_parsed_expression_simplify_to(
       "[[1,2+i][3,4][5,6]]+[[1,2+i][3,4][5,6]]", "[[2,4+2×i][6,8][10,12]]");
   assert_parsed_expression_simplify_to("3+[[1,2][3,4]]", Undefined::Name());
@@ -329,10 +331,9 @@ QUIZ_CASE(poincare_simplification_multiplication) {
   assert_parsed_expression_simplify_to("2*3^x*3^(-x)", "\u0014dep(2,{x})");
   assert_parsed_expression_simplify_to("10-1/(3^x)",
                                        "\u001210×3^x-1\u0013/3^x");
+  assert_parsed_expression_simplify_to("2×cos(π/12)×e^(5πi/12)",
+                                       "1/2+\U000000122+√(3)\U00000013/2×i");
   // Do not factorize exponent if the multiplication result is over DBL_MAX
-#if !EMSCRIPTEN
-  /* TODO: This assert does not work on web-simulator because exceptions are
-   * not properly caught. */
   assert_parsed_expression_simplify_to(
       "((1.63871ᴇ182)^(1/256))*((1.93871ᴇ157)^(1/256))",
       "root("
@@ -342,7 +343,6 @@ QUIZ_CASE(poincare_simplification_multiplication) {
       "163871000000000000000000000000000000000000000000000000000000000000000000"
       "000000000000000000000000000000000000000000000000000000000000000000000000"
       "000000000000000000000000000000000000000,256)");
-#endif
 }
 
 /* Some of these are currently not tested because their units are weirdly
@@ -394,7 +394,7 @@ void assert_parsed_unit_simplify_to_with_prefixes(
         representative->canPrefix(prefixes + i, false)) {
       Unit::Builder(representative, prefixes + i)
           .serialize(buffer + strlen("1×"), bufferSize - strlen("1×"),
-                     Preferences::PrintFloatMode::Decimal,
+                     DecimalMode,
                      Preferences::VeryShortNumberOfSignificantDigits);
       assert_parsed_expression_simplify_to(buffer, buffer);
     }
@@ -740,6 +740,9 @@ QUIZ_CASE(poincare_simplification_units) {
   assert_parsed_expression_simplify_to("cross(_s,[[1][2][3]])",
                                        Undefined::Name());
   assert_parsed_expression_simplify_to("det(_s)", Undefined::Name());
+  assert_parsed_expression_simplify_to("det([[_s]])", Undefined::Name());
+  assert_parsed_expression_simplify_to("det([[cos(3gon)]])",
+                                       "cos(\U000000123×π\U00000013/200)");
   assert_parsed_expression_simplify_to("diff(_s,x,0)", Undefined::Name());
   assert_parsed_expression_simplify_to("diff(0,x,_s)", Undefined::Name());
   assert_parsed_expression_simplify_to("dim(_s)", Undefined::Name());
@@ -795,6 +798,8 @@ QUIZ_CASE(poincare_simplification_units) {
   assert_parsed_expression_simplify_to("quo(1,_s)", Undefined::Name());
   assert_parsed_expression_simplify_to("re(_s)", Undefined::Name());
   assert_parsed_expression_simplify_to("ref(_s)", Undefined::Name());
+  assert_parsed_expression_simplify_to("ref([[_s]])", Undefined::Name());
+  assert_parsed_expression_simplify_to("ref([[cos(3gon)]])", "[[1]]");
   assert_parsed_expression_simplify_to("rem(_s,1)", Undefined::Name());
   assert_parsed_expression_simplify_to("rem(1,_s)", Undefined::Name());
   assert_parsed_expression_simplify_to("round(1,_s)", Undefined::Name());
@@ -844,12 +849,9 @@ QUIZ_CASE(poincare_simplification_units) {
   assert_parsed_expression_simplify_to("1000000_kg", "1×_kt");
 
   // angle units
-  assert_parsed_expression_simplify_to("ln(2/2)_°", "0×_rad",
-                                       ReductionTarget::User,
-                                       Preferences::AngleUnit::Degree);
+  assert_parsed_expression_simplify_to("ln(2/2)_°", "0×_rad", User, Degree);
   assert_parsed_expression_simplify_to("ln(2/2)_rad", "0×_rad");
-  assert_parsed_expression_simplify_to("1×π×_°", "π×_°", ReductionTarget::User,
-                                       Preferences::AngleUnit::Degree);
+  assert_parsed_expression_simplify_to("1×π×_°", "π×_°", User, Degree);
   assert_parsed_expression_simplify_to("1×π×_rad", "π×_rad");
 }
 
@@ -955,6 +957,12 @@ QUIZ_CASE(poincare_simplification_power) {
   assert_parsed_expression_simplify_to("2^(6+π+x)", "64×2^\u0012x+π\u0013");
   assert_parsed_expression_simplify_to("i^(2/3)", "1/2+√(3)/2×i");
   assert_parsed_expression_simplify_to("e^(i×π/3)", "1/2+√(3)/2×i");
+  assert_parsed_expression_simplify_to("(-1)^2", "1");
+  assert_parsed_expression_simplify_to("(-1)^3", "-1");
+  assert_parsed_expression_simplify_to("(-1)^2006", "1");
+  assert_parsed_expression_simplify_to("(-1)^2007", "-1");
+  assert_parsed_expression_simplify_to("(-2)^2006", "(-2)^2006");
+  assert_parsed_expression_simplify_to("(-2)^2007", "(-2)^2007");
   assert_parsed_expression_simplify_to("(-1)^(1/2)", "i");
   assert_parsed_expression_simplify_to("(-1)^(-1/2)", "-i");
   assert_parsed_expression_simplify_to("(-1)^(1/3)", "1/2+√(3)/2×i");
@@ -986,6 +994,8 @@ QUIZ_CASE(poincare_simplification_power) {
                                        "√(330)/100000000000000000000");
   assert_parsed_expression_simplify_to("√(3.3×10^(-39))",
                                        "√(33)/100000000000000000000");
+  assert_parsed_expression_simplify_to("(√(2)^√(2))^√(2)", "2");
+
   // Principal angle of root of unity
   assert_parsed_expression_simplify_to("(-5)^(-1/3)",
                                        "root(25,3)/10-root(16875,6)/10×i", User,
@@ -1024,6 +1034,8 @@ QUIZ_CASE(poincare_simplification_power) {
   // assert this does not crash
   assert_parsed_expression_simplify_to(
       "90000000005^(x+0.5)", "90000000005^\u0012\u00122×x+1\u0013/2\u0013");
+  assert_parsed_expression_simplify_to("(-123456789012345)^3",
+                                       "(-123456789012345)^3");
 }
 
 QUIZ_CASE(poincare_simplification_factorial) {
@@ -1207,6 +1219,18 @@ QUIZ_CASE(poincare_simplification_function) {
   assert_parsed_expression_simplify_to("round(12.9,-2)", "0");
   assert_parsed_expression_simplify_to("round(4.235)", "4");
   assert_parsed_expression_simplify_to("round(0.235)", "0");
+  /* This tests that checks for overflow during its reduction. We need to input
+   * the expression as 10^30*... so that the number 3.5E303 is reduced as a
+   * Rational instead of being parsed as a Float because it's too long. */
+  assert_parsed_expression_simplify_to(
+      "round(10^30*10^30*10^30*10^10*10^10*10^30*10^30*10^30*10^30*10^30*10^30*"
+      "10^13*3,5)",
+      "round("
+      "300000000000000000000000000000000000000000000000000000000000000000000000"
+      "000000000000000000000000000000000000000000000000000000000000000000000000"
+      "000000000000000000000000000000000000000000000000000000000000000000000000"
+      "000000000000000000000000000000000000000000000000000000000000000000000000"
+      "0000000000000000,5)");
   assert_parsed_expression_simplify_to("sign(-23)", "-1");
   assert_parsed_expression_simplify_to("sign(-i)", "sign(-i)");
   assert_parsed_expression_simplify_to("sign(0)", "0");
@@ -1428,6 +1452,13 @@ QUIZ_CASE(poincare_simplification_trigonometry_functions) {
                                        Degree);
   assert_parsed_expression_simplify_to("acos(cos(180+50))", "130", User,
                                        Degree);
+  assert_parsed_expression_simplify_to(
+      "arccos(cos(2345995537929342462976×π^5-36850577388590589246720×π^4+"
+      "231537533966682879807360×π^3-727391989955238208647840×π^2+"
+      "1142577399842170168717980×π-717897987691852588770249))",
+      "arccos(cos(2345995537929342462976×π^5-36850577388590589246720×π^4+"
+      "231537533966682879807360×π^3-727391989955238208647840×π^2+"
+      "1142577399842170168717980×π-717897987691852588770249))");
 
   assert_parsed_expression_simplify_to("acos(cos(4π/7))", "\u00124×π\u0013/7");
   assert_parsed_expression_simplify_to("acos(-cos(2))", "π-2");
@@ -1508,9 +1539,13 @@ QUIZ_CASE(poincare_simplification_trigonometry_functions) {
       "atan(1/x)", "\u0014dep(90×sign(x)-arctan(x),{1/x})", User, Degree);
   assert_parsed_expression_simplify_to(
       "atan(1/x)", "\u0014dep(100×sign(x)-arctan(x),{1/x})", User, Gradian);
-  assert_parsed_expression_simplify_to(
-      "atan(cos(x)/sin(x))",
-      "\u0014dep(\u0012π×sign(tan(x))-2×arctan(tan(x))\u0013/2,{csc(x)})");
+  assert_parsed_expression_simplify_to("atan(cos(x)/sin(x))", "arctan(cot(x))");
+  assert_parsed_expression_simplify_to("atan(cos(π/7)/sin(π/7))",
+                                       "\U000000125×π\U00000013/14");
+  assert_parsed_expression_simplify_to("atan(cos(4)/sin(4))",
+                                       "\U000000123×π-8\U00000013/2");
+  assert_parsed_expression_simplify_to("atan(cos(1.57079632)/sin(1.57079632))",
+                                       "arctan(cot(9817477/6250000))");
 
   // cos(asin)
   assert_parsed_expression_simplify_to("cos(asin(x))", "√(-x^2+1)", User,
@@ -1689,6 +1724,9 @@ QUIZ_CASE(poincare_simplification_matrix) {
                                        "[[1,-1/4][0,1]]");
   assert_parsed_expression_simplify_to("ref([[0,1][1ᴇ-100,1]])",
                                        "[[1,10^100][0,1]]");
+  // Can't canonize if a child cannot be approximated
+  assert_parsed_expression_simplify_to("ref([[0,0][x,0]])",
+                                       "ref([[0,0][x,0]])");
 
   // Cross product
   assert_parsed_expression_simplify_to("cross([[0][1/√(2)][0]],[[0][0][1]])",
@@ -2618,12 +2656,28 @@ QUIZ_CASE(poincare_simplification_list) {
   // Product of elements
   assert_parsed_expression_simplify_to("prod({})", "1");
   assert_parsed_expression_simplify_to("prod({1,4,9})", "36");
-  // Sorting a list
+  // Sort a list of complexes
   assert_parsed_expression_simplify_to("sort({})", "{}");
-  assert_parsed_expression_simplify_to("sort({1})", "{1}");
-  assert_parsed_expression_simplify_to("sort({3,2,1})", "{1,2,3}");
-  assert_parsed_expression_simplify_to("sort({undef,-1,-2,-inf,inf})",
-                                       "{-∞,-2,-1,∞,undef}");
+  assert_parsed_expression_simplify_to("sort({4})", "{4}");
+  assert_parsed_expression_simplify_to("sort({undef})", "{undef}");
+  assert_parsed_expression_simplify_to("sort({i})", "sort({i})");
+  assert_parsed_expression_simplify_to("sort({-1,5,2+6,-0})", "{-1,0,5,8}");
+  assert_parsed_expression_simplify_to("sort({-1,-2,-inf,inf})",
+                                       "{-∞,-2,-1,∞}");
+  assert_parsed_expression_simplify_to("sort({-1,undef,-2,-inf,inf})",
+                                       "{-1,undef,-2,-∞,∞}");
+  assert_parsed_expression_simplify_to("sort({-1,i,8,-0})", "sort({-1,i,8,0})");
+  assert_parsed_expression_simplify_to("sort({-1,undef,1})", "{-1,undef,1}");
+  // Sort list of points
+  assert_parsed_expression_simplify_to("sort({(8,1),(5,0),(5,-3),(1,0),(5,9)})",
+                                       "{(1,0),(5,-3),(5,0),(5,9),(8,1)}");
+  assert_parsed_expression_simplify_to("sort({(8,1),(5,i),(5,-3)})",
+                                       "sort({(8,1),(5,i),(5,-3)})");
+  assert_parsed_expression_simplify_to("sort({(undef,1),(6,1),(5,-3)})",
+                                       "{(undef,1),(6,1),(5,-3)}");
+  assert_parsed_expression_simplify_to(
+      "sort({(inf,1),(6,1),(5,-3),(-inf,9),(-inf,1)})",
+      "{(-∞,1),(-∞,9),(5,-3),(6,1),(∞,1)}");
   // Mean of a list
   assert_parsed_expression_simplify_to("mean({})", Undefined::Name());
   assert_parsed_expression_simplify_to("mean({1,2,3})", "2");
@@ -2641,19 +2695,23 @@ QUIZ_CASE(poincare_simplification_list) {
   // Minimum of a list
   assert_parsed_expression_simplify_to("min({})", Undefined::Name());
   assert_parsed_expression_simplify_to("min({1,2,3})", "1");
-  assert_parsed_expression_simplify_to("min({3,undef,-2})", "-2");
+  assert_parsed_expression_simplify_to("min({3,undef,-2})", Undefined::Name());
   // Do not simplify when a value can't be approximated
   assert_parsed_expression_simplify_to("min({3,x,-2})", "min({3,x,-2})");
   assert_parsed_expression_simplify_to("min({3,-inf,-2})",
                                        Infinity::Name(true));
+  assert_parsed_expression_simplify_to("min({-7,0,i})", "min({-7,0,i})");
+  assert_parsed_expression_simplify_to("min({-7,undef,i})", Undefined::Name());
 
   // Maximum of a list
   assert_parsed_expression_simplify_to("max({})", Undefined::Name());
   assert_parsed_expression_simplify_to("max({1,2,3})", "3");
-  assert_parsed_expression_simplify_to("max({3,undef,-2})", "3");
+  assert_parsed_expression_simplify_to("max({3,undef,-2})", Undefined::Name());
   // Do not simplify when a value can't be approximated
   assert_parsed_expression_simplify_to("max({3,x,-2})", "max({3,x,-2})");
   assert_parsed_expression_simplify_to("max({3,inf,-2})", Infinity::Name());
+  assert_parsed_expression_simplify_to("max({-7,0,i})", "max({-7,0,i})");
+  assert_parsed_expression_simplify_to("max({-7,undef,i})", Undefined::Name());
 
   // Variance of a list
   assert_parsed_expression_simplify_to("var({})", Undefined::Name());
@@ -2844,6 +2902,11 @@ QUIZ_CASE(poincare_simplification_comparison_operators) {
   assert_parsed_expression_simplify_to("3=3+3<4", "False");
   assert_parsed_expression_simplify_to("(3=3)+(3<4)", Undefined::Name());
   assert_parsed_expression_simplify_to("ln(3=5)", Undefined::Name());
+
+  assert_parsed_expression_simplify_to("4000!4=9",
+                                       "\U000000124×4000!\U00000013=9");
+  assert_parsed_expression_simplify_to("4000!4!=9",
+                                       "\U000000124×4000!\U00000013≠9");
 }
 
 typedef bool (*BoolCompare)(bool a, bool b);
@@ -2931,6 +2994,10 @@ QUIZ_CASE(poincare_simplification_piecewise_operator) {
   assert_parsed_expression_simplify_to(
       "piecewise(-x/x,x>0,0)",
       "\u0014dep(piecewise(-1,x>0,0),{piecewise(1/x,x>0,0)})");
+
+  assert_parsed_expression_simplify_to(
+      "piecewise(3,4>0,2,2<a)", "undef", User, Radian, MetricUnitFormat,
+      Cartesian, ReplaceAllSymbolsWithDefinitionsOrUndefined);
 }
 
 QUIZ_CASE(poincare_simplification_integral) {
@@ -2942,7 +3009,7 @@ QUIZ_CASE(poincare_simplification_integral) {
 
 QUIZ_CASE(poincare_simplification_point) {
   assert_parsed_expression_simplify_to("(1,2)", "(1,2)");
-  assert_parsed_expression_simplify_to("(1/0,2)", Undefined::Name());
+  assert_parsed_expression_simplify_to("(1/0,2)", "(undef,2)");
   assert_parsed_expression_simplify_to("(1,2)+3", Undefined::Name());
   assert_parsed_expression_simplify_to("abs((1.23,4.56))", Undefined::Name());
   assert_parsed_expression_simplify_to("{(1+2,3+4),(5+6,7+8)}",

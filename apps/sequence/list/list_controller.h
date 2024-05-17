@@ -9,7 +9,7 @@
 #include "editable_sequence_cell.h"
 #include "list_parameter_controller.h"
 #include "sequence_cell.h"
-#include "sequence_toolbox.h"
+#include "sequence_toolbox_data_source.h"
 #include "type_parameter_controller.h"
 
 namespace Sequence {
@@ -17,33 +17,31 @@ namespace Sequence {
 class ListController : public Shared::FunctionListController {
  public:
   ListController(Escher::Responder* parentResponder,
-                 Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
                  Escher::ButtonRowController* header,
                  Escher::ButtonRowController* footer);
   int numberOfExpressionRows() const override;
-  KDCoordinate expressionRowHeight(int j) override;
-  Escher::Toolbox* toolbox() override;
+  KDCoordinate expressionRowHeight(int row) override;
   void selectPreviousNewSequenceCell();
   void editExpression(Ion::Events::Event event) override;
   /* ViewController */
   void viewWillAppear() override;
+  void viewDidDisappear() override;
   /* ListViewDataSource */
   Escher::HighlightCell* reusableCell(int index, int type) override;
   int reusableCellCount(int type) override {
     return type > k_expressionCellType ? 1 : maxNumberOfDisplayableRows();
   }
+  bool canStoreCellAtRow(int row) override { return false; }
   void fillCellForRow(Escher::HighlightCell* cell, int row) override;
   /* Responder */
   bool handleEvent(Ion::Events::Event event) override;
-  /* ViewController */
-  bool canStoreContentOfCell(Escher::SelectableListView* t,
-                             int row) const override {
-    return false;
-  }
   void showLastSequence();
-  /* LayoutFieldDelegate */
+
+  /* MathLayoutFieldDelegate */
   bool layoutFieldDidReceiveEvent(Escher::LayoutField* layoutField,
                                   Ion::Events::Event event) override;
+  bool isAcceptableExpression(const Poincare::Expression expression) override;
+  CodePoint defaultXNT() override { return Shared::Sequence::k_sequenceSymbol; }
 
  private:
   /* Model definitions */
@@ -54,13 +52,13 @@ class ListController : public Shared::FunctionListController {
   /* Width and margins */
   constexpr static KDCoordinate k_minTitleColumnWidth = 65;
   constexpr static KDCoordinate k_functionTitleSumOfMargins = 25;
-  constexpr static KDCoordinate k_expressionCellVerticalMargin =
-      Escher::Metric::BigCellMargin;
   /* Row numbers */
   constexpr static int k_maxNumberOfRows =
       3 * Shared::SequenceStore::k_maxNumberOfSequences;
 
-  void initCellSize(Escher::TableView* view) override {}
+  Escher::EditableExpressionModelCell* editableExpressionModelCell() override {
+    return m_editableCell.expressionCell();
+  }
 
   void computeTitlesColumnWidth(bool forceMax = false);
   ListParameterController* parameterController() override {
@@ -93,7 +91,7 @@ class ListController : public Shared::FunctionListController {
   ListParameterController m_parameterController;
   TypeParameterController m_typeParameterController;
   Escher::StackViewController m_typeStackController;
-  SequenceToolbox m_sequenceToolbox;
+  SequenceToolboxDataSource m_sequenceToolboxDataSource;
   KDCoordinate m_titlesColumnWidth;
   bool m_parameterColumnSelected;
 };

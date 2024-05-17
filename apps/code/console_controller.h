@@ -4,13 +4,12 @@
 #include <escher/list_view_data_source.h>
 #include <python/port/port.h>
 
-#include "../shared/input_event_handler_delegate.h"
 #include "console_edit_cell.h"
 #include "console_line_cell.h"
 #include "console_store.h"
+#include "python_variable_box_controller.h"
 #include "sandbox_controller.h"
 #include "script_store.h"
-#include "variable_box_controller.h"
 
 namespace Code {
 
@@ -21,11 +20,9 @@ class ConsoleController : public Escher::ViewController,
                           public Escher::SelectableListViewDataSource,
                           public Escher::SelectableListViewDelegate,
                           public Escher::TextFieldDelegate,
-                          public Shared::InputEventHandlerDelegate,
                           public MicroPython::ExecutionEnvironment {
  public:
-  ConsoleController(Escher::Responder* parentResponder, App* pythonDelegate,
-                    ScriptStore* scriptStore
+  ConsoleController(Escher::Responder* parentResponder, App* pythonDelegate
 #if EPSILON_GETOPT
                     ,
                     bool m_lockOnConsole
@@ -70,12 +67,8 @@ class ConsoleController : public Escher::ViewController,
   bool textFieldDidReceiveEvent(Escher::AbstractTextField* textField,
                                 Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
-  bool textFieldDidAbortEditing(Escher::AbstractTextField* textField) override;
-
-  // InputEventHandlerDelegate
-  VariableBoxController* variableBox() override;
+  void textFieldDidAbortEditing(Escher::AbstractTextField* textField) override;
 
   // MicroPython::ExecutionEnvironment
   Escher::ViewController* sandbox() override { return &m_sandboxController; }
@@ -108,15 +101,18 @@ class ConsoleController : public Escher::ViewController,
                     KDCOORDINATE_MAX / KDFont::GlyphWidth(KDFont::Size::Large),
                 "Accumulation buffer of console is too long for large font");
 
+  int editableCellRow() const { return m_consoleStore.numberOfLines(); }
+
   // RegularListViewDataSource
   KDCoordinate defaultRowHeight() override;
   bool isDisplayingViewController();
-  void reloadData(bool isEditing);
+  void reloadData();
   void flushOutputAccumulationBufferToStore();
   void appendTextToOutputAccumulationBuffer(const char* text, size_t length);
   void emptyOutputAccumulationBuffer();
   size_t firstNewLineCharIndex(const char* text, size_t length);
   Escher::StackViewController* stackViewController();
+  void prepareVariableBox();
   App* m_pythonDelegate;
   bool m_importScriptsWhenViewAppears;
   ConsoleStore m_consoleStore;
@@ -129,7 +125,7 @@ class ConsoleController : public Escher::ViewController,
    * different strings until a new line char appears in the text. When this
    * happens, or when m_outputAccumulationBuffer is full, we create a new
    * ConsoleLine in the ConsoleStore and empty m_outputAccumulationBuffer. */
-  ScriptStore* m_scriptStore;
+  ScriptStore m_scriptStore;
   SandboxController m_sandboxController;
   bool m_inputRunLoopActive;
   bool m_autoImportScripts;

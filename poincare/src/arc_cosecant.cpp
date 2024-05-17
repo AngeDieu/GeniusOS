@@ -15,11 +15,11 @@ int ArcCosecantNode::numberOfChildren() const {
 }
 
 template <typename T>
-Complex<T> ArcCosecantNode::computeOnComplex(
+std::complex<T> ArcCosecantNode::computeOnComplex(
     const std::complex<T> c, Preferences::ComplexFormat complexFormat,
     Preferences::AngleUnit angleUnit) {
   if (c == static_cast<T>(0.0)) {
-    return Complex<T>::Undefined();
+    return complexNAN<T>();
   }
   return ArcSineNode::computeOnComplex<T>(std::complex<T>(1) / c, complexFormat,
                                           angleUnit);
@@ -44,7 +44,7 @@ int ArcCosecantNode::serialize(char* buffer, int bufferSize,
 Expression ArcCosecantNode::shallowReduce(
     const ReductionContext& reductionContext) {
   ArcCosecant e = ArcCosecant(this);
-  return Trigonometry::shallowReduceInverseAdvancedFunction(e,
+  return Trigonometry::ShallowReduceInverseAdvancedFunction(e,
                                                             reductionContext);
 }
 

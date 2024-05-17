@@ -39,16 +39,10 @@ class Layout : public TreeHandle {
     return isUninitialized() ? l.isUninitialized()
                              : node()->isIdenticalTo(l, makeEditable);
   }
-  bool hasTopLevelEquationSymbol() const {
-    return privateHasTopLevelComparisonSymbol(false);
-  }
-  bool hasTopLevelComparisonSymbol() const {
-    return privateHasTopLevelComparisonSymbol(true);
-  }
 
   // Rendering
   void draw(KDContext *ctx, KDPoint p, KDGlyph::Style style,
-            LayoutSelection selection,
+            const LayoutSelection &selection,
             KDColor selectionColor = Escher::Palette::Select);
   void draw(KDContext *ctx, KDPoint p, KDGlyph::Style style);
   void render(KDContext *ctx, KDPoint p, KDGlyph::Style style) {

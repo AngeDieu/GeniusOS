@@ -65,7 +65,7 @@ void NestedMenuController::BreadcrumbController::updateTitle() {
 
 void NestedMenuController::ListController::didBecomeFirstResponder() {
   m_selectableListView->reloadData();
-  Container::activeApp()->setFirstResponder(m_selectableListView);
+  App::app()->setFirstResponder(m_selectableListView);
 }
 
 /* NestedMenuController */
@@ -78,7 +78,7 @@ NestedMenuController::NestedMenuController(Responder* parentResponder,
       m_breadcrumbController(this, &m_selectableListView),
       m_listController(this, &m_selectableListView, title),
       m_savedChecksum(0) {
-  m_selectableListView.setMargins(0);
+  m_selectableListView.resetMargins();
   m_selectableListView.hideScrollBars();
   /* Title and breadcrumb headers should not overlap. Breadcrumb should.
    * Using default tableCell's border color. */
@@ -86,8 +86,6 @@ NestedMenuController::NestedMenuController(Responder* parentResponder,
 }
 
 void NestedMenuController::viewWillAppear() {
-  // Reset memoization first, so that the right cells are manipulated
-  resetMemoization();
   StackViewController::viewWillAppear();
   m_selectableListView.reloadData();
 
@@ -115,17 +113,14 @@ bool NestedMenuController::handleEvent(Ion::Events::Event event) {
   }
   if ((event == Ion::Events::Toolbox && isToolbox()) ||
       (event == Ion::Events::Var && !isToolbox())) {
-    if (stackDepth() == 0) {
-      Container::activeApp()->modalViewController()->dismissModal();
-      return true;
-    }
-    return returnToRootMenu();
+    App::app()->modalViewController()->dismissModal();
+    return true;
   }
   if ((event == Ion::Events::Var && isToolbox()) ||
       (event == Ion::Events::Toolbox && !isToolbox())) {
-    Container::activeApp()->modalViewController()->dismissModal();
+    App::app()->modalViewController()->dismissModal();
     assert(sender());
-    return sender()->handleBoxEvent(event);
+    return sender()->handleEvent(event);
   }
   if (selectedRow() < 0) {
     return false;
@@ -144,10 +139,11 @@ bool NestedMenuController::handleEvent(Ion::Events::Event event) {
 }
 
 bool NestedMenuController::selectSubMenu(int selectedRow) {
-  resetMemoization();
+  m_selectableListView.resetSizeAndOffsetMemoization();
   int previousDepth = stackDepth();
   m_stack.push(
       StackState(selectedRow, m_selectableListView.contentOffset().y()));
+  setOffset(KDPointZero);
 
   /* Unless breadcrumb wasn't visible (depth 0), we need to pop it first to push
    * it again, in order to force title refresh. */
@@ -157,12 +153,12 @@ bool NestedMenuController::selectSubMenu(int selectedRow) {
   m_breadcrumbController.pushTitle(subTitle());
   StackViewController::push(&m_breadcrumbController);
   m_selectableListView.selectFirstRow();
-  Container::activeApp()->setFirstResponder(&m_listController);
+  App::app()->setFirstResponder(&m_listController);
   return true;
 }
 
 bool NestedMenuController::returnToPreviousMenu() {
-  resetMemoization();
+  m_selectableListView.resetSizeAndOffsetMemoization();
   int previousDepth = stackDepth();
   NestedMenuController::StackState state = m_stack.stackPop();
 
@@ -179,7 +175,7 @@ bool NestedMenuController::returnToPreviousMenu() {
 }
 
 bool NestedMenuController::returnToRootMenu() {
-  resetMemoization();
+  m_selectableListView.resetSizeAndOffsetMemoization();
   m_selectableListView.selectFirstRow();
   if (stackDepth() > 0) {
     // Reset breadcrumb and stack
@@ -199,9 +195,8 @@ void NestedMenuController::loadState(NestedMenuController::StackState state) {
 }
 
 void NestedMenuController::open() {
-  Container::activeApp()->displayModalViewController(
-      this, 0.f, 0.f, Metric::PopUpTopMargin, Metric::PopUpLeftMargin, 0,
-      Metric::PopUpRightMargin);
+  App::app()->displayModalViewController(this, 0.f, 0.f,
+                                         Metric::PopUpMarginsNoBottom);
 }
 
 }  // namespace Escher

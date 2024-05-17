@@ -1,22 +1,15 @@
 #include "calculation.h"
 
 #include <apps/apps_container_helper.h>
-#include <apps/global_preferences.h>
 #include <apps/shared/expression_display_permissions.h>
-#include <apps/shared/poincare_helpers.h>
-#include <apps/shared/scrollable_multiple_layouts_view.h>
 #include <poincare/exception_checkpoint.h>
-#include <poincare/matrix.h>
 #include <poincare/nonreal.h>
-#include <poincare/trigonometry.h>
 #include <poincare/undefined.h>
-#include <poincare/unit.h>
 #include <string.h>
 
 #include <algorithm>
 #include <cmath>
 
-#include "additional_outputs/scientific_notation_helper.h"
 #include "app.h"
 #include "poincare/expression_node.h"
 
@@ -65,7 +58,9 @@ const char *Calculation::approximateOutputText(
 }
 
 Expression Calculation::input() {
-  return Expression::Parse(m_inputText, nullptr);
+  Expression e = Expression::Parse(m_inputText, nullptr);
+  assert(!e.isUninitialized());
+  return e;
 }
 
 Expression Calculation::exactOutput() {
@@ -73,7 +68,9 @@ Expression Calculation::exactOutput() {
    * thereby avoid turning cos(Pi/4) into sqrt(2)/2 and displaying
    * 'sqrt(2)/2 = 0.999906' (which is totally wrong) instead of
    * 'cos(pi/4) = 0.999906' (which is true in degree). */
-  return Expression::Parse(exactOutputText(), nullptr);
+  Expression e = Expression::Parse(exactOutputText(), nullptr);
+  assert(!e.isUninitialized());
+  return e;
 }
 
 Expression Calculation::approximateOutput(
@@ -109,8 +106,10 @@ Expression Calculation::approximateOutput(
    *
    */
   // clang-format on
-  return Expression::Parse(approximateOutputText(numberOfSignificantDigits),
-                           nullptr);
+  Expression e = Expression::Parse(
+      approximateOutputText(numberOfSignificantDigits), nullptr);
+  assert(!e.isUninitialized());
+  return e;
 }
 
 Layout Calculation::createInputLayout() {
@@ -119,7 +118,7 @@ Layout Calculation::createInputLayout() {
     Expression e = input();
     if (!e.isUninitialized()) {
       return e.createLayout(Preferences::PrintFloatMode::Decimal,
-                            PrintFloat::k_numberOfStoredSignificantDigits,
+                            PrintFloat::k_maxNumberOfSignificantDigits,
                             App::app()->localContext());
     }
   }
@@ -132,7 +131,7 @@ Layout Calculation::createExactOutputLayout(bool *couldNotCreateExactLayout) {
     Expression e = exactOutput();
     if (!e.isUninitialized()) {
       return e.createLayout(Preferences::PrintFloatMode::Decimal,
-                            PrintFloat::k_numberOfStoredSignificantDigits,
+                            PrintFloat::k_maxNumberOfSignificantDigits,
                             App::app()->localContext());
     }
   }
@@ -200,7 +199,8 @@ Calculation::DisplayOutput Calculation::displayOutput(Context *context) {
           inputExp, outputExp,
           approximateOutput(NumberOfSignificantDigits::UserDefined), context)) {
     m_displayOutput = DisplayOutput::ApproximateOnly;
-  } else if (inputExp.recursivelyMatches(Expression::IsApproximate, context) ||
+  } else if (inputExp.isIdenticalTo(outputExp) ||
+             inputExp.recursivelyMatches(Expression::IsApproximate, context) ||
              outputExp.recursivelyMatches(Expression::IsApproximate, context) ||
              inputExp.recursivelyMatches(Expression::IsPercent, context)) {
     m_displayOutput = DisplayOutput::ExactAndApproximateToggle;
@@ -210,8 +210,64 @@ Calculation::DisplayOutput Calculation::displayOutput(Context *context) {
   return m_displayOutput;
 }
 
-Calculation::EqualSign
-Calculation::exactAndApproximateDisplayedOutputsEqualSign(Context *context) {
+void Calculation::createOutputLayouts(Layout *exactOutput,
+                                      Layout *approximateOutput,
+                                      Context *context,
+                                      bool canChangeDisplayOutput,
+                                      KDCoordinate maxVisibleWidth,
+                                      KDFont::Size font) {
+  assert(exactOutput && approximateOutput);
+
+  // Create the exact output layout
+  *exactOutput = Layout();
+  if (DisplaysExact(displayOutput(context))) {
+    bool couldNotCreateExactLayout = false;
+    *exactOutput = createExactOutputLayout(&couldNotCreateExactLayout);
+    if (couldNotCreateExactLayout) {
+      if (canChangeDisplayOutput &&
+          displayOutput(context) != DisplayOutput::ExactOnly) {
+        forceDisplayOutput(DisplayOutput::ApproximateOnly);
+      } else {
+        /* We should only display the exact result, but we cannot create it
+         * -> raise an exception. */
+        ExceptionCheckpoint::Raise();
+      }
+    }
+    if (canChangeDisplayOutput &&
+        displayOutput(context) == DisplayOutput::ExactAndApproximate &&
+        exactOutput->layoutSize(font).width() > maxVisibleWidth) {
+      forceDisplayOutput(DisplayOutput::ExactAndApproximateToggle);
+    }
+  }
+
+  // Create the approximate output layout
+  if (displayOutput(context) == DisplayOutput::ExactOnly) {
+    *approximateOutput = *exactOutput;
+  } else {
+    bool couldNotCreateApproximateLayout = false;
+    *approximateOutput =
+        createApproximateOutputLayout(&couldNotCreateApproximateLayout);
+    if (couldNotCreateApproximateLayout) {
+      if (canChangeDisplayOutput &&
+          displayOutput(context) != DisplayOutput::ApproximateOnly) {
+        /* Set display the output to ApproximateOnly, make room in the pool by
+         * erasing the exact layout, retry to create the approximate layout. */
+        forceDisplayOutput(DisplayOutput::ApproximateOnly);
+        *exactOutput = Layout();
+        couldNotCreateApproximateLayout = false;
+        *approximateOutput =
+            createApproximateOutputLayout(&couldNotCreateApproximateLayout);
+        if (couldNotCreateApproximateLayout) {
+          ExceptionCheckpoint::Raise();
+        }
+      } else {
+        ExceptionCheckpoint::Raise();
+      }
+    }
+  }
+}
+
+Calculation::EqualSign Calculation::equalSign(Context *context) {
   // TODO: implement a UserCircuitBreaker
   if (m_equalSign != EqualSign::Unknown) {
     return m_equalSign;
@@ -224,23 +280,31 @@ Calculation::exactAndApproximateDisplayedOutputsEqualSign(Context *context) {
     return EqualSign::Approximation;
   }
   /* Displaying the right equal symbol is less important than displaying a
-   * result, so we do not want exactAndApproximateDisplayedOutputsEqualSign to
-   * create a pool failure that would prevent from displaying a result that we
-   * managed to compute. We thus encapsulate the method in an exception
-   * checkpoint: if there was not enough memory on the pool to compute the equal
-   * sign, just return EqualSign::Approximation.
-   * We can safely use an exception checkpoint here because we are sure of not
-   * modifying any pre-existing node in the pool. We are sure there cannot be a
-   * Store in the exactOutput. */
+   * result, so we do not want equalSign to create a pool failure that would
+   * prevent from displaying a result that we managed to compute. We thus
+   * encapsulate the method in an exception checkpoint: if there was not enough
+   * memory on the pool to compute the equal sign, just return
+   * EqualSign::Approximation. We can safely use an exception checkpoint here
+   * because we are sure of not modifying any pre-existing node in the pool. We
+   * are sure there cannot be a Store in the exactOutput. */
   ExceptionCheckpoint ecp;
   if (ExceptionRun(ecp)) {
     Expression exactOutputExpression = exactOutput();
-    if (input().recursivelyMatches(Expression::IsPercent, context)) {
-      /* When the input contains percent, the exact expression is not fully
-       * reduced so we need to reduce it again prior to computing equal sign */
+    if (input().recursivelyMatches(
+            [](const Expression e) {
+              return Expression::IsPercent(e) ||
+                     e.type() == ExpressionNode::Type::Factor;
+            },
+            context)) {
+      /* When the input contains percent or factor, the exact expression is not
+       * fully reduced so we need to reduce it again prior to computing equal
+       * sign */
       PoincareHelpers::CloneAndSimplify(
-          &exactOutputExpression, context, ReductionTarget::User,
-          SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined);
+          &exactOutputExpression, context,
+          {.complexFormat = m_complexFormat,
+           .angleUnit = m_angleUnit,
+           .symbolicComputation = SymbolicComputation::
+               ReplaceAllSymbolsWithDefinitionsOrUndefined});
     }
     m_equalSign = Expression::ExactAndApproximateExpressionsAreEqual(
                       exactOutputExpression,
@@ -255,154 +319,23 @@ Calculation::exactAndApproximateDisplayedOutputsEqualSign(Context *context) {
   }
 }
 
-static bool expressionIsInterestingFunction(Expression e) {
-  if (e.isOfType({ExpressionNode::Type::Opposite,
-                  ExpressionNode::Type::Parenthesis})) {
-    return expressionIsInterestingFunction(e.childAtIndex(0));
-  }
-  return !e.isNumber() && !e.isOfType({ExpressionNode::Type::ConstantMaths,
-                                       ExpressionNode::Type::Sequence,
-                                       ExpressionNode::Type::UnitConvert});
-}
-
-Calculation::AdditionalInformations Calculation::additionalInformations() {
-  if (Preferences::sharedPreferences->examMode().forbidAdditionalResults() ||
-      strcmp(approximateOutputText(NumberOfSignificantDigits::Maximal),
-             Undefined::Name()) == 0) {
-    return AdditionalInformations();
-  }
-  Preferences *preferences = Preferences::sharedPreferences;
+void Calculation::fillExpressionsForAdditionalResults(
+    Expression *input, Expression *exactOutput, Expression *approximateOutput) {
   Context *globalContext =
       AppsContainerHelper::sharedAppsContainerGlobalContext();
-  Expression i = input();
-  Expression a = approximateOutput(NumberOfSignificantDigits::Maximal);
-  Expression o = displayOutput(globalContext) !=
-                         Calculation::DisplayOutput::ApproximateOnly
-                     ? exactOutput()
-                     : a;
-  /* Special case for Store:
-   * Store nodes have to be at the root of the expression, which prevents
-   * from creating new expressions with store node as a child. We don't
-   * return any additional outputs for them to avoid bothering with special
-   * cases. */
-  if (i.isUninitialized() || o.isUninitialized() || a.isUninitialized() ||
-      i.type() == ExpressionNode::Type::Store ||
-      o.type() == ExpressionNode::Type::List ||
-      a.type() == ExpressionNode::Type::List || a.isUndefined() ||
-      a.recursivelyMatches(
-          [](const Expression e, Context *c) {
-            return e.isOfType({ExpressionNode::Type::Infinity});
-          },
-          nullptr)) {
-    return AdditionalInformations{};
-  }
-  /* Using the approximated output instead of the user input to guess the
-   * complex format makes additional results more consistent when the user has
-   * created complexes in Complex mode and then switched back to Real mode. */
-  Preferences::ComplexFormat complexFormat =
-      Preferences::UpdatedComplexFormatWithExpressionInput(
-          preferences->complexFormat(), a, nullptr);
-  bool isComplex = a.hasDefinedComplexApproximation<double>(
-      nullptr, complexFormat, preferences->angleUnit());
-  /* Trigonometry additional results are displayed if either input or output is
-   * a direct or inverse trigonometric function. Indeed, we want to capture both
-   * cases:
-   *
-   * - > input: cos(60)
-   *   > output: 1/2
-   * - > input: 2cos(2) - cos(2)
-   *   > output: cos(2)
-   * However if the result is complex, it is treated as a complex result instead
-   */
-  if (!isComplex) {
-    if (Trigonometry::isInverseTrigonometryFunction(i) ||
-        Trigonometry::isInverseTrigonometryFunction(o)) {
-      // The angle cannot be complex since Expression a isn't
-      return AdditionalInformations{.inverseTrigonometry = true};
-    }
-    Expression directExpression;
-    if (Trigonometry::isDirectTrigonometryFunction(o)) {
-      directExpression = o;
-    } else if (Trigonometry::isDirectTrigonometryFunction(i)) {
-      directExpression = i;
-    }
+  *input = this->input();
+  *approximateOutput =
+      this->approximateOutput(NumberOfSignificantDigits::Maximal);
+  *exactOutput = DisplaysExact(displayOutput(globalContext))
+                     ? this->exactOutput()
+                     : *approximateOutput;
+}
 
-    if (!directExpression.isUninitialized()) {
-      Expression angle = directExpression.childAtIndex(0);
-      Expression unit;
-      PoincareHelpers::CloneAndReduceAndRemoveUnit(
-          &angle, globalContext, ReductionTarget::SystemForApproximation,
-          &unit);
-      // The angle must be real.
-      if ((unit.isPureAngleUnit() || unit.isUninitialized()) &&
-          std::isfinite(PoincareHelpers::ApproximateToScalar<double>(
-              angle, globalContext))) {
-        return AdditionalInformations{.directTrigonometry = true};
-      }
-    }
-  }
-  if (o.hasUnit()) {
-    AdditionalInformations additionalInformations = {};
-    Expression unit;
-    Expression oClone = o.clone();
-    PoincareHelpers::CloneAndReduceAndRemoveUnit(
-        &oClone, globalContext, ReductionTarget::User, &unit,
-        SymbolicComputation::ReplaceAllSymbolsWithDefinitionsOrUndefined,
-        UnitConversion::None);
-    double value =
-        PoincareHelpers::ApproximateToScalar<double>(oClone, globalContext);
-    if (Unit::ShouldDisplayAdditionalOutputs(
-            value, unit,
-            GlobalPreferences::sharedGlobalPreferences->unitFormat()) ||
-        UnitComparison::ShouldDisplayUnitComparison(value, unit)) {
-      /* Sometimes with angle units, the reduction with UnitConversion::None
-       * will be defined but not the reduction with UnitConversion::Default,
-       * which will make the unit list controller crash.  */
-      unit = Expression();
-      PoincareHelpers::CloneAndReduceAndRemoveUnit(
-          &o, globalContext, ReductionTarget::User, &unit);
-      if (!unit.isUninitialized()) {
-        additionalInformations.unit = true;
-      }
-    }
-    return additionalInformations;
-  }
-  if (o.type() == ExpressionNode::Type::Matrix) {
-    if (static_cast<const Matrix &>(o).vectorType() !=
-        Array::VectorType::None) {
-      return AdditionalInformations{.vector = true};
-    }
-    return AdditionalInformations{.matrix = true};
-  }
-  if (isComplex) {
-    return AdditionalInformations{.complex = true};
-  }
-  AdditionalInformations additionalInformations = {};
-  if (a.type() != ExpressionNode::Type::Nonreal &&
-      preferences->displayMode() != Preferences::PrintFloatMode::Scientific) {
-    // There should be no units at this point
-    assert(!a.hasUnit());
-    additionalInformations.scientificNotation =
-        ScientificNotationHelper::HasAdditionalOutputs(a, globalContext);
-  }
-  // We want a single numerical value and to avoid showing the identity function
-  assert(!a.isUndefined());
-  if (expressionIsInterestingFunction(i) &&
-      a.type() != ExpressionNode::Type::Nonreal &&
-      i.numberOfNumericalValues() == 1) {
-    additionalInformations.function = true;
-  }
-  if (o.isBasedIntegerCappedBy(k_maximalIntegerWithAdditionalInformation)) {
-    additionalInformations.integer = true;
-    return additionalInformations;
-  }
-  // Find forms like [12]/[23] or -[12]/[23]
-  if (o.isDivisionOfIntegers() || (o.type() == ExpressionNode::Type::Opposite &&
-                                   o.childAtIndex(0).isDivisionOfIntegers())) {
-    additionalInformations.rational = true;
-    return additionalInformations;
-  }
-  return additionalInformations;
+AdditionalResultsType Calculation::additionalResultsType() {
+  Expression i, a, e;
+  fillExpressionsForAdditionalResults(&i, &e, &a);
+  return AdditionalResultsType::AdditionalResultsForExpressions(
+      i, e, a, m_complexFormat, m_angleUnit);
 }
 
 }  // namespace Calculation

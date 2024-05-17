@@ -48,8 +48,8 @@ class Store final : public ExpressionTwoChildren<Store, StoreNode> {
 
   // Store
   const SymbolAbstract symbol() const {
-    assert(childAtIndex(1).type() == ExpressionNode::Type::Symbol ||
-           childAtIndex(1).type() == ExpressionNode::Type::Function);
+    assert(childAtIndex(1).isOfType(
+        {ExpressionNode::Type::Symbol, ExpressionNode::Type::Function}));
     return childAtIndex(1).convert<const SymbolAbstract>();
   }
   const Expression value() const { return childAtIndex(0); }
@@ -67,10 +67,10 @@ class Store final : public ExpressionTwoChildren<Store, StoreNode> {
 
   bool storeRecursivelyMatches(
       ExpressionTrinaryTest test, Context* context,
-      SymbolicComputation replaceSymbols =
-          SymbolicComputation::ReplaceAllDefinedSymbolsWithDefinition,
-      void* auxiliary = nullptr) const {
-    return value().recursivelyMatches(test, context, replaceSymbols, auxiliary);
+      SymbolicComputation replaceSymbols, void* auxiliary,
+      Expression::IgnoredSymbols* ignoredSymbols) const {
+    return value().recursivelyMatches(test, context, replaceSymbols, auxiliary,
+                                      ignoredSymbols);
   }
 
  private:

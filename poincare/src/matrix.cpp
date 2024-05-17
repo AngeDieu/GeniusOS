@@ -142,44 +142,46 @@ void Matrix::addChildrenAsRowInPlace(TreeHandle t, int i) {
                                               : previousNumberOfColumns);
 }
 
-int Matrix::rank(Context *context, Preferences::ComplexFormat complexFormat,
-                 Preferences::AngleUnit angleUnit,
-                 Preferences::UnitFormat unitFormat,
-                 ReductionTarget reductionTarget, bool inPlace) {
+int Matrix::rank(Context *context, bool forceCanonization) {
   assert(!recursivelyMatches(Expression::IsUninitialized, context));
   if (recursivelyMatches(Expression::IsUndefined, context)) {
     return -1;
   }
-
   Expression m;
-  ReductionContext systemReductionContext = ReductionContext(
-      context, complexFormat, angleUnit, unitFormat, reductionTarget);
+  ReductionContext systemReductionContext =
+      ReductionContext::DefaultReductionContextForAnalysis(context);
 
+  bool canonizationSuccess = true;
   {
     ExceptionCheckpoint ecp;
     if (ExceptionRun(ecp)) {
       Matrix cannonizedM = clone().convert<Matrix>();
-      m = cannonizedM.rowCanonize(systemReductionContext, nullptr);
+      m = cannonizedM.rowCanonize(systemReductionContext, &canonizationSuccess,
+                                  nullptr, true, forceCanonization);
     } else {
       /* rowCanonize can create expression that are too big for the pool.
        * If it's the case, compute the rank with approximated values. */
       Expression mApproximation =
-          approximate<double>(context, complexFormat, angleUnit);
+          approximate<double>(ApproximationContext(systemReductionContext));
       if (mApproximation.type() != ExpressionNode::Type::Matrix) {
         /* The approximation was able to conclude that a coefficient is undef
          * while the reduction could not. */
         return -1;
       }
       m = static_cast<Matrix &>(mApproximation)
-              .rowCanonize(systemReductionContext, nullptr);
+              .rowCanonize(systemReductionContext, &canonizationSuccess,
+                           nullptr, true, forceCanonization);
     }
+  }
+
+  if (!canonizationSuccess ||
+      m.recursivelyMatches(Expression::IsUndefined, context)) {
+    return -1;
   }
 
   assert(m.type() == ExpressionNode::Type::Matrix);
   Matrix cannonizedMatrix = static_cast<Matrix &>(m);
-  if (inPlace) {
-    *this = cannonizedMatrix;
-  }
+  *this = cannonizedMatrix;
 
   int rank = cannonizedMatrix.numberOfRows();
   int i = rank - 1;
@@ -251,10 +253,34 @@ int Matrix::ArrayInverse(T *array, int numberOfRows, int numberOfColumns) {
   return 0;
 }
 
+bool Matrix::isCanonizable(const ReductionContext &reductionContext) {
+  ApproximationContext approximationContext(reductionContext);
+  int m = numberOfRows();
+  int n = numberOfColumns();
+  for (int i = 0; i < m; i++) {
+    for (int j = 0; j < n; j++) {
+      if (std::isnan(AbsoluteValue::Builder(matrixChild(i, j).clone())
+                         .approximateToScalar<float>(approximationContext))) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 Matrix Matrix::rowCanonize(const ReductionContext &reductionContext,
-                           Expression *determinant, bool reduced) {
+                           bool *canonizationSuccess, Expression *determinant,
+                           bool reduced, bool forceCanonization) {
+  assert(canonizationSuccess);
+  *canonizationSuccess = true;
+
   // The matrix children have to be reduced to be able to spot 0
   deepReduceChildren(reductionContext);
+
+  if (!forceCanonization && !isCanonizable(reductionContext)) {
+    *canonizationSuccess = false;
+    return *this;
+  }
 
   Multiplication det = Multiplication::Builder();
 
@@ -263,6 +289,8 @@ Matrix Matrix::rowCanonize(const ReductionContext &reductionContext,
 
   int h = 0;  // row pivot
   int k = 0;  // column pivot
+
+  ApproximationContext approximationContext(reductionContext);
 
   while (h < m && k < n) {
     /* In non-reduced form, the pivot selection method will affect the output.
@@ -275,11 +303,8 @@ Matrix Matrix::rowCanonize(const ReductionContext &reductionContext,
     float bestPivot = 0.0;
     while (iPivot_temp < m) {
       // Using float to find the biggest pivot is sufficient.
-      float pivot =
-          AbsoluteValue::Builder(matrixChild(iPivot_temp, k).clone())
-              .approximateToScalar<float>(reductionContext.context(),
-                                          reductionContext.complexFormat(),
-                                          reductionContext.angleUnit(), true);
+      float pivot = AbsoluteValue::Builder(matrixChild(iPivot_temp, k).clone())
+                        .approximateToScalar<float>(approximationContext);
       // Handle very low pivots
       if (pivot == 0.0f &&
           matrixChild(iPivot_temp, k).isNull(reductionContext.context()) !=
@@ -387,6 +412,29 @@ void Matrix::ArrayRowCanonize(T *array, int numberOfRows, int numberOfColumns,
                               T *determinant, bool reduced) {
   int h = 0;  // row pivot
   int k = 0;  // column pivot
+
+  bool undef = false;
+  for (int row = 0; row < numberOfRows; row++) {
+    if (undef) {
+      break;
+    }
+    for (int col = 0; col < numberOfColumns; col++) {
+      if (std::isnan(std::abs(array[row * numberOfColumns + col]))) {
+        undef = true;
+        break;
+      }
+    }
+  }
+  if (undef) {
+    for (int row = 0; row < numberOfRows; row++) {
+      for (int col = 0; col < numberOfColumns; col++) {
+        array[row * numberOfColumns + col] = static_cast<T>(NAN);
+      }
+    }
+    if (determinant) {
+      *determinant = static_cast<T>(NAN);
+    }
+  }
 
   while (h < numberOfRows && k < numberOfColumns) {
     // Find the biggest pivot (in absolute value). See comment on rowCanonize.
@@ -509,10 +557,10 @@ Expression Matrix::createRef(const ReductionContext &reductionContext,
      * destroying the child handle, its reference counter would be off by one
      * after the long jump. */
     Matrix result = clone().convert<Matrix>();
-    *couldComputeRef = true;
     /* Reduced row echelon form is also called row canonical form. To compute
      * the row echelon form (non reduced one), fewer steps are required. */
-    result = result.rowCanonize(reductionContext, nullptr, reduced);
+    result =
+        result.rowCanonize(reductionContext, couldComputeRef, nullptr, reduced);
     return std::move(result);
   } else {
     *couldComputeRef = false;
@@ -595,7 +643,7 @@ Expression Matrix::determinant(const ReductionContext &reductionContext,
 
 Expression Matrix::norm(const ReductionContext &reductionContext) const {
   // Norm is defined on vectors only
-  assert(vectorType() != Array::VectorType::None);
+  assert(isVector());
   Addition sum = Addition::Builder();
   int childrenNumber = numberOfChildren();
   for (int j = 0; j < childrenNumber; j++) {
@@ -615,8 +663,7 @@ Expression Matrix::norm(const ReductionContext &reductionContext) const {
 Expression Matrix::dot(Matrix *b,
                        const ReductionContext &reductionContext) const {
   // Dot product is defined between two vectors of same size and type
-  assert(vectorType() != Array::VectorType::None &&
-         vectorType() == b->vectorType() &&
+  assert(isVector() && vectorType() == b->vectorType() &&
          numberOfChildren() == b->numberOfChildren());
   Addition sum = Addition::Builder();
   int childrenNumber = numberOfChildren();
@@ -634,9 +681,8 @@ Expression Matrix::dot(Matrix *b,
 Matrix Matrix::cross(Matrix *b,
                      const ReductionContext &reductionContext) const {
   // Cross product is defined between two vectors of size 3 and of same type.
-  assert(vectorType() != Array::VectorType::None &&
-         vectorType() == b->vectorType() && numberOfChildren() == 3 &&
-         b->numberOfChildren() == 3);
+  assert(isVector() && vectorType() == b->vectorType() &&
+         numberOfChildren() == 3 && b->numberOfChildren() == 3);
   Matrix matrix = Matrix::Builder();
   for (int j = 0; j < 3; j++) {
     int j1 = (j + 1) % 3;
@@ -709,14 +755,17 @@ Expression Matrix::computeInverseOrDeterminant(
       }
     }
     matrixAI.setDimensions(dim, 2 * dim);
-    if (computeDeterminant) {
-      // Compute the determinant
-      Expression d;
-      matrixAI.rowCanonize(reductionContext, &d);
-      return d;
+    Expression det;
+    bool canonizationSuccess = true;
+    matrixAI =
+        matrixAI.rowCanonize(reductionContext, &canonizationSuccess, &det);
+    if (!canonizationSuccess) {
+      *couldCompute = false;
+      return Undefined::Builder();
     }
-    // Compute the inverse
-    matrixAI = matrixAI.rowCanonize(reductionContext, nullptr);
+    if (computeDeterminant) {
+      return det;
+    }
     // Check inversibility
     for (int i = 0; i < dim; i++) {
       if (!matrixAI.matrixChild(i, i).isRationalOne()) {

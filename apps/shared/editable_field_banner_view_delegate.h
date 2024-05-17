@@ -12,14 +12,12 @@ namespace Shared {
 
 class EditableFieldBannerViewDelegate {
  public:
-  EditableFieldBannerViewDelegate(
-      Escher::Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      Escher::TextFieldDelegate* textFieldDelegate)
+  EditableFieldBannerViewDelegate(Escher::Responder* parentResponder,
+                                  Escher::TextFieldDelegate* textFieldDelegate)
       : m_editableFieldLabel({.style = BannerView::k_bannerFieldFormat.style,
                               .horizontalAlignment = KDGlyph::k_alignRight}),
         m_editableField(parentResponder, m_textBody, k_bufferSize,
-                        inputEventHandlerDelegate, textFieldDelegate,
+                        textFieldDelegate,
                         {.style = BannerView::k_bannerFieldFormat.style,
                          .horizontalAlignment = KDGlyph::k_alignLeft}),
         m_editableView(&m_editableFieldLabel, &m_editableField) {
@@ -31,7 +29,7 @@ class EditableFieldBannerViewDelegate {
     return &m_editableFieldLabel;
   }
   Escher::TextField* editableField() { return &m_editableField; }
-  Escher::View* editablView() { return &m_editableView; }
+  Escher::View* editableView() { return &m_editableView; }
 
  private:
   constexpr static KDCoordinate k_bufferSize =

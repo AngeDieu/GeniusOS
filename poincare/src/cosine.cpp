@@ -17,14 +17,13 @@ int CosineNode::numberOfChildren() const {
 }
 
 template <typename T>
-Complex<T> CosineNode::computeOnComplex(const std::complex<T> c,
-                                        Preferences::ComplexFormat,
-                                        Preferences::AngleUnit angleUnit) {
+std::complex<T> CosineNode::computeOnComplex(const std::complex<T> c,
+                                             Preferences::ComplexFormat,
+                                             Preferences::AngleUnit angleUnit) {
   std::complex<T> angleInput = Trigonometry::ConvertToRadian(c, angleUnit);
   std::complex<T> res = std::cos(angleInput);
-  return Complex<T>::Builder(
-      ApproximationHelper::NeglectRealOrImaginaryPartIfNeglectable(res,
-                                                                   angleInput));
+  return ApproximationHelper::NeglectRealOrImaginaryPartIfNeglectable(
+      res, angleInput);
 }
 
 Layout CosineNode::createLayout(Preferences::PrintFloatMode floatDisplayMode,
@@ -45,7 +44,7 @@ int CosineNode::serialize(char* buffer, int bufferSize,
 
 Expression CosineNode::shallowReduce(const ReductionContext& reductionContext) {
   Cosine e = Cosine(this);
-  return Trigonometry::shallowReduceDirectFunction(e, reductionContext);
+  return Trigonometry::ShallowReduceDirectFunction(e, reductionContext);
 }
 
 bool CosineNode::derivate(const ReductionContext& reductionContext,

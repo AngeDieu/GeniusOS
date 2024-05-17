@@ -6,7 +6,6 @@
 #include <cmath>
 
 #include "poincare_helpers.h"
-#include "text_field_delegate_app.h"
 
 using namespace Escher;
 using namespace Poincare;
@@ -20,21 +19,19 @@ ExplicitFloatParameterController::ExplicitFloatParameterController(
 void ExplicitFloatParameterController::didBecomeFirstResponder() {
   if (selectedRow() >= 0) {
     int selRow = std::min(selectedRow(), numberOfRows() - 1);
-    selectCell(selRow);
+    selectRow(selRow);
   }
   ExplicitSelectableListViewController::didBecomeFirstResponder();
 }
 
 void ExplicitFloatParameterController::viewWillAppear() {
   ViewController::viewWillAppear();
-  int selRow = selectedRow();
-  if (selRow == -1) {
-    selectCell(0);
-  } else {
-    selRow = std::min(selectedRow(), numberOfRows() - 1);
-    selectCell(selRow);
+  int nRows = numberOfRows();
+  for (int row = 0; row < nRows; row++) {
+    if (cell(row)->isVisible()) {
+      fillParameterCellAtRow(row);
+    }
   }
-  resetMemoization();
   m_selectableListView.reloadData();
 }
 
@@ -53,9 +50,8 @@ bool ExplicitFloatParameterController::handleEvent(Ion::Events::Event event) {
   return false;
 }
 
-void ExplicitFloatParameterController::fillCellForRow(HighlightCell *cell,
-                                                      int row) {
-  if (textFieldOfCellAtIndex(cell, row)->isEditing()) {
+void ExplicitFloatParameterController::fillParameterCellAtRow(int row) {
+  if (textFieldOfCellAtRow(row)->isEditing()) {
     return;
   }
   constexpr int precision = Preferences::VeryLargeNumberOfSignificantDigits;
@@ -65,28 +61,26 @@ void ExplicitFloatParameterController::fillCellForRow(HighlightCell *cell,
   PoincareHelpers::ConvertFloatToTextWithDisplayMode(
       parameterAtIndex(row), buffer, bufferSize, precision,
       Preferences::PrintFloatMode::Decimal);
-  textFieldOfCellAtIndex(cell, row)->setText(buffer);
+  textFieldOfCellAtRow(row)->setText(buffer);
 }
 
 bool ExplicitFloatParameterController::textFieldShouldFinishEditing(
     AbstractTextField *textField, Ion::Events::Event event) {
   return (event == Ion::Events::Down && selectedRow() < numberOfRows() - 1) ||
          (event == Ion::Events::Up && selectedRow() > 0) ||
-         TextFieldDelegate::textFieldShouldFinishEditing(textField, event);
+         MathTextFieldDelegate::textFieldShouldFinishEditing(textField, event);
 }
 
 bool ExplicitFloatParameterController::textFieldDidFinishEditing(
-    AbstractTextField *textField, const char *text, Ion::Events::Event event) {
-  float floatBody =
-      textFieldDelegateApp()->parseInputtedFloatValue<double>(text);
+    AbstractTextField *textField, Ion::Events::Event event) {
+  double floatBody = ParseInputFloatValue<double>(textField->draftText());
   int row = selectedRow();
-  if (textFieldDelegateApp()->hasUndefinedValue(floatBody)) {
+  if (HasUndefinedValue(floatBody)) {
     return false;
   }
   if (!setParameterAtIndex(row, floatBody)) {
     return false;
   }
-  resetMemoization();
   m_selectableListView.reloadSelectedCell();
   m_selectableListView.reloadData();
   if (event == Ion::Events::EXE || event == Ion::Events::OK) {

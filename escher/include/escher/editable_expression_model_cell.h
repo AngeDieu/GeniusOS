@@ -3,6 +3,7 @@
 
 #include <escher/even_odd_cell.h>
 #include <escher/layout_field.h>
+#include <kandinsky/margins.h>
 
 namespace Escher {
 
@@ -15,10 +16,9 @@ namespace Escher {
 
 class EditableExpressionModelCell : public HighlightCell {
  public:
-  EditableExpressionModelCell(
-      Responder* parentResponder,
-      InputEventHandlerDelegate* inputEventHandlerDelegate,
-      LayoutFieldDelegate* layoutDelegate, KDGlyph::Format format = {});
+  EditableExpressionModelCell(Responder* parentResponder = nullptr,
+                              LayoutFieldDelegate* layoutDelegate = nullptr,
+                              KDGlyph::Format format = {});
   void setLayout(Poincare::Layout layout) { m_layoutField.setLayout(layout); }
   void setTextColor(KDColor textColor) {
     m_layoutField.layoutView()->setTextColor(textColor);
@@ -29,7 +29,7 @@ class EditableExpressionModelCell : public HighlightCell {
     m_layoutField.layoutView()->setAlignment(horizontalAlignment,
                                              verticalAlignment);
   }
-  void setMargins(KDCoordinate leftMargin, KDCoordinate rightMargin);
+  void setMargins(KDHorizontalMargins margins);
   KDPoint drawingOrigin() const {
     return m_layoutField.layoutView()->drawingOrigin();
   }
@@ -43,8 +43,7 @@ class EditableExpressionModelCell : public HighlightCell {
   View* subviewAtIndex(int index) override { return &m_layoutField; }
   void layoutSubviews(bool force = false) override;
   LayoutField m_layoutField;
-  KDCoordinate m_leftMargin;
-  KDCoordinate m_rightMargin;
+  KDHorizontalMargins m_margins;
 };
 
 }  // namespace Escher

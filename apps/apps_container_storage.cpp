@@ -14,6 +14,10 @@
 #error Missing snapshot count
 #endif
 
+#if VALGRIND
+#include "memcheck.h"
+#endif
+
 // Take the Home app into account
 constexpr int k_numberOfCommonApps = 1 + APPS_CONTAINER_SNAPSHOT_COUNT;
 
@@ -32,7 +36,7 @@ Escher::App::Snapshot* AppsContainerStorage::appSnapshotAtIndex(int index) {
   assert(index < numberOfBuiltinApps());
   Escher::App::Snapshot* snapshots[] = {homeAppSnapshot()
                                             APPS_CONTAINER_SNAPSHOT_LIST};
-  assert(std::size(snapshots) == numberOfBuiltinApps());
+  assert(static_cast<int>(std::size(snapshots)) == numberOfBuiltinApps());
   assert(index >= 0 && index < numberOfBuiltinApps());
   return snapshots[index];
 }
@@ -61,6 +65,9 @@ void* AppsContainerStorage::currentAppBuffer() {
       __attribute__((section(".bss.$app_buffer")));
 #else
       ;
+#endif
+#if VALGRIND
+  VALGRIND_MAKE_MEM_UNDEFINED(&s_apps, sizeof(s_apps));
 #endif
   return &s_apps;
 }

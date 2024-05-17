@@ -23,16 +23,11 @@ SlopeTableCell::SlopeTableCell(Responder *parentResponder, Statistic *statistic,
   }
 }
 
-void SlopeTableCell::willAppear() {
+void SlopeTableCell::fillColumnsNames() {
   for (int i = 0; i < k_maxNumberOfColumns; i++) {
     /* We delayed filling the column names X1, Y1 to ensure that the underlying
      * model was a valid DoublePairStore. */
     fillColumnName(i, const_cast<char *>(m_header[i].text()));
-  }
-  bool bottomOfTableWasSelected = selectedRow() >= numberOfRows();
-  m_selectableTableView.reloadData(false);
-  if (bottomOfTableWasSelected) {
-    selectRow(numberOfRows());
   }
 }
 
@@ -40,11 +35,7 @@ InputViewController *SlopeTableCell::inputViewController() {
   return App::app()->inputViewController();
 }
 
-void SlopeTableCell::reload() {
-  if (!recomputeDimensions()) {
-    m_selectableTableView.reloadData(false);
-  }
-}
+void SlopeTableCell::reload() { recomputeDimensionsAndReload(true); }
 
 CategoricalController *SlopeTableCell::categoricalController() {
   return m_inputSlopeController;

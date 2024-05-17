@@ -21,7 +21,7 @@ StoreParameterController::StoreParameterController(
 
 void StoreParameterController::initializeColumnParameters() {
   // Number of cells and cells size may change when switching between columns
-  resetMemoization();
+  m_selectableListView.resetSizeAndOffsetMemoization();
   Shared::StoreParameterController::initializeColumnParameters();
   int relativeColumn = m_store->relativeColumn(m_column);
   m_isCumulatedFrequencyColumnSelected = relativeColumn == 2;
@@ -84,17 +84,16 @@ Escher::AbstractMenuCell* StoreParameterController::cell(int index) {
   return Shared::StoreParameterController::cell(index);
 }
 
-void StoreParameterController::fillCellForRow(Escher::HighlightCell* cell,
-                                              int row) {
-  if (cell == &m_displayCumulatedFrequencyCell) {
-    m_displayCumulatedFrequencyCell.accessory()->setState(
-        m_store->displayCumulatedFrequenciesForSeries(
-            m_storeColumnHelper->selectedSeries()));
-    return;
-  } else if (cell == &m_hideCumulatedFrequencyCell) {
-    return;
-  }
-  Shared::StoreParameterController::fillCellForRow(cell, row);
+void StoreParameterController::viewWillAppear() {
+  m_displayCumulatedFrequencyCell.accessory()->setState(
+      m_store->displayCumulatedFrequenciesForSeries(
+          m_storeColumnHelper->selectedSeries()));
+  Shared::StoreParameterController::viewWillAppear();
+}
+
+I18n::Message StoreParameterController::sortMessage() {
+  return m_store->relativeColumn(m_column) == 1 ? I18n::Message::SortFrequencies
+                                                : I18n::Message::SortValues;
 }
 
 }  // namespace Statistics

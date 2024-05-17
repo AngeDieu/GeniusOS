@@ -17,13 +17,14 @@ template <typename T>
 class FloatParameterController : public Escher::ListWithTopAndBottomController,
                                  public ParameterTextFieldDelegate {
  public:
-  FloatParameterController(Escher::Responder *parentResponder);
+  FloatParameterController(Escher::Responder *parentResponder,
+                           Escher::View *topView = nullptr);
 
   // ListWithTopAndBottomController
   bool handleEvent(Ion::Events::Event event) override;
 
   // MemoizedListViewDataSource
-  int typeAtRow(int index) const override;
+  int typeAtRow(int row) const override;
   int reusableCellCount(int type) override;
   Escher::HighlightCell *reusableCell(int index, int type) override;
   void fillCellForRow(Escher::HighlightCell *cell, int row) override;
@@ -36,7 +37,6 @@ class FloatParameterController : public Escher::ListWithTopAndBottomController,
   bool textFieldShouldFinishEditing(Escher::AbstractTextField *textField,
                                     Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField *textField,
-                                 const char *text,
                                  Ion::Events::Event event) override;
 
  protected:

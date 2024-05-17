@@ -21,11 +21,10 @@ class GraphController;
 class GraphOptionsController
     : public Escher::ExplicitSelectableListViewController {
  public:
-  GraphOptionsController(
-      Escher::Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      Shared::InteractiveCurveViewRange* range, Store* store,
-      Shared::CurveViewCursor* cursor, GraphController* graphController);
+  GraphOptionsController(Escher::Responder* parentResponder,
+                         Shared::InteractiveCurveViewRange* range, Store* store,
+                         Shared::CurveViewCursor* cursor,
+                         GraphController* graphController);
   void removeRegression();
 
   const char* title() override;
@@ -34,7 +33,6 @@ class GraphOptionsController
   }
   bool handleEvent(Ion::Events::Event event) override;
   void viewWillAppear() override;
-  void fillCell(Escher::HighlightCell* cell) override;
 
   // MemoizedListViewDataSource
   int numberOfRows() const override { return k_maxNumberOfRows; }

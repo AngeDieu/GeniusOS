@@ -1,8 +1,7 @@
 #ifndef DISTRIBUTIONS_APP_H
 #define DISTRIBUTIONS_APP_H
 
-#include <apps/shared/layout_field_delegate_app.h>
-#include <apps/shared/shared_app.h>
+#include <apps/shared/math_app.h>
 #include <escher/stack_view_controller.h>
 #include <ion/ring_buffer.h>
 
@@ -12,7 +11,7 @@
 
 namespace Distributions {
 
-class App : public Shared::LayoutFieldDelegateApp {
+class App : public Shared::MathApp {
  public:
   // Descriptor
   class Descriptor : public Escher::App::Descriptor {
@@ -48,9 +47,7 @@ class App : public Shared::LayoutFieldDelegateApp {
     DistributionBuffer m_distributionBuffer;
   };
 
-  static App *app() {
-    return static_cast<App *>(Escher::Container::activeApp());
-  }
+  static App *app() { return static_cast<App *>(Escher::App::app()); }
   void didBecomeActive(Escher::Window *window) override;
 
   // Navigation

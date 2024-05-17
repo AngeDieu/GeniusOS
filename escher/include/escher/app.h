@@ -1,6 +1,7 @@
 #ifndef ESCHER_APP_H
 #define ESCHER_APP_H
 
+#include <escher/editable_fiel_help_box.h>
 #include <escher/i18n.h>
 #include <escher/image.h>
 #include <escher/modal_view_controller.h>
@@ -26,7 +27,7 @@ class AppsContainer;
 namespace Escher {
 
 class Container;
-class InputEventHandler;
+class EditableField;
 
 class App : public Responder {
  public:
@@ -38,19 +39,34 @@ class App : public Responder {
     }
     virtual const Image* icon() const { return nullptr; }
   };
+
+  /* The Snapshot is the part of the App that is never destroyed, even when the
+   * App is closed.
+   *
+   * IMPORTANT: When adding a variable to the Snapshot the functions `reset` and
+   * `tidy` might need to be updated.
+   *
+   * - The `reset` function is called when all snapshot's variables need to be
+   * set to their initial values (when the exam mode is activated for example).
+   *
+   * - The `tidy` function is called each time the app is closed, in case some
+   * values in the Snapshot need to be cleaned (mainly to clean the pool).
+   * */
   class Snapshot {
    public:
     virtual App* unpack(Container* container) = 0;
     void pack(App* app);
     /* reset all instances to their initial values */
     virtual void reset() {}
+    /* tidy clean all dynamically-allocated data */
+    virtual void tidy() {}
     virtual const Descriptor* descriptor() const = 0;
 #if EPSILON_GETOPT
     virtual void setOpt(const char* name, const char* value) {}
 #endif
-    /* tidy clean all dynamically-allocated data */
-    virtual void tidy() {}
+    virtual void countryWasUpdated() {}
   };
+
   /* The destructor has to be virtual. Otherwise calling a destructor on an
    * App * pointing to a Derived App would have undefined behaviour. */
   virtual ~App() = default;
@@ -60,10 +76,7 @@ class App : public Responder {
   virtual bool processEvent(Ion::Events::Event event);
   void displayModalViewController(ViewController* vc, float verticalAlignment,
                                   float horizontalAlignment,
-                                  KDCoordinate topMargin = 0,
-                                  KDCoordinate leftMargin = 0,
-                                  KDCoordinate bottomMargin = 0,
-                                  KDCoordinate rightMargin = 0,
+                                  KDMargins margins = {},
                                   bool growingOnly = false);
   void displayWarning(I18n::Message warningMessage1,
                       I18n::Message warningMessage2 = (I18n::Message)0,
@@ -82,6 +95,8 @@ class App : public Responder {
     return nullptr;
   }
   virtual Poincare::Context* localContext() { return nullptr; }
+  virtual EditableFieldHelpBox* toolbox() { return nullptr; }
+  virtual EditableFieldHelpBox* variableBox() { return nullptr; }
 
   virtual bool storageCanChangeForRecordName(
       const Ion::Storage::Record::Name recordName) const {
@@ -92,6 +107,8 @@ class App : public Responder {
 #if EPSILON_TELEMETRY
   virtual const char* telemetryId() const { return nullptr; }
 #endif
+
+  static App* app();
 
  protected:
   App(Snapshot* snapshot, ViewController* rootViewController,

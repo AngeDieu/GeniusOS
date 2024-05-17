@@ -4,6 +4,7 @@
 #include <escher/metric.h>
 #include <escher/palette.h>
 #include <escher/view.h>
+#include <kandinsky/margins.h>
 
 namespace Escher {
 
@@ -36,8 +37,8 @@ class ScrollViewHorizontalBar : public ScrollViewBar {
   void drawRect(KDContext *ctx, KDRect rect) const override;
 
  private:
-  constexpr static KDCoordinate k_leftMargin = Metric::CommonLeftMargin;
-  constexpr static KDCoordinate k_rightMargin = Metric::CommonRightMargin;
+  constexpr static KDCoordinate k_leftMargin = Metric::CommonMargins.left();
+  constexpr static KDCoordinate k_rightMargin = Metric::CommonMargins.right();
   KDCoordinate totalLength() const {
     return bounds().width() - k_leftMargin - k_rightMargin;
   }
@@ -47,15 +48,13 @@ class ScrollViewVerticalBar : public ScrollViewBar {
  public:
   ScrollViewVerticalBar();
   void drawRect(KDContext *ctx, KDRect rect) const override;
-  void setMargins(KDCoordinate top, KDCoordinate bottom);
-  void setTopMargin(KDCoordinate top) { setMargins(top, m_bottomMargin); }
+  void setMargins(KDVerticalMargins margins) { m_margins = margins; }
 
  private:
   KDCoordinate totalLength() const {
-    return bounds().height() - m_topMargin - m_bottomMargin;
+    return bounds().height() - m_margins.height();
   }
-  KDCoordinate m_topMargin;
-  KDCoordinate m_bottomMargin;
+  KDVerticalMargins m_margins;
 };
 
 class ScrollViewArrow : public ScrollViewIndicator {

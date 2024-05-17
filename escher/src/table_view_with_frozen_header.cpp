@@ -10,10 +10,10 @@ TableViewWithFrozenHeader::TableViewWithFrozenHeader(
                             .horizontalAlignment = KDGlyph::k_alignCenter}),
       m_selectableTableView(selectableTableView) {
   // Remove selectable table top margin to control margin between text and table
-  m_selectableTableView->setTopMargin(0);
+  m_selectableTableView->margins()->setTop(0);
   // Fit m_selectableTableView scroll to content size
   m_selectableTableView->decorator()->setVerticalMargins(
-      0, Metric::CommonBottomMargin);
+      {0, Metric::CommonMargins.bottom()});
 }
 
 void TableViewWithFrozenHeader::drawRect(KDContext* ctx, KDRect rect) const {
@@ -37,7 +37,7 @@ void TableViewWithFrozenHeader::layoutSubviews(bool force) {
   setChildFrame(&m_headerView, KDRect(0, 0, bounds().width(), titleHeight),
                 force);
   /* SelectableTableView must be given a width before computing height. */
-  m_selectableTableView->initSize(bounds());
+  m_selectableTableView->setSize(bounds().size());
   KDCoordinate tableHeight =
       m_selectableTableView->minimalSizeForOptimalDisplay().height();
   setChildFrame(m_selectableTableView,

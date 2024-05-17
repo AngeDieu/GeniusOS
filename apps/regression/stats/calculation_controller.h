@@ -6,7 +6,6 @@
 #include <escher/even_odd_buffer_text_cell.h>
 #include <escher/even_odd_editable_text_cell.h>
 #include <escher/even_odd_expression_cell.h>
-#include <escher/even_odd_message_text_cell.h>
 #include <poincare/preferences.h>
 
 #include "../store.h"
@@ -23,29 +22,20 @@ class CalculationController : public Shared::DoublePairTableController {
   // View Controller
   TELEMETRY_ID("Calculation");
 
-  void viewWillAppear() override;
+  // TableViewDataSource
+  int numberOfRows() const override;
+  void fillCellForLocation(Escher::HighlightCell* cell, int column,
+                           int row) override;
+  Escher::HighlightCell* reusableCell(int index, int type) override;
+  int reusableCellCount(int type) override;
+  int typeAtLocation(int column, int row) override;
+  bool canStoreCellAtLocation(int column, int row) override;
 
   // SelectableTableViewDelegate
   void tableViewDidChangeSelectionAndDidScroll(
       Escher::SelectableTableView* t, int previousSelectedCol,
       int previousSelectedRow, KDPoint previousOffset,
       bool withinTemporarySelection) override;
-  bool canStoreContentOfCellAtLocation(Escher::SelectableTableView* t, int col,
-                                       int row) const override;
-
-  // TableViewDataSource
-  int numberOfRows() const override;
-  int numberOfColumns() const override;
-  void fillCellForLocation(Escher::HighlightCell* cell, int column,
-                           int row) override;
-  Escher::HighlightCell* reusableCell(int index, int type) override;
-  int reusableCellCount(int type) override;
-  int typeAtLocation(int column, int row) override;
-  KDCoordinate separatorBeforeColumn(int column) override {
-    return typeAtLocation(column, 0) == k_columnTitleCellType
-               ? Escher::Metric::TableSeparatorThickness
-               : 0;
-  }
 
  private:
   enum class Calculation : uint8_t {
@@ -79,22 +69,10 @@ class CalculationController : public Shared::DoublePairTableController {
   constexpr static int k_numberOfMemoizedSingleBufferCalculations = 3;
   // Displayable cells
   constexpr static int k_numberOfDoubleCalculationCells =
-      Store::k_numberOfSeries * k_numberOfDoubleBufferCalculations;
-  constexpr static int k_numberOfDisplayableCalculationCells =
-      Store::k_numberOfSeries * k_maxNumberOfDisplayableRows;
+      k_numberOfSeriesTitleCells * k_numberOfDoubleBufferCalculations;
   // Cell types
-  constexpr static int k_standardCalculationTitleCellType = 0;
-  constexpr static int k_columnTitleCellType = 1;
-  constexpr static int k_doubleBufferCalculationCellType = 2;
-  constexpr static int k_standardCalculationCellType = 3;
-  constexpr static int k_hideableCellType = 4;
-  constexpr static int k_symbolCalculationTitleCellType = 5;
-  // Title & Symbol
-  constexpr static int k_numberOfHeaderColumns = 2;
+  constexpr static int k_doubleBufferCalculationCellType = 5;
   // Cell sizes
-  constexpr static KDCoordinate k_titleCalculationCellWidth =
-      Escher::Metric::SmallFontCellWidth(
-          k_titleNumberOfChars, Escher::Metric::CellVerticalElementMargin);
   /* Margins from EvenOddCell::layoutSubviews (and derived classes
    * implementations) must be accounted for here.
    * Calculation width should at least be able to hold two numbers with
@@ -123,30 +101,27 @@ class CalculationController : public Shared::DoublePairTableController {
 
   // TableViewDataSource
   KDCoordinate nonMemoizedColumnWidth(int column) override;
+  void resetSizeMemoization() override;
 
+  // DoublePairTableController
   Shared::DoublePairStore* store() const override { return m_store; }
+
   static I18n::Message MessageForCalculation(Calculation c);
   static I18n::Message SymbolForCalculation(Calculation c);
-
   Calculation calculationForRow(int row) const;
   int numberOfDisplayedCoefficients() const;
   int numberOfDisplayedBCDECoefficients() const;
-  void resetMemoization(bool force = true) override;
 
-  Escher::EvenOddMessageTextCell m_titleCells[k_maxNumberOfDisplayableRows];
-  Escher::EvenOddMessageTextCell
-      m_titleSymbolCells[k_maxNumberOfDisplayableRows];
-  ColumnTitleCell m_columnTitleCells[Store::k_numberOfSeries];
+  ColumnTitleCell m_seriesTitleCells[k_numberOfSeriesTitleCells];
   EvenOddDoubleBufferTextCell
       m_doubleCalculationCells[k_numberOfDoubleCalculationCells];
   Escher::SmallFontEvenOddBufferTextCell
-      m_calculationCells[k_numberOfDisplayableCalculationCells];
-  Escher::EvenOddCell m_hideableCell[k_numberOfHeaderColumns];
+      m_calculationCells[k_numberOfCalculationCells];
   Store* m_store;
-  double m_memoizedDoubleCalculationCells[Store::k_numberOfSeries][2]
+  double m_memoizedDoubleCalculationCells[k_numberOfSeriesTitleCells][2]
                                          [k_numberOfDoubleBufferCalculations];
   double m_memoizedSimpleCalculationCells
-      [Store::k_numberOfSeries][k_numberOfMemoizedSingleBufferCalculations];
+      [k_numberOfSeriesTitleCells][k_numberOfMemoizedSingleBufferCalculations];
 };
 
 }  // namespace Regression

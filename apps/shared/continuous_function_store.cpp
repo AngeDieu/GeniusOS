@@ -2,6 +2,8 @@
 
 #include <ion.h>
 
+using namespace Escher;
+
 namespace Shared {
 
 bool ContinuousFunctionStore::displaysNonCartesianFunctions(
@@ -23,6 +25,50 @@ bool ContinuousFunctionStore::displaysFunctionsToNormalize(
              &ContinuousFunctionProperties::enforcePlotNormalization) != 0;
 }
 
+int ContinuousFunctionStore::numberOfActiveFunctions() const {
+  uint32_t checksum = Ion::Storage::FileSystem::sharedFileSystem->checksum();
+  if (m_memoizedNumberOfActiveFunctions < 0 || checksum != m_storageCheckSum) {
+    m_storageCheckSum = checksum;
+    m_memoizedNumberOfActiveFunctions =
+        FunctionStore::numberOfActiveFunctions();
+  }
+  return m_memoizedNumberOfActiveFunctions;
+}
+
+using ErrorStatus = Ion::Storage::Record::ErrorStatus;
+
+ContinuousFunction ContinuousFunctionStore::newModel(const char* name,
+                                                     ErrorStatus* error) {
+  /* Choose the next color following the rule:
+   * - no other function is the same color among the last
+   * size(Palette::DataColor) - 1 ones in the list */
+  constexpr int paletteSize = std::size(Palette::DataColor);
+
+  int functionsCount = numberOfModels();
+
+  // Find the first color in the palette that is different
+
+  KDColor nextColor;
+
+  for (KDColor color : Palette::DataColor) {
+    bool isCandidate = true;
+
+    for (int i = std::max(0, functionsCount - (paletteSize - 1));
+         i < functionsCount; i++) {
+      if (colorForRecord(recordAtIndex(i)) == color) {
+        isCandidate = false;
+        break;
+      }
+    }
+    if (isCandidate) {
+      nextColor = color;
+      break;
+    }
+  }
+
+  return ContinuousFunction::NewModel(error, name, nextColor);
+}
+
 Ion::Storage::Record::ErrorStatus ContinuousFunctionStore::addEmptyModel() {
   char name[ContinuousFunction::k_maxDefaultNameSize];
   const char* const extensions[1] = {modelExtension()};
@@ -31,7 +77,8 @@ Ion::Storage::Record::ErrorStatus ContinuousFunctionStore::addEmptyModel() {
       name, 1, ContinuousFunction::k_maxDefaultNameSize, extensions, 1, 99);
   Ion::Storage::Record::ErrorStatus error =
       Ion::Storage::Record::ErrorStatus::RecordDoesNotExist;
-  ContinuousFunction newModel = ContinuousFunction::NewModel(&error, name);
+
+  newModel(name, &error);
   return error;
 }
 

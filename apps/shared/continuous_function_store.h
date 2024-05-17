@@ -11,8 +11,8 @@ class ContinuousFunctionStore : public FunctionStore {
   // Very large limit, so that records id in name can't exceed two chars.
   constexpr static int k_maxNumberOfModels = 100;
   constexpr static int k_maxNumberOfMemoizedModels = 10;
-  bool memoizationIsFull() const {
-    return numberOfModels() >= maxNumberOfMemoizedModels();
+  bool memoizationOverflows() const {
+    return numberOfModels() > maxNumberOfMemoizedModels();
   }
 
   static bool IsFunctionActiveAndDerivable(ExpressionModelHandle *model,
@@ -33,6 +33,7 @@ class ContinuousFunctionStore : public FunctionStore {
                                         &symbolType);
   }
   typedef bool (ContinuousFunctionProperties::*HasProperty)() const;
+  int numberOfActiveFunctions() const override;
   int numberOfActiveFunctionsWithProperty(HasProperty propertyFunction) const {
     return numberOfModelsSatisfyingTest(&IsFunctionActiveAndHasProperty,
                                         &propertyFunction);
@@ -59,11 +60,17 @@ class ContinuousFunctionStore : public FunctionStore {
   KDColor colorForRecord(Ion::Storage::Record record) const override {
     return modelForRecord(record)->color();
   }
+  void setCachesContainer(CachesContainer *container) {
+    m_cachesContainer = container;
+  }
   ContinuousFunctionCache *cacheAtIndex(int i) const {
-    return (i < ContinuousFunctionCache::k_numberOfAvailableCaches)
-               ? m_functionCaches + i
+    return (m_cachesContainer && i < CachesContainer::k_numberOfAvailableCaches)
+               ? m_cachesContainer->cacheAtIndex(i)
                : nullptr;
   }
+
+  ContinuousFunction newModel(const char *name,
+                              Ion::Storage::Record::ErrorStatus *error);
   Ion::Storage::Record::ErrorStatus addEmptyModel() override;
   int maxNumberOfModels() const override { return k_maxNumberOfModels; }
 
@@ -105,9 +112,10 @@ class ContinuousFunctionStore : public FunctionStore {
       int cacheIndex, Ion::Storage::Record record) const override;
   ExpressionModelHandle *memoizedModelAtIndex(int cacheIndex) const override;
 
+  mutable uint32_t m_storageCheckSum;
+  mutable int m_memoizedNumberOfActiveFunctions;
   mutable ContinuousFunction m_functions[k_maxNumberOfMemoizedModels];
-  mutable ContinuousFunctionCache
-      m_functionCaches[ContinuousFunctionCache::k_numberOfAvailableCaches];
+  CachesContainer *m_cachesContainer;
 };
 
 }  // namespace Shared

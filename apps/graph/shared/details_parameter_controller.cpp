@@ -34,21 +34,20 @@ const char *DetailsParameterController::title() {
 void DetailsParameterController::viewWillAppear() {
   ViewController::viewWillAppear();
   assert(!m_record.isNull());
-  selectCell(0);
-  resetMemoization();
+  selectRow(0);
   m_selectableListView.reloadData();
 }
 
 KDCoordinate DetailsParameterController::nonMemoizedRowHeight(int row) {
   DetailCell tempCell;
-  return nonMemoizedRowHeightWithWidthInit(&tempCell, row);
+  return protectedNonMemoizedRowHeight(&tempCell, row);
 }
 
 void DetailsParameterController::fillCellForRow(HighlightCell *cell, int row) {
   assert(0 <= row && row < k_numberOfDataPoints);
   DetailCell *myCell = static_cast<DetailCell *>(cell);
   if (row == k_indexOfCurveTypeRow) {
-    myCell->label()->setMessage(I18n::Message::CurveType);
+    myCell->label()->setMessage(I18n::Message::Type);
     myCell->subLabel()->setMessage(I18n::Message::Default);
     myCell->accessory()->setText(
         I18n::translate(function()->properties().caption()));
@@ -147,8 +146,8 @@ I18n::Message DetailsParameterController::detailsTitle(int i) const {
 
   if (functionIsNonVerticalLine()) {
     constexpr I18n::Message k_titles[k_lineDetailsSections] = {
-        I18n::Message::LineEquationTitle,
-        I18n::Message::LineSlopeTitle,
+        I18n::Message::Equation,
+        I18n::Message::M,
         I18n::Message::LineYInterceptTitle,
     };
     return k_titles[i];
@@ -157,7 +156,7 @@ I18n::Message DetailsParameterController::detailsTitle(int i) const {
   switch (function()->properties().conicShape()) {
     case Conic::Shape::Circle: {
       constexpr I18n::Message k_titles[k_circleDetailsSections] = {
-          I18n::Message::CircleRadiusTitle,
+          I18n::Message::R,
           I18n::Message::CenterAbscissaTitle,
           I18n::Message::CenterOrdinateTitle,
       };
@@ -165,10 +164,10 @@ I18n::Message DetailsParameterController::detailsTitle(int i) const {
     }
     case Conic::Shape::Ellipse: {
       constexpr I18n::Message k_titles[k_ellipseDetailsSections] = {
-          I18n::Message::EllipseSemiMajorAxisTitle,
-          I18n::Message::EllipseSemiMinorAxisTitle,
-          I18n::Message::LinearEccentricityTitle,
-          I18n::Message::EccentricityTitle,
+          I18n::Message::A,
+          I18n::Message::B,
+          I18n::Message::C,
+          I18n::Message::E,
           I18n::Message::CenterAbscissaTitle,
           I18n::Message::CenterOrdinateTitle,
       };
@@ -176,7 +175,7 @@ I18n::Message DetailsParameterController::detailsTitle(int i) const {
     }
     case Conic::Shape::Parabola: {
       constexpr I18n::Message k_titles[k_parabolaDetailsSections] = {
-          I18n::Message::ParabolaParameterTitle,
+          I18n::Message::P,
           I18n::Message::ParabolaVertexAbscissaTitle,
           I18n::Message::ParabolaVertexOrdinateTitle,
       };
@@ -185,10 +184,10 @@ I18n::Message DetailsParameterController::detailsTitle(int i) const {
     default: {
       assert(function()->properties().conicShape() == Conic::Shape::Hyperbola);
       constexpr I18n::Message k_titles[k_hyperbolaDetailsSections] = {
-          I18n::Message::HyperbolaSemiMajorAxisTitle,
-          I18n::Message::HyperbolaSemiMinorAxisTitle,
-          I18n::Message::LinearEccentricityTitle,
-          I18n::Message::EccentricityTitle,
+          I18n::Message::A,
+          I18n::Message::B,
+          I18n::Message::C,
+          I18n::Message::E,
           I18n::Message::CenterAbscissaTitle,
           I18n::Message::CenterOrdinateTitle,
       };

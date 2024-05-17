@@ -51,18 +51,14 @@ class EditableTextWidget : public CellWidget {
 class AbstractWithEditableText : public Responder,
                                  public ChainedTextFieldDelegate {
  public:
-  AbstractWithEditableText(
-      Responder* parentResponder = nullptr,
-      InputEventHandlerDelegate* inputEventHandlerDelegate = nullptr,
-      TextFieldDelegate* textFieldDelegate = nullptr);
+  AbstractWithEditableText(Responder* parentResponder = nullptr,
+                           TextFieldDelegate* textFieldDelegate = nullptr);
 
   void setEditable(bool isEditable) { m_editable = isEditable; }
-  void setDelegates(InputEventHandlerDelegate* inputEventHandlerDelegate,
-                    TextFieldDelegate* textFieldDelegate);
 
   void didBecomeFirstResponder() override {
     if (m_editable) {
-      Container::activeApp()->setFirstResponder(&m_textField);
+      App::app()->setFirstResponder(&m_textField);
     }
   }
   TextField* textField() { return &m_textField; }
@@ -70,9 +66,9 @@ class AbstractWithEditableText : public Responder,
 
   // ChainedTextFieldDelegate
   void textFieldDidStartEditing(AbstractTextField* textField) override;
-  bool textFieldDidFinishEditing(AbstractTextField* textField, const char* text,
+  bool textFieldDidFinishEditing(AbstractTextField* textField,
                                  Ion::Events::Event event) override;
-  bool textFieldDidAbortEditing(AbstractTextField* textField) override;
+  void textFieldDidAbortEditing(AbstractTextField* textField) override;
   bool textFieldIsEditable(AbstractTextField* textField) override {
     return m_editable;
   }
@@ -91,13 +87,10 @@ class MenuCellWithEditableText
     : public MenuCell<Label, SubLabel, EditableTextWidget>,
       public AbstractWithEditableText {
  public:
-  MenuCellWithEditableText(
-      Responder* parentResponder = nullptr,
-      InputEventHandlerDelegate* inputEventHandlerDelegate = nullptr,
-      TextFieldDelegate* textFieldDelegate = nullptr)
+  MenuCellWithEditableText(Responder* parentResponder = nullptr,
+                           TextFieldDelegate* textFieldDelegate = nullptr)
       : MenuCell<Label, SubLabel, EditableTextWidget>(),
-        AbstractWithEditableText(parentResponder, inputEventHandlerDelegate,
-                                 textFieldDelegate) {
+        AbstractWithEditableText(parentResponder, textFieldDelegate) {
     this->accessory()->setTextField(&m_textField);
   }
 

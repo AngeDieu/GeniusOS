@@ -13,7 +13,7 @@ InterestMenuController::InterestMenuController(
   selectRow(0);
 }
 
-void InterestMenuController::didBecomeFirstResponder() {
+void InterestMenuController::viewWillAppear() {
   int nRows = numberOfRows();
   for (int i = 0; i < nRows; i++) {
     m_cells[i].label()->setMessage(
@@ -21,8 +21,8 @@ void InterestMenuController::didBecomeFirstResponder() {
     m_cells[i].subLabel()->setMessage(
         App::GetInterestData()->sublabelForParameter(paramaterAtIndex(i)));
   }
-  resetMemoization();
-  m_selectableListView.reloadData();
+  m_selectableListView.reloadData(false);
+  ViewController::viewWillAppear();
 }
 
 bool InterestMenuController::handleEvent(Ion::Events::Event event) {
@@ -41,6 +41,10 @@ const char* InterestMenuController::title() {
 
 int InterestMenuController::numberOfRows() const {
   return App::GetInterestData()->numberOfUnknowns();
+}
+
+KDCoordinate InterestMenuController::nonMemoizedRowHeight(int row) {
+  return protectedNonMemoizedRowHeight(&m_cells[row], row);
 }
 
 uint8_t InterestMenuController::paramaterAtIndex(int index) const {

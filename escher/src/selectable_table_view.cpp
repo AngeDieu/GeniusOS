@@ -16,8 +16,7 @@ SelectableTableView::SelectableTableView(
       m_selectionDataSource(selectionDataSource),
       m_delegate(delegate) {
   assert(m_selectionDataSource != nullptr);
-  setMargins(Metric::CommonTopMargin, Metric::CommonRightMargin,
-             Metric::CommonBottomMargin, Metric::CommonLeftMargin);
+  setMargins(Metric::CommonMargins);
 }
 
 HighlightCell* SelectableTableView::selectedCell() {
@@ -35,14 +34,20 @@ int SelectableTableView::firstOrLastSelectableColumnOrRow(bool first,
   for (int cow = firstIndex; first ? cow < nColumnsOrRow : cow >= 0;
        first ? cow++ : cow--) {
     bool isSelectable = searchForRow
-                            ? cellAtLocationIsSelectable(selectedColumn(), cow)
-                            : cellAtLocationIsSelectable(cow, selectedRow());
+                            ? canSelectCellAtLocation(selectedColumn(), cow)
+                            : canSelectCellAtLocation(cow, selectedRow());
     if (isSelectable) {
       return cow;
     }
   }
   assert(false);
   return -1;
+}
+
+bool SelectableTableView::canSelectCellAtLocation(int column, int row) {
+  HighlightCell* cell = cellAtLocation(column, row);
+  return (!cell || cell->isVisible()) &&
+         dataSource()->canSelectCellAtLocation(column, row);
 }
 
 int SelectableTableView::indexOfNextSelectableColumnOrRow(int delta, int col,
@@ -65,8 +70,8 @@ int SelectableTableView::indexOfNextSelectableColumnOrRow(int delta, int col,
       }
       return firstOrLastSelectableColumnOrRow(delta < 0, searchForRow);
     }
-    bool cellIsSelectable = searchForRow ? cellAtLocationIsSelectable(col, cow)
-                                         : cellAtLocationIsSelectable(cow, row);
+    bool cellIsSelectable = searchForRow ? canSelectCellAtLocation(col, cow)
+                                         : canSelectCellAtLocation(cow, row);
     if (cellIsSelectable) {
       selectableCow = cow;
       delta -= step;
@@ -83,13 +88,13 @@ bool SelectableTableView::selectCellAtLocation(int col, int row,
     return false;
   }
 
-  if (!cellAtLocationIsSelectable(col, row)) {
+  if (!canSelectCellAtLocation(col, row)) {
     /* If the cell is not selectable, go down by default.
      * This behaviour is only implemented for Explicit. */
     row = indexOfNextSelectableRow(1, col, row);
   }
   // There should always be at least 1 selectable cell in the column
-  assert(cellAtLocationIsSelectable(col, row));
+  assert(canSelectCellAtLocation(col, row));
 
   // Unhighlight previous cell
   unhighlightSelectedCell();
@@ -122,8 +127,8 @@ bool SelectableTableView::selectCellAtLocation(int col, int row,
            changed. Other times, the row did not change but the responder did
            (when going back in previous menu for example). */
         ((selectedColumn() != previousColumn || selectedRow() != previousRow) ||
-         Container::activeApp()->firstResponder() != r)) {
-      Container::activeApp()->setFirstResponder(r, true);
+         App::app()->firstResponder() != r)) {
+      App::app()->setFirstResponder(r, true);
     }
     // Highlight new cell
     cell->setHighlighted(true);
@@ -179,8 +184,7 @@ bool SelectableTableView::handleEvent(Ion::Events::Event event) {
     if (!text && layout.isUninitialized()) {
       return false;
     }
-    if (!m_delegate || m_delegate->canStoreContentOfCellAtLocation(
-                           this, selectedColumn(), selectedRow())) {
+    if (dataSource()->canStoreCellAtLocation(selectedColumn(), selectedRow())) {
       if (text) {
         strlcpy(buffer, text, bufferSize);
       } else {
@@ -203,7 +207,7 @@ bool SelectableTableView::handleEvent(Ion::Events::Event event) {
         Escher::Clipboard::SharedClipboard()->store(buffer);
       }
     } else {
-      Container::activeApp()->storeValue(buffer);
+      App::app()->storeValue(buffer);
     }
     return true;
   }
@@ -231,12 +235,17 @@ void SelectableTableView::deselectTable(bool withinTemporarySelection) {
   }
 }
 
-void SelectableTableView::reloadData(bool setFirstResponder) {
-  dataSource()->initCellSize(this);
+void SelectableTableView::reloadData(bool setFirstResponder,
+                                     bool resetMemoization) {
+  if (resetMemoization) {
+    resetSizeAndOffsetMemoization();
+  }
   int col = selectedColumn();
   int row = selectedRow();
+  KDPoint offset = offsetToRestoreAfterReload();
   deselectTable(true);
-  SelectableTableView::layoutSubviews();
+  layoutSubviews();
+  setClippedContentOffset(offset);
   selectCellAtLocation(col, row, setFirstResponder, true);
 }
 
@@ -244,7 +253,7 @@ void SelectableTableView::didBecomeFirstResponder() {
   HighlightCell* cell = selectedCell();
   if (cell && cell->responder()) {
     // Update first responder
-    Container::activeApp()->setFirstResponder(cell->responder());
+    App::app()->setFirstResponder(cell->responder());
   }
 }
 

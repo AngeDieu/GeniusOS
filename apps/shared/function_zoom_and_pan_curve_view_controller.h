@@ -22,7 +22,6 @@ class FunctionZoomAndPanCurveViewController
   const char* title() override;
   Escher::View* view() override { return &m_contentView; }
   void viewWillAppear() override;
-  void viewDidDisappear() override;
   TitlesDisplay titlesDisplay() override {
     return TitlesDisplay::DisplayNoTitle;
   }
@@ -71,17 +70,19 @@ class FunctionZoomAndPanCurveViewController
     bool m_displayLegend;
   };
 
-  /* Warning : these methods do not reload the curve view. It should be done
-   * manually after calling either or both. */
-  void adaptRangeForHeaders(bool viewWillAppear);
-  /* Returns true if the legend visibility has changed. */
+  /* Warning : this methods do not reload the curve view. It should be done
+   * manually after calling it. Returns true if the legend visibility has
+   * changed. */
   bool setLegendVisible(bool legendWillAppear);
 
   // ZoomAndPanCurveViewController
+  float offscreenYAxis() const override;
   InteractiveCurveViewRange* interactiveCurveViewRange() override {
     return m_interactiveRange;
   }
   AbstractPlotView* curveView() override { return m_contentView.curveView(); }
+  float xMove() override;
+  float yMove() override;
 
   ContentView m_contentView;
   InteractiveCurveViewRange* m_interactiveRange;

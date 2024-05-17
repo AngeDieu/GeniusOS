@@ -35,12 +35,12 @@ class PowerNode final : public ExpressionNode {
                                 Expression coefficients[]) const override;
 
   template <typename T>
-  static Complex<T> computeNotPrincipalRealRootOfRationalPow(
+  static std::complex<T> computeNotPrincipalRealRootOfRationalPow(
       const std::complex<T> c, T p, T q);
   template <typename T>
-  static Complex<T> computeOnComplex(const std::complex<T> c,
-                                     const std::complex<T> d,
-                                     Preferences::ComplexFormat complexFormat);
+  static std::complex<T> computeOnComplex(
+      const std::complex<T> c, const std::complex<T> d,
+      Preferences::ComplexFormat complexFormat);
   template <typename T>
   static Evaluation<T> Compute(Evaluation<T> eval1, Evaluation<T> eval2,
                                Preferences::ComplexFormat complexFormat) {
@@ -141,11 +141,14 @@ class Power final : public ExpressionTwoChildren<Power, PowerNode> {
   constexpr static int k_maxExactPowerMatrix = 100;
   constexpr static int k_maxNumberOfTermsInExpandedMultinome = 25;
 
-  /* Simplification
-   * WARNING: These two methods alter their arguments */
-  static Expression PowerRationalRational(
+  // Simplification
+  static Expression SafePowerRationalRational(
+      const Rational base, const Rational index,
+      const ReductionContext& reductionContext);
+  // WARNING: These two methods alter their arguments
+  static Expression UnsafePowerRationalRational(
       Rational base, Rational index, const ReductionContext& reductionContext);
-  static Expression PowerIntegerRational(
+  static Expression UnsafePowerIntegerRational(
       Integer base, Rational index, const ReductionContext& reductionContext);
   // Returns e^(i*pi*r)
   static Expression CreateComplexExponent(
@@ -156,6 +159,8 @@ class Power final : public ExpressionTwoChildren<Power, PowerNode> {
   static Expression ReduceLogarithmLinearCombination(
       const ReductionContext& reductionContext, Expression linearCombination,
       const Expression baseOfLogarithmToReduce);
+  static Expression MinusOnePowerRational(
+      const Rational index, const ReductionContext& reductionContext);
   bool isLogarithmOfSameBase(Expression e) const;
   bool isNthRootOfUnity() const;
 

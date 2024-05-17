@@ -1,13 +1,11 @@
 #ifndef ESCHER_ABSTRACT_TEXT_FIELD_H
 #define ESCHER_ABSTRACT_TEXT_FIELD_H
 
-#include <escher/editable_field.h>
 #include <escher/text_field_delegate.h>
 #include <escher/text_input.h>
 #include <string.h>
 
 namespace Escher {
-// See TODO in EditableField
 
 /* TODO: TextField currently uses using 2 buffers:
  * - one to keep the displayed text
@@ -17,12 +15,11 @@ namespace Escher {
  * delegate method 'textFieldDidAbortEdition' in the way that it reloads the
  * previous text from the model instead of from the textfield buffer. */
 
-class AbstractTextField : public TextInput, public EditableField {
+class AbstractTextField : public TextInput {
  public:
   constexpr static int MaxBufferSize() { return ContentView::k_maxBufferSize; }
 
   AbstractTextField(Responder *parentResponder, View *contentView,
-                    InputEventHandlerDelegate *inputEventHandlerDelegate,
                     TextFieldDelegate *delegate);
 
   // Responder
@@ -35,37 +32,40 @@ class AbstractTextField : public TextInput, public EditableField {
   // TextInput
   void scrollToCursor() override;
 
-  // InputEventHandler
+  // EditableField
   bool handleEventWithText(const char *text, bool indentation = false,
                            bool forceCursorRightOfText = false) override;
-
-  // EditableField
   bool addXNTCodePoint(CodePoint defaultXNTCodePoint) override;
-  void setEditing(bool isEditing) override {
+  void setEditing(bool isEditing) {
     assert(!isEditing || isEditable());
     contentView()->setEditing(isEditing);
   }
-  bool isEditing() const override;
-  bool shouldFinishEditing(Ion::Events::Event event) override;
 
-  bool isEditable() { return m_delegate->textFieldIsEditable(this); }
-
-  void setDelegates(InputEventHandlerDelegate *inputEventHandlerDelegate,
-                    TextFieldDelegate *delegate);
-  void setInputEventHandlerDelegate(
-      InputEventHandlerDelegate *inputEventHandlerDelegate);
-  void setText(const char *text);
-  char *draftTextBuffer() const {
-    return const_cast<char *>(nonEditableContentView()->editedText());
+  bool isEditing() const { return nonEditableContentView()->isEditing(); }
+  bool isEditable() {
+    return m_delegate ? m_delegate->textFieldIsEditable(this) : true;
   }
-  size_t draftTextLength() const;
+  void setDelegate(TextFieldDelegate *delegate) { m_delegate = delegate; }
+  void setText(const char *text);
+  char *draftText() const {
+    return const_cast<char *>(nonEditableContentView()->draftText());
+  }
+  size_t draftTextLength() const {
+    assert(isEditing());
+    return nonEditableContentView()->draftTextLength();
+  }
+  char *draftTextEnd() const {
+    return const_cast<char *>(nonEditableContentView()->draftTextEnd());
+  }
   void reinitDraftTextBuffer() { contentView()->reinitDraftTextBuffer(); }
   KDFont::Size font() const { return nonEditableContentView()->font(); }
-  void setTextColor(KDColor textColor);
+  void setTextColor(KDColor textColor) {
+    contentView()->setTextColor(textColor);
+  }
   size_t insertXNTChars(CodePoint defaultXNTCodePoint, char *buffer,
                         size_t bufferLength);
   bool cursorAtEndOfText() const {
-    return isEditing() && cursorLocation() == text() + draftTextLength();
+    return isEditing() && cursorLocation() == draftTextEnd();
   }
   size_t dumpContent(char *buffer, size_t bufferSize, int *cursorOffset);
 
@@ -91,8 +91,7 @@ class AbstractTextField : public TextInput, public EditableField {
 
     // TextInput::ContentView
     const char *text() const override;
-    const char *editedText() const override;
-    size_t editedTextLength() const override;
+    const char *draftText() const override;
     /* If the text to be appended is too long to be added without overflowing
      * the buffer, nothing is done (not even adding few letters from the text to
      * reach the maximum buffer capacity) and false is returned. */
@@ -102,8 +101,9 @@ class AbstractTextField : public TextInput, public EditableField {
     bool removeEndOfLine() override;
     size_t deleteSelection() override;
 
+    // Format
     void setBackgroundColor(KDColor backgroundColor);
-    KDColor backgroundColor() const { return m_backgroundColor; }
+    KDColor backgroundColor() const { return m_format.style.backgroundColor; }
     void setTextColor(KDColor textColor);
 
     bool isEditing() const { return m_isEditing; }
@@ -127,8 +127,6 @@ class AbstractTextField : public TextInput, public EditableField {
    private:
     char *m_textBuffer;
     size_t m_textBufferSize;
-    KDColor m_textColor;
-    KDColor m_backgroundColor;
     bool m_isEditing;
     /* The textfield is 'Stalling' when the edition has been interrupted (by a
      * 'syntax error pop-up for instance) but should not be discarded. */
@@ -149,11 +147,13 @@ class AbstractTextField : public TextInput, public EditableField {
 
   virtual void removeWholeText();
   void removePreviousGlyphIfRepetition(bool defaultXNTHasChanged);
-  bool privateHandleEventWhileEditing(Ion::Events::Event event);
-  bool privateHandleMoveEvent(Ion::Events::Event event);
-  bool privateHandleSelectEvent(Ion::Events::Event event);
+  bool handleMoveEvent(Ion::Events::Event event);
+  bool handleSelectEvent(Ion::Events::Event event);
   bool handleStoreEvent() override;
   bool storeInClipboard() const;
+  bool privateHandleEvent(Ion::Events::Event event, bool *textDidChange);
+  bool privateHandleEventWithText(const char *text, bool indentation = false,
+                                  bool forceCursorRightOfText = false);
 
   TextFieldDelegate *m_delegate;
 };

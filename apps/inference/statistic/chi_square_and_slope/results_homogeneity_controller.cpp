@@ -13,9 +13,7 @@ ResultsHomogeneityTabController::ResultsHomogeneityTabController(
                         &m_contributionsController, nullptr),
       m_tableController(nextController, statistic),
       m_expectedValuesController(this, &m_tableController),
-      m_contributionsController(this, &m_tableController) {
-  TabViewController::initView();
-}
+      m_contributionsController(this, &m_tableController) {}
 
 // ResultsHomogeneityController
 
@@ -26,8 +24,13 @@ ResultsHomogeneityController::ResultsHomogeneityController(
                                 &CategoricalController::ButtonAction, this)),
       m_resultsHomogeneityTable(&m_selectableListView, statistic, this) {}
 
+void ResultsHomogeneityController::createDynamicCells() {
+  m_resultsHomogeneityTable.createCells();
+}
+
 void ResultsHomogeneityController::viewWillAppear() {
   m_resultsHomogeneityTable.selectableTableView()->selectRow(-1);
+  m_resultsHomogeneityTable.selectableTableView()->resetScroll();
   m_selectableListView.selectRow(-1);
   m_selectableListView.reloadData(false);
   CategoricalController::viewWillAppear();

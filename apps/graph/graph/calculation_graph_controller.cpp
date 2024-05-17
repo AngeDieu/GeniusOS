@@ -58,7 +58,6 @@ bool CalculationGraphController::handleEnter() {
 }
 
 void CalculationGraphController::viewWillAppear() {
-  Shared::SimpleInteractiveCurveViewController::viewWillAppear();
   curveView()->setFocus(true);
   assert(!m_record.isNull());
   Coordinate2D<double> pointOfInterest = computeNewPointOfInterestFromAbscissa(
@@ -83,7 +82,7 @@ void CalculationGraphController::viewWillAppear() {
     panToMakeCursorVisible();
   }
   m_graphView->setInterest(specialInterest());
-  m_graphView->reload();
+  Shared::SimpleInteractiveCurveViewController::viewWillAppear();
 }
 
 void CalculationGraphController::setRecord(Ion::Storage::Record record) {
@@ -104,8 +103,7 @@ CalculationGraphController::computeNewPointOfInterestFromAbscissa(
       direction.isRight() ? m_graphRange->xMax() : m_graphRange->xMin();
   functionStore()->modelForRecord(m_record)->trimResolutionInterval(&start,
                                                                     &max);
-  return computeNewPointOfInterest(start, max,
-                                   textFieldDelegateApp()->localContext());
+  return computeNewPointOfInterest(start, max, App::app()->localContext());
 }
 
 PointOfInterest CalculationGraphController::computeAtLeastOnePointOfInterest(

@@ -2,6 +2,7 @@
 #define SHARED_EXPRESSION_MODEL_LIST_CONTROLLER_H
 
 #include <apps/i18n.h>
+#include <escher/editable_expression_model_cell.h>
 #include <escher/even_odd_message_text_cell.h>
 #include <escher/input_view_controller.h>
 #include <escher/layout_field.h>
@@ -10,7 +11,7 @@
 #include <escher/selectable_table_view_delegate.h>
 
 #include "expression_model_store.h"
-#include "layout_field_delegate.h"
+#include "math_field_delegate.h"
 
 namespace Shared {
 
@@ -19,7 +20,7 @@ class ExpressionModelListController
       public Escher::SelectableListViewDataSource,
       public Escher::SelectableListViewDelegate,
       public Escher::StandardMemoizedListViewDataSource,
-      public LayoutFieldDelegate {
+      public MathLayoutFieldDelegate {
  public:
   ExpressionModelListController(Escher::Responder* parentResponder,
                                 I18n::Message text);
@@ -31,44 +32,57 @@ class ExpressionModelListController
   bool handleEventOnExpressionInTemplateMenu(Ion::Events::Event event) {
     return handleEventOnExpression(event, true);
   }
-  /* We want all ListControllers to use the same margin and the one in Grapher
-   * asserts it is aligned with its other cells. */
+  constexpr static KDCoordinate k_defaultVerticalMargin =
+      Escher::Metric::CellMargins.left();
+  /* We want all ListControllers to use the same margin */
   constexpr static KDCoordinate k_newModelMargin =
-      Escher::Metric::BigCellMargin + 3;
+      k_defaultVerticalMargin + Escher::Metric::VerticalColorIndicatorThickness;
+  constexpr static KDCoordinate k_defaultRowHeight =
+      Escher::Metric::StoreRowHeight;
 
  protected:
-  constexpr static KDFont::Size k_font = KDFont::Size::Large;
-  constexpr static KDCoordinate k_expressionMargin = 5;
   constexpr static int k_expressionCellType = 0;
   constexpr static int k_addNewModelCellType = 1;
   constexpr static int k_editableCellType = 2;
+  constexpr static KDFont::Size k_font = KDFont::Size::Large;
+  constexpr static KDCoordinate k_expressionMargin = 5;
+
+  virtual Escher::EditableExpressionModelCell*
+  editableExpressionModelCell() = 0;
+  bool isAddEmptyRow(int row) const;
+
   // ListViewDataSource
   int numberOfRows() const override { return numberOfExpressionRows(); }
   int typeAtRow(int row) const override;
-  KDCoordinate nonMemoizedRowHeight(int row) override {
-    return expressionRowHeight(row);
-  }
   virtual int numberOfExpressionRows() const;
-  bool isAddEmptyRow(int j) const;
-  static KDCoordinate ExpressionRowHeightFromLayoutHeight(KDCoordinate height);
-  virtual KDCoordinate expressionRowHeight(int j);
   virtual void willDisplayExpressionCellAtIndex(Escher::HighlightCell* cell,
                                                 int j);
+  // Row height
+  virtual KDCoordinate expressionRowHeight(int row);
+  virtual KDCoordinate editableRowHeight();
+  KDCoordinate nonMemoizedRowHeight(int row) override;
+
   // Responder
   virtual void addModel();
-  virtual void didChangeModelsList() { resetMemoization(); }
+  /* TODO: This should only update cells that changed instead of reloading the
+   * whole memoization, which is time-consuming. */
+  virtual void didChangeModelsList() {
+    selectableListView()->resetSizeAndOffsetMemoization();
+  }
   virtual bool removeModelRow(Ion::Storage::Record record);
   virtual int modelIndexForRow(int j) const { return j; }
+
   // ViewController
   virtual Escher::SelectableListView* selectableListView() = 0;
   virtual ExpressionModelStore* modelStore() const = 0;
   Escher::EvenOddMessageTextCell m_addNewModelCell;
+
   // LayoutDelegate
   bool layoutFieldDidFinishEditing(Escher::LayoutField* layoutField,
-                                   Poincare::Layout layout,
                                    Ion::Events::Event event) override;
   void layoutFieldDidChangeSize(Escher::LayoutField* layoutField) override;
   void layoutFieldDidAbortEditing(Escher::LayoutField* layoutField) override;
+
   // EditableCell
   virtual Escher::LayoutField* layoutField() = 0;
   int16_t m_editedCellIndex;
@@ -76,6 +90,13 @@ class ExpressionModelListController
  private:
   void finishEdition();
   bool addEmptyModel();
+  virtual bool shouldCompleteEquation(Poincare::Expression expression) {
+    return false;
+  }
+  virtual bool completeEquation(Escher::LayoutField* equationField) {
+    assert(false);
+    return true;
+  }
 };
 
 }  // namespace Shared

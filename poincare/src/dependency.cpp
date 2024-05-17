@@ -49,8 +49,7 @@ Evaluation<T> DependencyNode::templatedApproximate(
     const ApproximationContext &approximationContext) const {
   ExpressionNode *dependencies =
       childAtIndex(Dependency::k_indexOfDependenciesList);
-  if (dependencies->type() == Type::Undefined ||
-      dependencies->type() == Type::Nonreal) {
+  if (dependencies->isUndefined()) {
     return Complex<T>::Undefined();
   }
   assert(dependencies->type() == ExpressionNode::Type::List);
@@ -87,13 +86,6 @@ void Dependency::deepReduceChildren(const ReductionContext &reductionContext) {
 }
 
 Expression Dependency::shallowReduce(ReductionContext reductionContext) {
-  /* Undefined and dependencies are bubbled-up from list of dependencies.
-   * We do this here because we do not want to do this in List::shallowReduce
-   * since most of lists do not want to bubble up their undef and dependencies.
-   * (because {undef} != undef) */
-  SimplificationHelper::defaultShallowReduce(dependenciesList(),
-                                             &reductionContext);
-
   Expression e =
       SimplificationHelper::defaultShallowReduce(*this, &reductionContext);
   if (!e.isUninitialized()) {
@@ -106,24 +98,29 @@ Expression Dependency::shallowReduce(ReductionContext reductionContext) {
   int i = 0;
   while (i < totalNumberOfDependencies) {
     Expression e = dependencies.childAtIndex(i);
-    if (e.deepIsSymbolic(reductionContext.context(),
-                         reductionContext.symbolicComputation())) {
+    Expression approximation;
+    bool hasSymbolsOrRandom =
+        e.deepIsSymbolic(reductionContext.context(),
+                         reductionContext.symbolicComputation()) ||
+        e.recursivelyMatches(Expression::IsRandom, reductionContext.context());
+    if (hasSymbolsOrRandom) {
       /* If the dependency involves unresolved symbol/function/sequence,
        * the approximation of the dependency could be undef while the
-       * whole expression is not, so the check is skipped.
+       * whole expression is not. We juste approximate everything but the symbol
+       * in case the other parts of the expression make it undef/nonreal.
        * */
-      i++;
-      continue;
+      approximation = e.clone().deepApproximateKeepingSymbols(reductionContext);
+    } else {
+      approximation =
+          e.approximate<double>(ApproximationContext(reductionContext, true));
     }
-
-    Expression approximation = e.approximate<double>(
-        reductionContext.context(), reductionContext.complexFormat(),
-        reductionContext.angleUnit(), true);
     if (approximation.isUndefined()) {
       return replaceWithUndefinedInPlace();
-    } else {
+    } else if (!hasSymbolsOrRandom) {
       static_cast<List &>(dependencies).removeChildAtIndexInPlace(i);
       totalNumberOfDependencies--;
+    } else {
+      i++;
     }
   }
 
@@ -201,8 +198,8 @@ Expression Dependency::removeUselessDependencies(
   for (int i = 0; i < dependencies.numberOfChildren(); i++) {
     Expression depI = dependencies.childAtIndex(i);
     // dep(..,{x*y}) = dep(..,{x+y}) = dep(..,{x ,y})
-    if (depI.type() == ExpressionNode::Type::Multiplication ||
-        depI.type() == ExpressionNode::Type::Addition) {
+    if (depI.isOfType({ExpressionNode::Type::Multiplication,
+                       ExpressionNode::Type::Addition})) {
       if (depI.numberOfChildren() == 1) {
         depI.replaceWithInPlace(depI.childAtIndex(0));
       } else {

@@ -11,14 +11,7 @@ Queue* Queue::sharedQueue() {
   return &sQueue;
 }
 
-void Queue::flush(bool resetPreemptiveState) {
-  reset();
-  Keyboard::resetMemoizedState();
-  Events::resetKeyboardState();
-  if (resetPreemptiveState) {
-    Events::resetPreemptiveKeyboardState();
-  }
-}
+void Queue::flush() { reset(); }
 
 void Queue::push(State s) {
   if (m_busy) {

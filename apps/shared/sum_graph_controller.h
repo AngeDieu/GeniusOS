@@ -8,24 +8,19 @@
 #include "function.h"
 #include "function_graph_view.h"
 #include "simple_interactive_curve_view_controller.h"
-#include "text_field_delegate.h"
 #include "vertical_cursor_view.h"
 
 namespace Shared {
 
 class SumGraphController : public SimpleInteractiveCurveViewController {
  public:
-  SumGraphController(
-      Responder* parentResponder,
-      Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-      FunctionGraphView* curveView, InteractiveCurveViewRange* range,
-      CurveViewCursor* cursor);
+  SumGraphController(Responder* parentResponder, FunctionGraphView* curveView,
+                     InteractiveCurveViewRange* range, CurveViewCursor* cursor);
 
   void viewWillAppear() override;
   void didBecomeFirstResponder() override;
   bool handleEvent(Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
 
   TELEMETRY_ID("Sum");
@@ -33,7 +28,7 @@ class SumGraphController : public SimpleInteractiveCurveViewController {
 
  protected:
   virtual bool moveCursorHorizontallyToPosition(double position);
-  void makeCursorVisibleAndReload();
+  void makeCursorVisibleAndReloadBanner();
   void makeCursorVisible();
   virtual void makeCursorVisibleOnSecondCurve(float x);
   void makeDotVisible(float x, float y, bool zoomOut);
@@ -72,8 +67,7 @@ class SumGraphController : public SimpleInteractiveCurveViewController {
 
   class LegendView : public Escher::View {
    public:
-    LegendView(SumGraphController* controller,
-               Escher::InputEventHandlerDelegate* inputEventHandlerDelegate);
+    LegendView(SumGraphController* controller);
     LegendView(const LegendView& other) = delete;
     LegendView(LegendView&& other) = delete;
 
@@ -93,28 +87,20 @@ class SumGraphController : public SimpleInteractiveCurveViewController {
         Poincare::PrintFloat::k_maxFloatCharSize;
     constexpr static int k_valuesPrecision =
         Poincare::Preferences::MediumNumberOfSignificantDigits;
+    constexpr static Poincare::Preferences::PrintFloatMode k_valuesDisplayMode =
+        Poincare::Preferences::PrintFloatMode::Decimal;
     constexpr static int k_valuesBufferSize =
         Poincare::PrintFloat::charSizeForFloatsWithPrecision(k_valuesPrecision);
     constexpr static KDCoordinate k_legendHeight = 35;
     constexpr static KDFont::Size k_font = KDFont::Size::Small;
-    constexpr static KDCoordinate k_symbolHeightMargin = 8;
-    constexpr static KDCoordinate k_sigmaHeight = 18;
     constexpr static KDGlyph::Format k_glyphsFormat = {
         .style = {.backgroundColor = Escher::Palette::GrayMiddle,
                   .font = k_font}};
-
-    constexpr static KDCoordinate editableZoneWidth() {
-      return 12 * KDFont::GlyphWidth(k_font);
-    }
-    constexpr static KDCoordinate editableZoneHeight() {
-      return KDFont::GlyphHeight(k_font);
-    }
 
     int numberOfSubviews() const override { return 3; }
     Escher::View* subviewAtIndex(int index) override;
     void layoutSubviews(bool force = false) override;
     void layoutSubviews(Step step, bool force);
-    Poincare::Layout defaultSumResultLayout(const char* resultBuffer);
 
     Escher::LayoutView m_sum;
     Escher::MessageTextView m_legend;

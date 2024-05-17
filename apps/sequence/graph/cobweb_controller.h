@@ -1,10 +1,10 @@
 #ifndef SEQUENCE_COBWEB_CONTROLLER_H
 #define SEQUENCE_COBWEB_CONTROLLER_H
 
+#include <apps/shared/sum_graph_controller.h>
+#include <apps/shared/xy_banner_view.h>
 #include <poincare/layout.h>
 
-#include "../../shared/sum_graph_controller.h"
-#include "../../shared/xy_banner_view.h"
 #include "apps/shared/curve_view_cursor.h"
 #include "apps/shared/function_graph_controller.h"
 #include "apps/shared/sequence_store.h"
@@ -19,10 +19,8 @@ class GraphController;
 class CobwebController : public Shared::SimpleInteractiveCurveViewController,
                          public Shared::FunctionBannerDelegate {
  public:
-  CobwebController(Responder* parentResponder,
-                   Escher::InputEventHandlerDelegate* inputEventHandlerDelegate,
-                   GraphView* graphView, CurveViewRange* graphRange,
-                   Shared::CurveViewCursor* cursor,
+  CobwebController(Responder* parentResponder, GraphView* graphView,
+                   CurveViewRange* graphRange, Shared::CurveViewCursor* cursor,
                    Shared::XYBannerView* bannerView,
                    Shared::CursorView* cursorView,
                    Shared::SequenceStore* sequenceStore);
@@ -40,7 +38,6 @@ class CobwebController : public Shared::SimpleInteractiveCurveViewController,
   }
 
  private:
-  void setStep(int step);
   float cursorBottomMarginRatio() const override {
     return cursorBottomMarginRatioForBannerHeight(
         m_bannerView->minimalSizeForOptimalDisplay().height());
@@ -55,17 +52,17 @@ class CobwebController : public Shared::SimpleInteractiveCurveViewController,
   bool handleLeftRightEvent(Ion::Events::Event event) override;
   bool handleEnter() override;
   bool handleZoom(Ion::Events::Event event) override;
-  void drawStep(int n);
   void setupRange();
   bool updateStep(int delta);
   Shared::ExpiringPointer<Shared::Sequence> sequence() const;
   CobwebGraphView m_graphView;
-  Shared::CurveViewCursor* m_cursor;
   Shared::XYBannerView* m_bannerView;
   Shared::InteractiveCurveViewRange m_graphRange;
   Ion::Storage::Record m_record;
 
  private:
+  void privateModalViewAltersFirstResponder(
+      FirstResponderAlteration alteration) override;
   constexpr static float k_margin = 0.12;
   int m_step;
   bool m_initialZoom;

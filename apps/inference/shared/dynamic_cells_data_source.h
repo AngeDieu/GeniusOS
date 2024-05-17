@@ -36,13 +36,13 @@ class DynamicCellsDataSource : public DynamicCellsDataSourceDestructor {
       : m_cells(nullptr), m_delegate(delegate) {}
   ~DynamicCellsDataSource();
   Escher::HighlightCell* cell(int i);
+  virtual void createCells();
   void destroyCells() override;
   Escher::SelectableTableView* dynamicCellsTableView() override {
     return m_delegate->tableView();
   }
 
  protected:
-  virtual void createCells();
   void createCellsWithOffset(size_t offset);
   T* m_cells;
   DynamicCellsDataSourceDelegate<T>* m_delegate;
@@ -61,6 +61,8 @@ constexpr int k_homogeneityTableNumberOfReusableHeaderCells = 5 + 10 - 1;
 constexpr int k_homogeneityTableNumberOfReusableInnerCells = 50;
 // static assertion in implementation
 constexpr int k_doubleColumnTableNumberOfReusableCells = 24;
+// static assertion in implementation
+constexpr int k_goodnessContributionsTableNumberOfReusableCells = 33;
 constexpr int k_inputControllerNumberOfReusableCells = 8;
 constexpr int k_maxNumberOfParameterCell =
     k_inputControllerNumberOfReusableCells;

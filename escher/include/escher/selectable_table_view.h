@@ -27,8 +27,8 @@ class SelectableTableView : public TableView, public Responder {
   void setDelegate(SelectableTableViewDelegate* delegate) {
     m_delegate = delegate;
   }
-  int selectedRow() { return m_selectionDataSource->selectedRow(); }
-  int selectedColumn() { return m_selectionDataSource->selectedColumn(); }
+  int selectedRow() const { return m_selectionDataSource->selectedRow(); }
+  int selectedColumn() const { return m_selectionDataSource->selectedColumn(); }
   void selectRow(int j) { m_selectionDataSource->selectRow(j); }
   void selectColumn(int i) { m_selectionDataSource->selectColumn(i); }
   void selectFirstRow() {
@@ -45,7 +45,7 @@ class SelectableTableView : public TableView, public Responder {
   bool handleEvent(Ion::Events::Event event) override;
   void unhighlightSelectedCell();
   void deselectTable(bool withinTemporarySelection = false);
-  void reloadData(bool setFirstResponder = true);
+  void reloadData(bool setFirstResponder = true, bool resetMemoization = true);
 
   void didBecomeFirstResponder() override;
   void didEnterResponderChain(Responder* previousFirstResponder) override;
@@ -57,10 +57,7 @@ class SelectableTableView : public TableView, public Responder {
   SelectableTableViewDelegate* m_delegate;
 
  private:
-  bool cellAtLocationIsSelectable(int column, int row) {
-    return dataSource()->cellAtLocationIsSelectable(cellAtLocation(column, row),
-                                                    column, row);
-  }
+  bool canSelectCellAtLocation(int column, int row);
   /* This function searches (for delta = n) :
    * - The n-th next selectable row in the currentCol starting from currentRow
    *   if searchForRow = true
@@ -91,6 +88,10 @@ class SelectableTableView : public TableView, public Responder {
                                             false);
   }
   int firstOrLastSelectableColumnOrRow(bool first, bool searchForRow);
+  KDPoint offsetToRestoreAfterReload() const {
+    return m_delegate ? m_delegate->offsetToRestoreAfterReload(this)
+                      : contentOffset();
+  }
 };
 
 }  // namespace Escher

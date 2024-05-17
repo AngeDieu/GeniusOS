@@ -8,10 +8,8 @@ using namespace Escher;
 namespace Graph {
 
 BannerView::BannerView(Responder* parentResponder,
-                       InputEventHandlerDelegate* inputEventHandlerDelegate,
                        TextFieldDelegate* textFieldDelegate)
-    : Shared::XYBannerView(parentResponder, inputEventHandlerDelegate,
-                           textFieldDelegate),
+    : Shared::XYBannerView(parentResponder, textFieldDelegate),
       m_derivativeView(k_bannerFieldFormat),
       m_tangentEquationView(I18n::Message::LinearRegressionFormula,
                             k_bannerFieldFormat),

@@ -3,20 +3,18 @@
 #include <apps/global_preferences.h>
 #include <apps/i18n.h>
 #include <assert.h>
-#include <escher/app.h>
 
 #include <algorithm>
 
+#include "app.h"
 #include "console_controller.h"
 
 using namespace Escher;
 
 namespace Code {
 
-ConsoleEditCell::ConsoleEditCell(
-    Responder *parentResponder,
-    InputEventHandlerDelegate *inputEventHandlerDelegate,
-    TextFieldDelegate *delegate)
+ConsoleEditCell::ConsoleEditCell(Responder *parentResponder,
+                                 TextFieldDelegate *delegate)
     : HighlightCell(),
       Responder(parentResponder),
       m_promptView(
@@ -24,8 +22,7 @@ ConsoleEditCell::ConsoleEditCell(
           {.style = {.font =
                          GlobalPreferences::sharedGlobalPreferences->font()}}),
       m_textField(
-          this, nullptr, TextField::MaxBufferSize(), inputEventHandlerDelegate,
-          delegate,
+          this, nullptr, TextField::MaxBufferSize(), delegate,
           {.style = {.font =
                          GlobalPreferences::sharedGlobalPreferences->font()}}) {
 }
@@ -54,8 +51,8 @@ void ConsoleEditCell::layoutSubviews(bool force) {
 }
 
 void ConsoleEditCell::didBecomeFirstResponder() {
-  Container::activeApp()->setFirstResponder(&m_textField);
-  m_textField.setEditing(true);
+  App::app()->setFirstResponder(&m_textField);
+  setEditing(true);
 }
 
 void ConsoleEditCell::setEditing(bool isEditing) {

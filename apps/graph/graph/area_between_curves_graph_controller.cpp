@@ -10,7 +10,6 @@
 
 #include <cmath>
 
-#include "../../shared/text_field_delegate.h"
 #include "../app.h"
 
 using namespace Shared;

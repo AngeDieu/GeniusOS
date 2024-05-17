@@ -1,17 +1,17 @@
 #ifndef GRAPH_SHARED_DOMAIN_PARAMETER_CONTROLLER_H
 #define GRAPH_SHARED_DOMAIN_PARAMETER_CONTROLLER_H
 
-#include <apps/graph/shared/function_toolbox.h>
 #include <apps/shared/continuous_function.h>
 #include <apps/shared/expiring_pointer.h>
-#include <apps/shared/input_event_handler_delegate.h>
 #include <apps/shared/interactive_curve_view_controller.h>
+#include <apps/shared/math_toolbox_controller.h>
 #include <apps/shared/single_range_controller.h>
 
 namespace Graph {
 
-class DomainParameterController : public Shared::SingleRangeController,
-                                  public Shared::InputEventHandlerDelegate {
+class DomainParameterController
+    : public Shared::SingleRangeController,
+      public Shared::MathToolboxExtraCellsDataSource {
  public:
   DomainParameterController(Escher::Responder* parentResponder);
 
@@ -28,9 +28,8 @@ class DomainParameterController : public Shared::SingleRangeController,
   bool textFieldDidReceiveEvent(Escher::AbstractTextField* textField,
                                 Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(Escher::AbstractTextField* textField,
-                                 const char* text,
                                  Ion::Events::Event event) override;
-  bool textFieldDidAbortEditing(Escher::AbstractTextField* textField) override;
+  void textFieldDidAbortEditing(Escher::AbstractTextField* textField) override;
 
   void setRecord(Ion::Storage::Record record) { m_record = record; }
   bool isVisible() const {
@@ -38,8 +37,9 @@ class DomainParameterController : public Shared::SingleRangeController,
                              : function()->properties().canHaveCustomDomain();
   }
 
-  // InputEventHandlerDelegate
-  FunctionToolbox* toolbox() override;
+  // MathToolboxExtraCellsDataSource
+  int numberOfExtraCells() override { return 1; }
+  Poincare::Layout extraCellLayoutAtRow(int row) override;
 
  private:
   I18n::Message parameterMessage(int index) const override;
@@ -65,6 +65,7 @@ class DomainParameterController : public Shared::SingleRangeController,
 
   Shared::MessagePopUpController m_confirmPopUpController;
   Ion::Storage::Record m_record;
+  bool m_currentTextFieldIsMinField;
 };
 
 }  // namespace Graph

@@ -4,7 +4,7 @@ PLATFORM ?= device
 DEBUG ?= 0
 DEVELOPMENT ?= 0
 
-EPSILON_VERSION ?= 21.0.0
+EPSILON_VERSION ?= 22.2.0
 EXTERNAL_APPS_API_LEVEL ?= 0
 EPSILON_APPS ?= calculation graph code statistics distributions inference solver sequence regression elements finance settings
 EPSILON_I18N ?= en fr nl pt it de es
@@ -14,3 +14,5 @@ ESCHER_LOG_EVENTS_BINARY ?= 0
 ESCHER_LOG_EVENTS_NAME ?= $(DEBUG)
 I18N_COMPRESS ?= 0
 ASSERTIONS ?= $(DEBUG)
+HWTEST_ALL_KEYS ?= 0
+VALGRIND ?= 0

@@ -1,5 +1,7 @@
 #include "preferences_controller.h"
 
+#include <apps/apps_container.h>
+#include <apps/global_preferences.h>
 #include <assert.h>
 #include <poincare/code_point_layout.h>
 #include <poincare/fraction_layout.h>
@@ -8,9 +10,6 @@
 
 #include <algorithm>
 #include <cmath>
-
-#include "../../apps_container.h"
-#include "../../global_preferences.h"
 
 using namespace Poincare;
 using namespace Escher;
@@ -123,7 +122,7 @@ void PreferencesController::fillCellForRow(HighlightCell *cell, int row) {
 
 KDCoordinate PreferencesController::nonMemoizedRowHeight(int row) {
   MenuCell<MessageTextView, LayoutView> tempCell;
-  return nonMemoizedRowHeightWithWidthInit(&tempCell, row);
+  return protectedNonMemoizedRowHeight(&tempCell, row);
 }
 
 void PreferencesController::setPreferenceWithValueIndex(I18n::Message message,

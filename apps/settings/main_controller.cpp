@@ -31,6 +31,7 @@ constexpr MessageTree s_modelTestModeMenu[2] = {
     MessageTree(I18n::Message::PressToTest)};
 constexpr MessageTree
     s_modelAboutChildren[AboutController::k_totalNumberOfCell] = {
+        MessageTree(I18n::Message::Name),
         MessageTree(I18n::Message::SoftwareVersion),
         MessageTree(I18n::Message::SerialNumber),
         MessageTree(I18n::Message::FccId),
@@ -39,9 +40,7 @@ constexpr MessageTree
 #endif
 };
 
-MainController::MainController(
-    Responder *parentResponder,
-    InputEventHandlerDelegate *inputEventHandlerDelegate)
+MainController::MainController(Responder *parentResponder)
     : SelectableListViewController(parentResponder),
       m_resetButton(&m_selectableListView, I18n::Message::ResetCalculator,
                     Invocation::Builder<MainController>(
@@ -51,7 +50,7 @@ MainController::MainController(
                         },
                         this)),
       m_preferencesController(this),
-      m_displayModeController(this, inputEventHandlerDelegate),
+      m_displayModeController(this),
       m_localizationController(this, LocalizationController::Mode::Language),
       m_examModeController(this),
       m_pressToTestController(this),
@@ -121,7 +120,8 @@ void MainController::pushModel(const Escher::MessageTree *messageTreeModel) {
     static_cast<GenericSubController *>(selectedSubController)
         ->setMessageTreeModel(messageTreeModel);
     static_cast<GenericSubController *>(selectedSubController)
-        ->resetMemoization();
+        ->selectableListView()
+        ->resetSizeAndOffsetMemoization();
   }
   stackController()->push(selectedSubController);
 }
@@ -142,7 +142,7 @@ KDCoordinate MainController::nonMemoizedRowHeight(int row) {
       return protectedNonMemoizedRowHeight(&m_resetButton, row);
     default:
       SubMenuCell tempCell;
-      return nonMemoizedRowHeightWithWidthInit(&tempCell, row);
+      return protectedNonMemoizedRowHeight(&tempCell, row);
   }
 }
 
@@ -265,7 +265,6 @@ KDCoordinate MainController::separatorBeforeRow(int row) {
 
 void MainController::viewWillAppear() {
   ViewController::viewWillAppear();
-  resetMemoization();
   m_selectableListView.reloadData();
 }
 

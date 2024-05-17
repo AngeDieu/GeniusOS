@@ -48,12 +48,6 @@ class HorizontalLayoutNode final : public LayoutNode {
                 Preferences::PrintFloatMode floatDisplayMode,
                 int numberOfSignificantDigits) const override;
 
-  int serializeChildrenBetweenIndexes(
-      char *buffer, int bufferSize,
-      Preferences::PrintFloatMode floatDisplayMode,
-      int numberOfSignificantDigits, bool forceIndexes, int firstIndex = -1,
-      int lastIndex = -1) const;
-
   bool isCollapsable(int *numberOfOpenParenthesis,
                      OMG::HorizontalDirection direction) const override {
     return m_numberOfChildren != 0;
@@ -148,9 +142,6 @@ class HorizontalLayout final : public Layout {
   }
 
   Layout squashUnaryHierarchyInPlace();
-
-  void serializeChildren(int firstIndex, int lastIndex, char *buffer,
-                         int bufferSize);
 
   KDSize layoutSizeBetweenIndexes(int leftIndex, int rightIndex,
                                   KDFont::Size font) const {

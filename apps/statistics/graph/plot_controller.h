@@ -57,7 +57,7 @@ class PlotController : public DataViewController {
     return std::max(0, std::min(index, numberOfPairs - 1));
   }
 
-  virtual void moveCursorToSelectedIndex();
+  virtual void moveCursorToSelectedIndex(bool setColor);
 
   // DataViewController
   virtual void reloadValueInBanner(
@@ -72,6 +72,7 @@ class PlotController : public DataViewController {
   }
 
   virtual PlotBannerView *bannerView() = 0;
+
   Shared::CurveViewCursor m_cursor;
   PlotRange m_graphRange;
   PlotView m_view;

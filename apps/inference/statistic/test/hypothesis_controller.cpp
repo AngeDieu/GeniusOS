@@ -3,7 +3,6 @@
 #include <apps/apps_container.h>
 #include <apps/apps_container_helper.h>
 #include <apps/i18n.h>
-#include <escher/input_event_handler_delegate.h>
 #include <escher/invocation.h>
 #include <escher/stack_view_controller.h>
 #include <poincare/code_point_layout.h>
@@ -23,13 +22,12 @@ namespace Inference {
 
 HypothesisController::HypothesisController(
     Escher::StackViewController* parent, InputController* inputController,
-    InputSlopeController* inputSlopeController,
-    InputEventHandlerDelegate* handler, Test* test)
-    : Escher::ExplicitSelectableListViewController(parent, this),
+    InputSlopeController* inputSlopeController, Test* test)
+    : Escher::ExplicitSelectableListViewController(parent),
       m_inputController(inputController),
       m_inputSlopeController(inputSlopeController),
       m_operatorDataSource(test),
-      m_h0(&m_selectableListView, handler, this),
+      m_h0(&m_selectableListView, this),
       m_haDropdown(&m_selectableListView, &m_operatorDataSource, this),
       m_next(&m_selectableListView, I18n::Message::Next,
              Invocation::Builder<HypothesisController>(
@@ -76,19 +74,14 @@ bool HypothesisController::textFieldDidReceiveEvent(
                        1 /* = symbol */);
   }
   return false;
-};
-
-bool HypothesisController::textFieldShouldFinishEditing(
-    Escher::AbstractTextField* textField, Ion::Events::Event event) {
-  return event == Ion::Events::OK || event == Ion::Events::EXE;
 }
 
 bool HypothesisController::textFieldDidFinishEditing(
-    Escher::AbstractTextField* textField, const char* text,
-    Ion::Events::Event event) {
+    Escher::AbstractTextField* textField, Ion::Events::Event event) {
   double h0 =
-      Shared::PoincareHelpers::ParseAndSimplifyAndApproximateToScalar<double>(
-          text, AppsContainerHelper::sharedAppsContainerGlobalContext());
+      Poincare::Expression::ParseAndSimplifyAndApproximateToScalar<double>(
+          textField->draftText(),
+          AppsContainerHelper::sharedAppsContainerGlobalContext());
   // Check
   if (std::isnan(h0) || !m_test->isValidH0(h0)) {
     App::app()->displayWarning(I18n::Message::UndefinedValue);
@@ -101,11 +94,10 @@ bool HypothesisController::textFieldDidFinishEditing(
   return true;
 }
 
-bool HypothesisController::textFieldDidAbortEditing(
+void HypothesisController::textFieldDidAbortEditing(
     AbstractTextField* textField) {
   // Reload params to add "p=..."
   loadHypothesisParam();
-  return true;
 }
 
 void HypothesisController::onDropdownSelected(int selectedRow) {
@@ -123,15 +115,14 @@ HighlightCell* HypothesisController::cell(int index) {
 }
 
 void HypothesisController::didBecomeFirstResponder() {
-  selectCell(0);
+  selectRow(0);
   m_h0.setEditable(m_test->significanceTestType() !=
                    SignificanceTestType::Slope);
   m_haDropdown.selectRow(
       static_cast<int>(m_test->hypothesisParams()->comparisonOperator()));
   m_haDropdown.init();
   loadHypothesisParam();
-  resetMemoization();
-  m_selectableListView.reloadData(true);
+  App::app()->setFirstResponder(&m_selectableListView);
 }
 
 bool HypothesisController::ButtonAction(HypothesisController* controller,
@@ -154,8 +145,8 @@ void HypothesisController::loadHypothesisParam() {
       Poincare::Preferences::PrintFloatMode::Decimal,
       Poincare::Preferences::ShortNumberOfSignificantDigits);
   m_h0.textField()->setText(buffer);
-  m_haDropdown.reloadAllCells();
-  resetMemoization();
+  m_operatorDataSource.updateMessages();
+  m_haDropdown.reloadCell();
   m_selectableListView.reloadData();
 }
 

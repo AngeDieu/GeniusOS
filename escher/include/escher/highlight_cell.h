@@ -15,10 +15,6 @@ class HighlightCell : public View {
 
   bool isVisible() const { return m_state != State::Hidden; }
   virtual void setVisible(bool visible);
-  void show() { setVisible(true); }
-  void hide() { setVisible(false); }
-
-  bool isSelectable() { return isVisible() && protectedIsSelectable(); }
 
   virtual void setHighlighted(bool highlight);
   void setHighlightedWithoutReload(bool highlight) {
@@ -28,9 +24,9 @@ class HighlightCell : public View {
   virtual Responder* responder() { return nullptr; }
   virtual const char* text() const { return nullptr; }
   virtual Poincare::Layout layout() const { return Poincare::Layout(); }
+  virtual void initSize(KDCoordinate width) {}
 
  protected:
-  virtual bool protectedIsSelectable() { return true; }
   bool isHighlighted() const { return m_state == State::Highlighted; }
   KDColor defaultBackgroundColor() const {
     return isHighlighted() ? Palette::Select : KDColorWhite;

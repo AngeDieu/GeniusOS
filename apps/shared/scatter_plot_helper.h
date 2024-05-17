@@ -27,11 +27,6 @@ class ScatterPlotIterable {
       assert(e.type() == Poincare::ExpressionNode::Type::Point);
       return static_cast<Poincare::Point&>(e);
     }
-    /* This will stop iteration as soon as an undefined expression is reached.
-     * It relies on the fact that the iterator will only ever be compared to
-     * end(). It also makes use of the fact that undefined expression will be at
-     * the end of a sorted list. */
-    static_assert(Poincare::ListSort::k_nanIsGreatest);
     bool operator!=(const Iterator& rhs) const {
       return this->ExpressionIterable::Iterator::operator!=(rhs) &&
              !ExpressionIterable::Iterator::operator*().isUndefined();
@@ -51,7 +46,7 @@ class ScatterPlotIterable {
 
  private:
   ScatterPlotIterable(Poincare::Expression e) : m_iterable(e), m_expression(e) {
-    assert(Poincare::Expression::IsPoint(e, nullptr) ||
+    assert(Poincare::Expression::IsPoint(e) ||
            (e.type() == Poincare::ExpressionNode::Type::List &&
             static_cast<Poincare::List&>(e).isListOfPoints(nullptr)));
   }

@@ -10,15 +10,17 @@ using namespace Escher;
 namespace Inference {
 
 ResultsController::ResultsController(
-    StackViewController *parent, Statistic *statistic,
+    Responder *parent, Statistic *statistic,
     TestGraphController *testGraphController,
-    IntervalGraphController *intervalGraphController)
-    : ListWithTopAndBottomController(parent, &m_title),
+    IntervalGraphController *intervalGraphController, bool enableHeadline)
+    : ListWithTopAndBottomController(parent,
+                                     enableHeadline ? &m_title : nullptr),
       DynamicCellsDataSource<ResultCell, k_maxNumberOfResultCells>(this),
       m_title(I18n::Message::CalculatedValues, k_messageFormat),
       m_statistic(statistic),
       m_testGraphController(testGraphController),
       m_intervalGraphController(intervalGraphController),
+      m_titleBuffer{0},
       m_next(&m_selectableListView, I18n::Message::Next,
              Invocation::Builder<ResultsController>(
                  &ResultsController::ButtonAction, this)) {}
@@ -53,6 +55,11 @@ const char *ResultsController::title() {
   return m_titleBuffer;
 }
 
+void ResultsController::initView() {
+  createCells();
+  ListWithTopAndBottomController::initView();
+}
+
 bool ResultsController::ButtonAction(ResultsController *controller, void *s) {
   if (!controller->m_statistic->isGraphable()) {
     App::app()->displayWarning(I18n::Message::InvalidValues);
@@ -72,35 +79,31 @@ int ResultsController::numberOfRows() const {
   return m_statistic->numberOfResults() + 1 /* button */;
 }
 
-KDCoordinate ResultsController::defaultColumnWidth() {
-  return Ion::Display::Width - Metric::CommonLeftMargin -
-         Metric::CommonRightMargin;
-}
-
-void ResultsController::fillCellForRow(HighlightCell *cell, int i) {
-  if (i < numberOfRows() - 1) {
-    ResultCell *messageCell = static_cast<ResultCell *>(cell);
-    double value;
-    Poincare::Layout message;
-    I18n::Message subMessage;
-    int precision = Poincare::Preferences::VeryLargeNumberOfSignificantDigits;
-    m_statistic->resultAtIndex(i, &value, &message, &subMessage, &precision);
-    constexpr int bufferSize = Constants::k_largeBufferSize;
-    char buffer[bufferSize];
-    Shared::PoincareHelpers::ConvertFloatToTextWithDisplayMode(
-        value, buffer, bufferSize, precision,
-        Poincare::Preferences::PrintFloatMode::Decimal);
-
-    messageCell->label()->setLayout(message);
-    messageCell->subLabel()->setMessage(subMessage);
-    messageCell->accessory()->setText(buffer);
+void ResultsController::fillCellForRow(HighlightCell *cell, int row) {
+  if (typeAtRow(row) != k_resultCellType) {
+    return;
   }
+  ResultCell *myCell = static_cast<ResultCell *>(cell);
+  double value;
+  Poincare::Layout message;
+  I18n::Message subMessage;
+  int precision = Poincare::Preferences::VeryLargeNumberOfSignificantDigits;
+  m_statistic->resultAtIndex(row, &value, &message, &subMessage, &precision);
+  constexpr int bufferSize = Constants::k_largeBufferSize;
+  char buffer[bufferSize];
+  Shared::PoincareHelpers::ConvertFloatToTextWithDisplayMode(
+      value, buffer, bufferSize, precision,
+      Poincare::Preferences::PrintFloatMode::Decimal);
+  myCell->label()->setLayout(message);
+  myCell->subLabel()->setMessage(subMessage);
+  myCell->accessory()->setText(buffer);
 }
 
 HighlightCell *ResultsController::reusableCell(int index, int type) {
   if (type == k_resultCellType) {
     return cell(index);
   }
+  assert(type == k_buttonCellType);
   return &m_next;
 }
 
@@ -111,11 +114,20 @@ int ResultsController::reusableCellCount(int type) {
   return 1;
 }
 
-int ResultsController::typeAtRow(int index) const {
-  if (index == numberOfRows() - 1) {
+int ResultsController::typeAtRow(int row) const {
+  if (row == numberOfRows() - 1) {
     return k_buttonCellType;
   }
   return k_resultCellType;
+}
+
+KDCoordinate ResultsController::nonMemoizedRowHeight(int row) {
+  if (typeAtRow(row) == k_resultCellType) {
+    ResultCell tempCell;
+    return protectedNonMemoizedRowHeight(&tempCell, row);
+  }
+  assert(typeAtRow(row) == k_buttonCellType);
+  return m_next.minimalSizeForOptimalDisplay().height();
 }
 
 }  // namespace Inference

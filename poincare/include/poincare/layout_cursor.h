@@ -99,14 +99,20 @@ class LayoutCursor final {
   /* Layout deletion */
   void performBackspace();
 
-  void stopSelecting();
+  void resetSelection();
 
   /* Set empty rectangle visibility and gray rectangle in grids. */
   bool didEnterCurrentPosition(LayoutCursor previousPosition = LayoutCursor());
+
   // Call this if the cursor is disappearing from the field
   bool didExitPosition();
+  /* This moves the cursor to a location that will stay valid after exiting the
+   * field */
+  void prepareForExitingPosition();
 
   bool isAtNumeratorOfEmptyFraction() const;
+
+  static int RightmostPossibleCursorPosition(Layout l);
 
  private:
   void setLayout(Layout layout, OMG::HorizontalDirection sideOfLayout);

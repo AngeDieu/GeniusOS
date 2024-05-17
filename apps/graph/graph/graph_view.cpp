@@ -15,7 +15,10 @@ GraphView::GraphView(InteractiveCurveViewRange *graphRange,
                      MemoizedCursorView *cursorView)
     : FunctionGraphView(graphRange, cursor, bannerView, cursorView),
       m_interestView(this),
+      m_areaIndex(0),
       m_nextPointOfInterestIndex(0),
+      m_interest(Solver<double>::Interest::None),
+      m_computePointsOfInterest(false),
       m_tangentDisplay(false) {}
 
 void GraphView::reload(bool resetInterrupted, bool force) {
@@ -91,8 +94,7 @@ void GraphView::drawRecord(Ion::Storage::Record record, int index,
   KDCoordinate rectMax = axis == Axis::Horizontal
                              ? rect.right() + k_externRectMargin
                              : rect.top() - k_externRectMargin;
-  float tCacheMin, tCacheStep;
-  float tStepNonCartesian = NAN;
+  float tCacheMin, tStep, tCacheStep;
   if (f->properties().isCartesian()) {
     float rectLimit = pixelToFloat(axis, rectMin);
     /* Here, tCacheMin can depend on rect (and change as the user move)
@@ -100,12 +102,13 @@ void GraphView::drawRecord(Ion::Storage::Record record, int index,
      * entirely invalidated. */
     tCacheMin = std::isnan(rectLimit) ? tmin : std::max(tmin, rectLimit);
     tmax = std::min(pixelToFloat(axis, rectMax), tmax);
-    tCacheStep = axis == Axis::Horizontal ? pixelWidth() : pixelHeight();
+    tStep = axis == Axis::Horizontal ? pixelWidth() : pixelHeight();
+    tCacheStep = tStep / 2.;
   } else {
     tCacheMin = tmin;
     // Compute tCacheStep and tStepNonCartesian
-    ContinuousFunctionCache::ComputeNonCartesianSteps(&tStepNonCartesian,
-                                                      &tCacheStep, tmax, tmin);
+    ContinuousFunctionCache::ComputeNonCartesianSteps(&tStep, &tCacheStep, tmax,
+                                                      tmin);
   }
   ContinuousFunctionCache::PrepareForCaching(f.operator->(), cch, tCacheMin,
                                              tCacheStep);
@@ -119,12 +122,12 @@ void GraphView::drawRecord(Ion::Storage::Record record, int index,
           : NoDiscontinuity;
 
   if (f->properties().isCartesian()) {
-    drawCartesian(ctx, rect, f.operator->(), record, tCacheMin, tmax,
-                  tCacheStep, discontinuityEvaluation, axis);
+    drawCartesian(ctx, rect, f.operator->(), record, tCacheMin, tmax, tStep,
+                  discontinuityEvaluation, axis);
     return;
   }
   if (f->properties().isPolar()) {
-    drawPolar(ctx, rect, f.operator->(), tCacheMin, tmax, tStepNonCartesian,
+    drawPolar(ctx, rect, f.operator->(), tCacheMin, tmax, tStep,
               discontinuityEvaluation);
     return;
   }
@@ -133,7 +136,7 @@ void GraphView::drawRecord(Ion::Storage::Record record, int index,
     return;
   }
   assert(f->properties().isParametric() || f->properties().isInversePolar());
-  drawFunction(ctx, rect, f.operator->(), tCacheMin, tmax, tStepNonCartesian,
+  drawFunction(ctx, rect, f.operator->(), tCacheMin, tmax, tStep,
                discontinuityEvaluation);
 }
 
@@ -484,11 +487,9 @@ void GraphView::drawFunction(KDContext *ctx, KDRect rect, ContinuousFunction *f,
 void GraphView::drawScatterPlot(KDContext *ctx, KDRect rect,
                                 ContinuousFunction *f) const {
   // TODO Handle limiting tMax and tMin ?
+  ApproximationContext approximationContext(context());
   for (Point p : f->iterateScatterPlot(context())) {
-    drawDot(ctx, rect, k_dotSize,
-            p.approximate2D<float>(
-                context(), Preferences::sharedPreferences->complexFormat(),
-                Preferences::sharedPreferences->angleUnit()),
+    drawDot(ctx, rect, k_dotSize, p.approximate2D<float>(approximationContext),
             f->color());
   }
 }

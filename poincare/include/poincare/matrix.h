@@ -80,6 +80,7 @@ class Matrix final : public Expression {
 
   void setDimensions(int rows, int columns);
   Array::VectorType vectorType() const { return node()->vectorType(); }
+  bool isVector() const { return node()->isVector(); }
   int numberOfRows() const { return node()->numberOfRows(); }
   int numberOfColumns() const { return node()->numberOfColumns(); }
   using TreeHandle::addChildAtIndexInPlace;
@@ -92,9 +93,7 @@ class Matrix final : public Expression {
   /* Operation on matrix */
 
   // rank returns -1 if the rank cannot be computed
-  int rank(Context* context, Preferences::ComplexFormat complexFormat,
-           Preferences::AngleUnit angleUnit, Preferences::UnitFormat unitFormat,
-           ReductionTarget reductionTarget, bool inPlace = false);
+  int rank(Context* context, bool forceCanonization = false);
   Expression createTrace();
   /* Inverse the array in-place. Array has to be given in the form
    * array[row_index][column_index] */
@@ -126,9 +125,31 @@ class Matrix final : public Expression {
   Expression computeInverseOrDeterminant(
       bool computeDeterminant, const ReductionContext& reductionContext,
       bool* couldCompute) const;
-  // rowCanonize turns a matrix in its row echelon form, reduced or not.
+  /* rowCanonize turns a matrix in its row echelon form, reduced or not.
+   *
+   * If the matrix contains unresolved symbols, the canonization cannot
+   * be properly done. The method will interrupt and set canonizationSuccess to
+   * false.
+   *
+   *  WARNING: If forceCanonization is set to true though, the canonization will
+   * be done anyway. This is very risky since the canonization behaviour is
+   * undef for unknown value. For example, the matrix [[3, 0][x, 5]] does not
+   * canonize the same if x=2 or x=6.
+   * This is used only by the solver when calling rank method to be able to
+   * solve equation systems. It works in this case because reduced is true and
+   * we know the matrix that is canonized is of the form:
+   * [ ... ...  0   0   0  ]
+   * [ ... ...  0   0   0  ]
+   * [ ... ...  0   0   0  ]
+   * [  1   0  ...  0   t1 ]
+   * [  0 ... 1 ... 0   tk ]
+   * [  0   0  ...  1   tN ]
+   * so the 1's of the last rows will always be taken as pivots, and not the tk.
+   * */
+  bool isCanonizable(const ReductionContext& reductionContext);
   Matrix rowCanonize(const ReductionContext& reductionContext,
-                     Expression* determinant, bool reduced = true);
+                     bool* canonizationSuccess, Expression* determinant,
+                     bool reduced = true, bool forceCanonization = false);
   // Row canonize the array in place
   template <typename T>
   static void ArrayRowCanonize(T* array, int numberOfRows, int numberOfColumns,

@@ -58,14 +58,7 @@ KDCoordinate AreaBetweenCurvesParameterController::nonMemoizedRowHeight(
   CurveSelectionCell tempCell;
   tempCell.label()->setLayout(function->layout());
   return tempCell.labelView()->minimalSizeForOptimalDisplay().height() +
-         Metric::CellTopMargin + Metric::CellBottomMargin +
-         Metric::CellSeparatorThickness;
-}
-
-void AreaBetweenCurvesParameterController::viewWillAppear() {
-  ViewController::viewWillAppear();
-  resetMemoization();
-  m_selectableListView.reloadData();
+         Metric::CellMargins.height() + Metric::CellSeparatorThickness;
 }
 
 void AreaBetweenCurvesParameterController::fillCellForRow(
@@ -73,9 +66,10 @@ void AreaBetweenCurvesParameterController::fillCellForRow(
   ExpiringPointer<ContinuousFunction> function =
       App::app()->functionStore()->modelForRecord(
           DerivableActiveFunctionAtIndex(row, m_mainRecord));
-  static_cast<CurveSelectionCell *>(cell)->setColor(function->color());
-  static_cast<CurveSelectionCell *>(cell)->label()->setLayout(
-      function->layout().clone());
+  CurveSelectionCell *curveSelectionCell =
+      static_cast<CurveSelectionCell *>(cell);
+  curveSelectionCell->setColor(function->color());
+  curveSelectionCell->label()->setLayout(function->layout().clone());
 }
 
 bool AreaBetweenCurvesParameterController::handleEvent(
@@ -87,12 +81,16 @@ bool AreaBetweenCurvesParameterController::handleEvent(
     return true;
   }
   if (event == Ion::Events::OK || event == Ion::Events::EXE) {
+    Ion::Storage::Record secondRecord =
+        DerivableActiveFunctionAtIndex(innerSelectedRow(), m_mainRecord);
+    assert(
+        App::app()->functionStore()->modelForRecord(m_mainRecord)->isActive() &&
+        App::app()->functionStore()->modelForRecord(secondRecord)->isActive());
     m_areaGraphController->setRecord(m_mainRecord);
-    m_areaGraphController->setSecondRecord(
-        DerivableActiveFunctionAtIndex(innerSelectedRow(), m_mainRecord));
+    m_areaGraphController->setSecondRecord(secondRecord);
     stack->popUntilDepth(
         Shared::InteractiveCurveViewController::k_graphControllerStackDepth,
-        true);
+        false);
     stack->push(m_areaGraphController);
     return true;
   }
