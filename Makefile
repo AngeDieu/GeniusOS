@@ -136,6 +136,10 @@ all_src = $(apps_src) $(escher_src) $(ion_src) $(kandinsky_src) $(liba_src) $(li
 # Ensure kandinsky fonts are generated first
 $(call object_for,$(all_src)): $(kandinsky_deps)
 
+# Make palette.h a dep for every source-file.
+# This ensures that the theming engine works correctly.
+$(call object_for,$(all_app_src)): $(BUILD_DIR)/escher/palette.h
+
 # kernel_obj are added separately since they require variants resolution
 all_objs = $(call object_for,$(all_src) $(kernel_src))
 .SECONDARY: $(all_objs)
